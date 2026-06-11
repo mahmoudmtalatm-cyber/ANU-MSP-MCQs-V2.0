@@ -2165,13 +2165,48 @@ function escapeHtml(str) {
 }
 
 function loadCustomQuizzes() {
-  try {
-    const raw = localStorage.getItem(CQ_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) { return []; }
+  return window._cachedCustomQuizzes || [];
 }
-function saveCustomQuizzesList(arr) {
-  try { localStorage.setItem(CQ_KEY, JSON.stringify(arr)); } catch (e) {}
+
+async function loadCustomQuizzesFromFirestore() {
+  if (!window._currentUser) return;
+  try {
+    const col = window._collection(window._db, 'users', window._currentUser.uid, 'customQuizzes');
+    const snap = await window._getDocs(col);
+    const quizzes = [];
+    snap.forEach(d => quizzes.push(d.data()));
+    quizzes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    window._cachedCustomQuizzes = quizzes;
+  } catch (e) {
+    console.error('Failed to load custom quizzes:', e);
+    try {
+      const raw = localStorage.getItem(CQ_KEY);
+      window._cachedCustomQuizzes = raw ? JSON.parse(raw) : [];
+    } catch (_) { window._cachedCustomQuizzes = []; }
+  }
+}
+async function saveCustomQuizzesList(arr) {
+  window._cachedCustomQuizzes = arr;
+  if (window._currentUser) {
+    try {
+      const col = window._collection(window._db, 'users', window._currentUser.uid, 'customQuizzes');
+      const snap = await window._getDocs(col);
+      const existingIds = new Set();
+      snap.forEach(d => existingIds.add(d.id));
+      const newIds = new Set(arr.map(q => q.id));
+      for (const id of existingIds) {
+        if (!newIds.has(id)) {
+          await window._deleteDoc(window._doc(window._db, 'users', window._currentUser.uid, 'customQuizzes', id));
+        }
+      }
+      for (const quiz of arr) {
+        const ref = window._doc(window._db, 'users', window._currentUser.uid, 'customQuizzes', quiz.id);
+        await window._setDoc(ref, quiz);
+      }
+    } catch (e) { console.error('Failed to save custom quizzes:', e); }
+  } else {
+    try { localStorage.setItem(CQ_KEY, JSON.stringify(arr)); } catch (e) {}
+  }
 }
 function getGeminiKey() {
   try { return localStorage.getItem(CQ_API_KEY_STORE) || ''; } catch (e) { return ''; }
@@ -2494,7 +2529,7 @@ function discardGeneratedQuiz() {
   renderCustomQuizModal();
 }
 
-function saveGeneratedCustomQuiz() {
+async function saveGeneratedCustomQuiz() {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions.length) return;
   const titleInput = document.getElementById('cqTitleInput');
   const title = (titleInput && titleInput.value.trim()) || cqGeneratedTitle || 'Custom Quiz';
@@ -2506,7 +2541,7 @@ function saveGeneratedCustomQuiz() {
     questions: cqGeneratedQuestions,
     createdAt: Date.now()
   });
-  saveCustomQuizzesList(quizzes);
+  await saveCustomQuizzesList(quizzes);
 
   cqGeneratedQuestions = null;
   cqSelectedFile = null;
@@ -2517,11 +2552,11 @@ function saveGeneratedCustomQuiz() {
   if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Quiz "${escapeHtml(title)}" saved! Start it from the list above.</div>`;
 }
 
-function deleteCustomQuiz(id) {
+async function deleteCustomQuiz(id) {
   if (!confirm('Delete this custom quiz? This cannot be undone.')) return;
   let quizzes = loadCustomQuizzes();
   quizzes = quizzes.filter(q => q.id !== id);
-  saveCustomQuizzesList(quizzes);
+  await saveCustomQuizzesList(quizzes);
   renderCustomQuizModal();
 }
 
@@ -2567,8 +2602,8 @@ function goHome() {
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, doc, getDoc, setDoc }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // ── REPLACE THIS WITH YOUR OWN CONFIG FROM STEP 1.7 ──
   // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -2594,6 +2629,9 @@ const firebaseConfig = {
   window._doc              = doc;
   window._getDoc           = getDoc;
   window._setDoc           = setDoc;
+  window._collection       = collection;
+  window._getDocs          = getDocs;
+  window._deleteDoc        = deleteDoc;
   window._signInWithPopup  = signInWithPopup;
   window._signOut          = signOut;
 
@@ -2603,6 +2641,7 @@ const firebaseConfig = {
     updateAuthUI(user);
     if (user) {
       loadStatsFromFirestore();
+      loadCustomQuizzesFromFirestore();
     } else {
       // No user — fall back to localStorage
       window._cachedStats = null;
