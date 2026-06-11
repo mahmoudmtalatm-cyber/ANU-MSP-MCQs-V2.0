@@ -734,6 +734,7 @@
     <div class="home-hero">
       <h1>🏥&nbsp; ANU MSP Question Bank</h1>
       <p>Choose your subject, pick a lecture, and test your knowledge</p>
+      <div id="authAreaHome" style="display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 6px;flex-wrap:wrap;"></div>
         <button class="stats-open-btn" onclick="openStats()">📊&nbsp; My Statistics</button>
         <button class="stats-open-btn" onclick="openRetake()">🔄&nbsp; Retake Wrong Qs</button>
     </div>
@@ -813,6 +814,7 @@
   <div id="quiz" class="hidden">
     <div class="header">
       <div class="header-title"><span>🏥</span>&nbsp; ANU MSP Question Bank</div>
+      <div id="authAreaQuiz" style="display:flex;align-items:center;gap:8px;"></div>
       <div class="timer" id="timerDisplay">00:00</div>
     </div>
     <div class="quiz-body">
@@ -857,6 +859,67 @@
 <script src="data/git_module.js"></script>
 <script src="data/endocrine_module.js"></script>
 <script>
+  /* ══════════════════════════════════════════════════════════
+   AUTH UI
+══════════════════════════════════════════════════════════ */
+function updateAuthUI(user) {
+  const homeArea = document.getElementById('authAreaHome');
+  const quizArea = document.getElementById('authAreaQuiz');
+
+  if (user) {
+    // Logged-in state
+    const loggedInHTML = `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <img src="${user.photoURL}"
+             style="width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.6);"
+             onerror="this.style.display='none'" />
+        <span style="color:white;font-size:.85rem;font-weight:700;">
+          ${user.displayName ? user.displayName.split(' ')[0] : 'User'}
+        </span>
+        <button onclick="fbSignOut()"
+                style="background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.4);
+                       color:white;padding:5px 12px;border-radius:6px;cursor:pointer;
+                       font-weight:700;font-size:.78rem;font-family:var(--font);">
+          Sign out
+        </button>
+      </div>`;
+    if (homeArea) homeArea.innerHTML = loggedInHTML;
+    if (quizArea) quizArea.innerHTML = loggedInHTML;
+  } else {
+    // Logged-out state
+    const signInHTML = `
+      <button onclick="fbSignIn()"
+              style="background:white;color:#1B8AC4;border:none;padding:8px 16px;
+                     border-radius:8px;cursor:pointer;font-weight:800;font-size:.85rem;
+                     display:flex;align-items:center;gap:7px;font-family:var(--font);
+                     box-shadow:0 2px 8px rgba(0,0,0,.15);">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+             style="width:17px;height:17px;" />
+        Sign in with Google
+      </button>`;
+    if (homeArea) homeArea.innerHTML = signInHTML;
+    if (quizArea) quizArea.innerHTML = signInHTML;
+  }
+}
+
+async function fbSignIn() {
+  try {
+    await window._signInWithPopup(window._auth, window._GoogleProvider);
+    // onAuthStateChanged fires automatically after this — no extra code needed
+  } catch (e) {
+    if (e.code !== 'auth/popup-closed-by-user') {
+      alert('Sign-in failed: ' + e.message);
+    }
+  }
+}
+
+async function fbSignOut() {
+  if (!confirm('Sign out of your account?')) return;
+  await window._signOut(window._auth);
+  window._currentUser  = null;
+  window._cachedStats  = null;
+  updateAuthUI(null);
+}
   function updateSubjectButtonStates() {
   document.querySelectorAll('.subject-btn').forEach(btn => {
     const name  = btn.dataset.subject;
@@ -1559,15 +1622,48 @@ function defaultStats() {
   };
 }
 
-function loadStats() {
+// Called once after login — loads stats from Firestore into memory
+async function loadStatsFromFirestore() {
+  if (!window._currentUser) return;
   try {
-    const raw = localStorage.getItem(STATS_KEY);
-    return raw ? Object.assign(defaultStats(), JSON.parse(raw)) : defaultStats();
-  } catch(e) { return defaultStats(); }
+    const ref  = window._doc(window._db, 'stats', window._currentUser.uid);
+    const snap = await window._getDoc(ref);
+    if (snap.exists()) {
+      window._cachedStats = Object.assign(defaultStats(), snap.data());
+    } else {
+      window._cachedStats = defaultStats();
+    }
+  } catch(e) {
+    console.error('Failed to load stats from Firestore:', e);
+    window._cachedStats = defaultStats();
+  }
+}
+
+// Called everywhere stats are read — returns the in-memory cache
+function loadStats() {
+  if (window._currentUser) {
+    // Signed in — use Firestore cache (or empty if still loading)
+    return window._cachedStats || defaultStats();
+  } else {
+    // Not signed in — fall back to localStorage
+    try {
+      const raw = localStorage.getItem(STATS_KEY);
+      return raw ? Object.assign(defaultStats(), JSON.parse(raw)) : defaultStats();
+    } catch(e) { return defaultStats(); }
+  }
 }
 
 function persistStats(st) {
-  try { localStorage.setItem(STATS_KEY, JSON.stringify(st)); } catch(e) {}
+  window._cachedStats = st; // always update the in-memory cache
+
+  if (window._currentUser) {
+    // Signed in — save to Firestore
+    const ref = window._doc(window._db, 'stats', window._currentUser.uid);
+    window._setDoc(ref, st).catch(e => console.error('Failed to save stats:', e));
+  } else {
+    // Not signed in — save to localStorage as fallback
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(st)); } catch(e) {}
+  }
 }
 
 function saveQuizStats(score, total, wrong, unanswered, timeSecs, timedQs, c2w, w2c, subject, lecture) {
@@ -1605,12 +1701,41 @@ function saveQuizStats(score, total, wrong, unanswered, timeSecs, timedQs, c2w, 
   persistStats(st);
 }
 
-function openStats()  { renderStatsModal(); document.getElementById('statsOverlay').classList.remove('hidden'); }
+function openStats() {
+  document.getElementById('statsOverlay').classList.remove('hidden');
+
+  if (window._currentUser && !window._cachedStats) {
+    // Still loading from Firestore — show spinner
+    document.getElementById('statsBody').innerHTML = `
+      <div style="text-align:center;padding:40px;color:var(--text-muted);">
+        <div style="font-size:2rem;margin-bottom:12px;">⏳</div>
+        <div style="font-weight:700;">Loading your stats…</div>
+      </div>`;
+    // Try again shortly
+    setTimeout(() => {
+      if (document.getElementById('statsOverlay').classList.contains('hidden')) return;
+      renderStatsModal();
+    }, 1500);
+  } else {
+    renderStatsModal();
+  }
+}
 function closeStats() { document.getElementById('statsOverlay').classList.add('hidden'); }
 
 function resetStats() {
   if (!confirm('Reset ALL statistics? This cannot be undone.')) return;
-  localStorage.removeItem(STATS_KEY);
+
+  window._cachedStats = defaultStats();
+
+  if (window._currentUser) {
+    // Signed in — overwrite Firestore doc with empty stats
+    const ref = window._doc(window._db, 'stats', window._currentUser.uid);
+    window._setDoc(ref, defaultStats()).catch(e => console.error('Failed to reset stats:', e));
+  } else {
+    // Not signed in — clear localStorage
+    localStorage.removeItem(STATS_KEY);
+  }
+
   renderStatsModal();
 }
 
@@ -1928,6 +2053,53 @@ function goHome() {
   stopTimer();
   showScreen('home');
 }
+</script>
+<script type="module">
+  import { initializeApp }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // ── REPLACE THIS WITH YOUR OWN CONFIG FROM STEP 1.7 ──
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDxAdqzVbo4HhxWAnTqEm7kfZvseYaQX88",
+  authDomain: "anu-msp-mcqs.firebaseapp.com",
+  projectId: "anu-msp-mcqs",
+  storageBucket: "anu-msp-mcqs.firebasestorage.app",
+  messagingSenderId: "82492063412",
+  appId: "1:82492063412:web:d051610631107b3e8da1e1",
+  measurementId: "G-B2EGBDNMMZ"
+};
+
+  // Initialize Firebase
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
+
+  // Expose to the rest of your app's scripts
+  window._auth             = auth;
+  window._db               = db;
+  window._GoogleProvider   = new GoogleAuthProvider();
+  window._doc              = doc;
+  window._getDoc           = getDoc;
+  window._setDoc           = setDoc;
+  window._signInWithPopup  = signInWithPopup;
+  window._signOut          = signOut;
+
+  // Watch login state — fires immediately on page load
+  onAuthStateChanged(auth, user => {
+    window._currentUser = user || null;
+    updateAuthUI(user);
+    if (user) {
+      loadStatsFromFirestore();
+    } else {
+      // No user — fall back to localStorage
+      window._cachedStats = null;
+    }
+  });
 </script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f4142a9a44aa49c6a67437c3b8932b61"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
