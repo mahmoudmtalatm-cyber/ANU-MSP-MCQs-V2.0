@@ -782,6 +782,51 @@
 .c2w .cf-verdict { color: #C62828; }
 .w2c .cf-verdict { color: #2E7D32; }
 .w2w .cf-verdict { color: #E65100; }
+
+/* ── CQ MODE TABS ── */
+.cq-tabs {
+  display: flex; gap: 6px; margin-bottom: 14px;
+}
+.cq-tab-btn {
+  flex: 1; padding: 9px 10px; border-radius: 8px; border: 2px solid #B0D4F0;
+  background: #F7FBFF; font-family: var(--font); font-size: .82rem; font-weight: 700;
+  color: var(--text-muted); cursor: pointer; transition: all .15s; text-align: center;
+}
+.cq-tab-btn:hover { border-color: var(--accent); color: var(--accent); background: #EEF7FF; }
+.cq-tab-btn.active {
+  border-color: var(--accent); background: var(--accent); color: #fff;
+}
+
+/* ── GENERATE FROM LECTURE ── */
+.cq-textarea {
+  width: 100%; padding: 11px 13px;
+  border: 1.5px solid #B0D4F0; border-radius: 8px;
+  font-family: var(--font); font-size: .9rem; color: var(--text-main);
+  background: #F7FBFF; outline: none; resize: vertical; min-height: 80px;
+  margin-bottom: 10px; transition: border-color .2s, box-shadow .2s;
+}
+.cq-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.15); }
+.cq-field-hint {
+  font-size: .76rem; color: var(--text-muted); font-weight: 600; margin-bottom: 6px;
+}
+.cq-qcount-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.cq-qcount-row label {
+  font-size: .82rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;
+}
+.cq-qcount-row input[type="number"] {
+  width: 90px; padding: 9px 11px; border: 1.5px solid #B0D4F0; border-radius: 8px;
+  font-family: var(--font); font-size: .9rem; background: #F7FBFF; outline: none;
+}
+.cq-qcount-row input[type="number"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.15); }
+.cq-badge-row {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.cq-badge {
+  background: #E3F2FD; color: #0D47A1; border-radius: 20px;
+  padding: 4px 11px; font-size: .75rem; font-weight: 700;
+}
   </style>
 </head>
 <body>
@@ -2158,6 +2203,17 @@ let cqGeneratedQuestions = null;
 let cqGeneratedTitle    = '';
 let cqBusy              = false;
 
+// ── NEW: Generate from lecture state ──
+let cqMode              = 'extract'; // 'extract' | 'generate'
+let cqLectureFile       = null;
+let cqCustomPrompt      = '';
+let cqQuestionCount     = '';
+
+function setCQMode(mode) {
+  cqMode = mode;
+  renderCustomQuizModal();
+}
+
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -2220,6 +2276,9 @@ function openCustomQuizzes() {
   cqGeneratedQuestions = null;
   cqGeneratedTitle = '';
   cqBusy = false;
+  cqLectureFile = null;
+  cqCustomPrompt = '';
+  cqQuestionCount = '';
   document.getElementById('customQuizOverlay').classList.remove('hidden');
   renderCustomQuizModal();
 }
@@ -2274,6 +2333,8 @@ function renderCustomQuizModal() {
   /* ── Create new quiz with AI ── */
   html += `<div class="cq-section">
     <div class="cq-section-title">✨ Create a New Quiz with AI (Gemini)</div>
+
+    <!-- API Key -->
     <div class="cq-help-box">
       <strong>How to get a free Gemini API key:</strong>
       <ol>
@@ -2289,19 +2350,67 @@ function renderCustomQuizModal() {
              value="${escapeHtml(savedKey)}" oninput="setGeminiKey(this.value)" />
       <button class="cq-btn cq-btn-secondary" id="cqToggleKeyBtn" onclick="toggleCQKeyVisibility()" type="button">👁</button>
     </div>
-    <div class="cq-dropzone" id="cqDropzone" onclick="document.getElementById('cqFileInput').click()">
-      <div class="cq-dz-icon">📄🖼️</div>
-      <div class="cq-dz-text">Click to upload, or drag &amp; drop — an image or PDF of your quiz questions</div>
-      ${cqSelectedFile ? `<div class="cq-dz-file">✅ ${escapeHtml(cqSelectedFile.name)}</div>` : ''}
+
+    <!-- Mode tabs -->
+    <div class="cq-tabs">
+      <button class="cq-tab-btn ${cqMode === 'extract' ? 'active' : ''}" onclick="setCQMode('extract')">📋 Extract from MCQs</button>
+      <button class="cq-tab-btn ${cqMode === 'generate' ? 'active' : ''}" onclick="setCQMode('generate')">🧠 Generate from Lecture</button>
     </div>
-    <input type="file" id="cqFileInput" accept="image/*,application/pdf" style="display:none;" onchange="handleCQFileSelect(event)" />
-    <div class="cq-input-row">
-      <input type="text" id="cqTitleInput" placeholder="Quiz title (e.g. 'Cardio Lecture 3')"
-             value="${escapeHtml(cqGeneratedTitle)}" oninput="cqGeneratedTitle = this.value" />
-      <button class="cq-btn" id="cqGenerateBtn" onclick="generateQuizFromAI()" ${cqBusy ? 'disabled' : ''}>
-        ${cqBusy ? '⏳ Generating…' : '✨ Generate Quiz'}
-      </button>
+
+    <!-- TAB: Extract from MCQs (original flow) -->
+    <div id="cqTabExtract" ${cqMode !== 'extract' ? 'style="display:none"' : ''}>
+      <div class="cq-field-hint">Upload an image or PDF that already contains MCQ questions — the AI will extract them exactly as written.</div>
+      <div class="cq-dropzone" id="cqDropzone" onclick="document.getElementById('cqFileInput').click()">
+        <div class="cq-dz-icon">📄🖼️</div>
+        <div class="cq-dz-text">Click to upload, or drag &amp; drop — an image or PDF of your quiz questions</div>
+        ${cqSelectedFile ? `<div class="cq-dz-file">✅ ${escapeHtml(cqSelectedFile.name)}</div>` : ''}
+      </div>
+      <input type="file" id="cqFileInput" accept="image/*,application/pdf" style="display:none;" onchange="handleCQFileSelect(event)" />
+      <div class="cq-input-row">
+        <input type="text" id="cqTitleInput" placeholder="Quiz title (e.g. 'Cardio Lecture 3')"
+               value="${escapeHtml(cqGeneratedTitle)}" oninput="cqGeneratedTitle = this.value" />
+        <button class="cq-btn" id="cqGenerateBtn" onclick="generateQuizFromAI()" ${cqBusy ? 'disabled' : ''}>
+          ${cqBusy ? '⏳ Generating…' : '✨ Extract Questions'}
+        </button>
+      </div>
     </div>
+
+    <!-- TAB: Generate from Lecture -->
+    <div id="cqTabGenerate" ${cqMode !== 'generate' ? 'style="display:none"' : ''}>
+      <div class="cq-badge-row">
+        <span class="cq-badge">🏥 Clinical scenarios included</span>
+        <span class="cq-badge">🎯 Hard difficulty</span>
+        <span class="cq-badge">🤖 AI-written questions</span>
+      </div>
+      <div class="cq-field-hint">Upload your lecture (PDF, image, or .txt file) — the AI will generate brand-new original questions from the content.</div>
+      <div class="cq-dropzone" id="cqLectureDropzone" onclick="document.getElementById('cqLectureFileInput').click()">
+        <div class="cq-dz-icon">📚🔬</div>
+        <div class="cq-dz-text">Click to upload, or drag &amp; drop — PDF, image, or .txt lecture file</div>
+        ${cqLectureFile ? `<div class="cq-dz-file">✅ ${escapeHtml(cqLectureFile.name)}</div>` : ''}
+      </div>
+      <input type="file" id="cqLectureFileInput" accept="image/*,application/pdf,text/plain,.txt" style="display:none;" onchange="handleLectureFileSelect(event)" />
+
+      <div class="cq-qcount-row">
+        <label for="cqQCountInput">Number of questions:</label>
+        <input type="number" id="cqQCountInput" placeholder="Auto" min="5" max="100"
+               value="${escapeHtml(cqQuestionCount)}" oninput="cqQuestionCount = this.value" />
+        <span class="cq-field-hint" style="margin:0;">(leave blank = AI decides based on content)</span>
+      </div>
+
+      <div class="cq-field-hint">Custom prompt / focus (optional):</div>
+      <textarea class="cq-textarea" id="cqCustomPromptInput"
+        placeholder="e.g. Focus on drug mechanisms and side effects. Include dosing questions."
+        oninput="cqCustomPrompt = this.value">${escapeHtml(cqCustomPrompt)}</textarea>
+
+      <div class="cq-input-row">
+        <input type="text" id="cqLectureTitleInput" placeholder="Quiz title (e.g. 'Respiratory Lecture 2')"
+               value="${escapeHtml(cqGeneratedTitle)}" oninput="cqGeneratedTitle = this.value" />
+        <button class="cq-btn" id="cqLectureGenBtn" onclick="generateQuizFromLecture()" ${cqBusy ? 'disabled' : ''}>
+          ${cqBusy ? '⏳ Generating…' : '🧠 Generate Questions'}
+        </button>
+      </div>
+    </div>
+
     <div id="cqStatus"></div>
     <div id="cqPreviewArea"></div>
   </div>`;
@@ -2310,6 +2419,7 @@ function renderCustomQuizModal() {
 
   if (cqGeneratedQuestions) renderCQPreview();
   setupCQDropzone();
+  setupLectureDropzone();
 }
 
 function setupCQDropzone() {
@@ -2327,9 +2437,49 @@ function setupCQDropzone() {
   });
 }
 
+function setupLectureDropzone() {
+  const dz = document.getElementById('cqLectureDropzone');
+  if (!dz) return;
+  ['dragenter', 'dragover'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.add('drag-over');
+  }));
+  ['dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag-over');
+  }));
+  dz.addEventListener('drop', e => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) acceptLectureFile(file);
+  });
+}
+
 function handleCQFileSelect(event) {
   const file = event.target.files && event.target.files[0];
   if (file) acceptCQFile(file);
+}
+
+function handleLectureFileSelect(event) {
+  const file = event.target.files && event.target.files[0];
+  if (file) acceptLectureFile(file);
+}
+
+function acceptLectureFile(file) {
+  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+  const isTxt   = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
+  const statusEl = document.getElementById('cqStatus');
+
+  if (!isPdf && !isImage && !isTxt) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload a PDF, image (JPG/PNG/WEBP), or .txt file.</div>`;
+    return;
+  }
+  if (file.size > 19 * 1024 * 1024) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File is too large (max ~19MB).</div>`;
+    return;
+  }
+
+  cqLectureFile = file;
+  if (statusEl) statusEl.innerHTML = '';
+  renderCustomQuizModal();
 }
 
 function acceptCQFile(file) {
@@ -2502,6 +2652,195 @@ async function generateQuizFromAI() {
   }
 }
 
+function buildGenerationPrompt(questionCount, customPrompt) {
+  const countInstruction = (questionCount && parseInt(questionCount) > 0)
+    ? `Generate exactly ${parseInt(questionCount)} questions.`
+    : `Decide the appropriate number of questions based on the content length — aim for roughly 1 question per major concept or topic, with a minimum of 10 and a maximum of 60.`;
+
+  const focusInstruction = (customPrompt && customPrompt.trim())
+    ? `Custom focus from the user: "${customPrompt.trim()}"`
+    : `Cover all major topics in the material comprehensively.`;
+
+  return `You are an expert medical exam question writer. Read the uploaded lecture material carefully and generate original, high-quality multiple-choice questions (MCQs) based ONLY on the content provided.
+
+QUESTION COUNT: ${countInstruction}
+
+DIFFICULTY: Hard — questions must require reasoning, clinical application, or integration of concepts. Avoid simple recall questions.
+
+QUESTION TYPES:
+- At least 50% of questions must be clinical scenario questions. These should start with a patient presentation, e.g.: "A 52-year-old male with a history of hypertension presents to the emergency department with sudden-onset chest pain radiating to the left arm..."
+- The remaining questions can test mechanisms, pathophysiology, pharmacology, or key concepts from the lecture.
+
+FOCUS: ${focusInstruction}
+
+STRICT RULES:
+1. Write ALL questions yourself — do NOT copy sentences from the lecture verbatim.
+2. Every question must have exactly 4 or 5 answer options (A, B, C, D — or A through E).
+3. Only one option is correct. Make the distractors plausible and clinically realistic.
+4. The correct answer must be definitively supported by the lecture content.
+5. Do NOT include any question that cannot be answered from the provided material.
+6. Do NOT add explanations, rationales, or commentary.
+
+Return ONLY a JSON array, one object per question, in exactly this format:
+[
+  {
+    "question": "full question text here",
+    "options": { "A": "option text", "B": "option text", "C": "option text", "D": "option text" },
+    "answer": "A"
+  }
+]
+
+The "answer" value must be one of the keys present in that question's "options" object. Output nothing besides the JSON array — no markdown fences, no preamble, no commentary.`;
+}
+
+function fileToText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result || '');
+    reader.onerror = () => reject(new Error('Failed to read the file.'));
+    reader.readAsText(file);
+  });
+}
+
+async function generateQuizFromLecture() {
+  const apiKeyInput   = document.getElementById('cqApiKeyInput');
+  const titleInput    = document.getElementById('cqLectureTitleInput');
+  const qCountInput   = document.getElementById('cqQCountInput');
+  const promptInput   = document.getElementById('cqCustomPromptInput');
+  const statusEl      = document.getElementById('cqStatus');
+  const genBtn        = document.getElementById('cqLectureGenBtn');
+
+  const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
+  const title  = (titleInput  ? titleInput.value  : cqGeneratedTitle).trim();
+  const qCount = (qCountInput ? qCountInput.value : cqQuestionCount).trim();
+  const prompt = (promptInput ? promptInput.value : cqCustomPrompt).trim();
+
+  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
+  if (!cqLectureFile) { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload a lecture file first.</div>`; return; }
+  if (!title)         { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
+
+  setGeminiKey(apiKey);
+  cqGeneratedTitle = title;
+  cqCustomPrompt   = prompt;
+  cqQuestionCount  = qCount;
+  cqBusy = true;
+  if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
+  statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your lecture and generating questions… this may take up to a minute for longer documents.</div>`;
+
+  try {
+    const isTxt = cqLectureFile.type === 'text/plain' || cqLectureFile.name.toLowerCase().endsWith('.txt');
+    const generationPrompt = buildGenerationPrompt(qCount, prompt);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    let requestBody;
+
+    if (isTxt) {
+      // Text file: send as plain text alongside the prompt
+      const lectureText = await fileToText(cqLectureFile);
+      if (!lectureText.trim()) throw new Error('The text file appears to be empty.');
+      requestBody = {
+        contents: [{
+          parts: [
+            { text: `LECTURE CONTENT:\n\n${lectureText}\n\n---\n\n${generationPrompt}` }
+          ]
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: CQ_RESPONSE_SCHEMA,
+          temperature: 0.7,
+          maxOutputTokens: 65536
+        }
+      };
+    } else {
+      // PDF or image: send as base64
+      const base64Data = await fileToBase64(cqLectureFile);
+      const mimeType = cqLectureFile.type ||
+        (cqLectureFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      requestBody = {
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: mimeType, data: base64Data } },
+            { text: generationPrompt }
+          ]
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: CQ_RESPONSE_SCHEMA,
+          temperature: 0.7,
+          maxOutputTokens: 65536
+        }
+      };
+    }
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      const msg = (data && data.error && data.error.message) || `Request failed (HTTP ${resp.status}).`;
+      throw new Error(msg);
+    }
+
+    const candidate = data && data.candidates && data.candidates[0];
+    if (!candidate) throw new Error('Gemini returned no result. The file may be unsupported or too large — try splitting it into smaller sections.');
+
+    const finishReason = candidate.finishReason;
+    const textOut = (candidate.content && candidate.content.parts || [])
+      .map(p => p.text || '').join('');
+    if (!textOut.trim()) throw new Error('Gemini returned an empty response. Please try again.');
+
+    let parsed;
+    try {
+      const clean = textOut.replace(/```json|```/g, '').trim();
+      parsed = JSON.parse(clean);
+    } catch (e) { throw new Error('Could not understand the AI response. Please try again.'); }
+
+    if (!Array.isArray(parsed) || !parsed.length) {
+      throw new Error('No questions were generated. Try uploading a more detailed lecture or reducing the question count.');
+    }
+
+    const cleaned = parsed.map(q => {
+      if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
+      const opts = {};
+      Object.entries(q.options).forEach(([k, v]) => {
+        if (typeof v === 'string' && v.trim() !== '') opts[k.toUpperCase()] = v;
+      });
+      if (!Object.keys(opts).length) return null;
+      let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
+      if (!opts[answer]) answer = Object.keys(opts)[0];
+      return { question: q.question, options: opts, answer };
+    }).filter(Boolean);
+
+    if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
+
+    cqGeneratedQuestions = cleaned;
+
+    let warn = '';
+    if (finishReason === 'MAX_TOKENS') {
+      warn = ` ⚠️ The response may have been cut off — try splitting very long documents into smaller files.`;
+    }
+
+    const clinicalCount = cleaned.filter(q =>
+      /\b(patient|presents|year.old|male|female|man|woman|child|boy|girl|case|history|examination|complains|admitted|brought|referred)\b/i.test(q.question)
+    ).length;
+    const clinicalPct = Math.round((clinicalCount / cleaned.length) * 100);
+
+    statusEl.innerHTML = `<div class="cq-status success">✅ Generated ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''} (${clinicalPct}% clinical scenarios). Review below, then save.${warn}</div>`;
+    renderCQPreview();
+
+  } catch (err) {
+    statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
+  } finally {
+    cqBusy = false;
+    const btn = document.getElementById('cqLectureGenBtn');
+    if (btn) { btn.disabled = false; btn.textContent = '🧠 Generate Questions'; }
+  }
+}
+
 function renderCQPreview() {
   const area = document.getElementById('cqPreviewArea');
   if (!area) return;
@@ -2526,6 +2865,7 @@ function renderCQPreview() {
 
 function discardGeneratedQuiz() {
   cqGeneratedQuestions = null;
+  cqLectureFile = null;
   renderCustomQuizModal();
 }
 
@@ -2545,6 +2885,7 @@ async function saveGeneratedCustomQuiz() {
 
   cqGeneratedQuestions = null;
   cqSelectedFile = null;
+  cqLectureFile = null;
   cqGeneratedTitle = '';
 
   renderCustomQuizModal();
