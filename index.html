@@ -659,7 +659,91 @@
         .stat-tile .stat-val { font-size: 1.1rem; }
         .subj-stat-name { min-width: 70px; font-size: .75rem; }
       }
-/* ── CHANGE FLOW ── */
+/* ── CUSTOM QUIZZES (AI) ── */
+.cq-section {
+  background: var(--bg-card);
+  border: 1px solid #B0D4F0;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 4px;
+}
+.cq-section-title {
+  font-size: .78rem; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .8px; margin-bottom: 10px;
+}
+.cq-help-box {
+  background: #F0F8FF; border: 1px solid #B0D4F0; border-radius: 8px;
+  padding: 12px 14px; font-size: .85rem; line-height: 1.6; color: var(--text-main);
+  margin-bottom: 14px;
+}
+.cq-help-box ol { margin: 6px 0 0 20px; }
+.cq-help-box a { color: var(--accent); font-weight: 700; text-decoration: none; }
+.cq-help-box a:hover { text-decoration: underline; }
+.cq-input-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.cq-input-row input[type="password"],
+.cq-input-row input[type="text"] {
+  flex: 1; min-width: 180px;
+  padding: 11px 13px; border: 1.5px solid #B0D4F0; border-radius: 8px;
+  font-family: var(--font); font-size: .92rem; color: var(--text-main);
+  background: #F7FBFF; outline: none;
+}
+.cq-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.15); }
+.cq-btn {
+  background: var(--accent); color: white; border: none; border-radius: 8px;
+  padding: 11px 18px; font-family: var(--font); font-size: .9rem; font-weight: 700;
+  cursor: pointer; transition: filter .15s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.cq-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.cq-btn:disabled { opacity: .5; cursor: not-allowed; }
+.cq-btn-secondary { background: #78909C; }
+.cq-btn-danger { background: #C62828; }
+.cq-dropzone {
+  border: 2px dashed #B0D4F0; border-radius: 10px; padding: 22px 14px;
+  text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  background: #F7FBFF; margin-bottom: 10px;
+}
+.cq-dropzone:hover, .cq-dropzone.drag-over { border-color: var(--accent); background: #EEF7FF; }
+.cq-dropzone .cq-dz-icon { font-size: 1.8rem; margin-bottom: 6px; }
+.cq-dropzone .cq-dz-text { font-size: .88rem; color: var(--text-muted); font-weight: 600; }
+.cq-dropzone .cq-dz-file { font-size: .85rem; color: var(--accent); font-weight: 700; margin-top: 6px; }
+.cq-status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: 8px; font-size: .88rem; font-weight: 600;
+  margin: 10px 0;
+}
+.cq-status.info { background: #E3F2FD; color: #0D47A1; }
+.cq-status.error { background: #FFEBEE; color: #C62828; }
+.cq-status.success { background: #E8F5E9; color: #2E7D32; }
+.cq-spinner {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 3px solid rgba(13,71,161,.25); border-top-color: #0D47A1;
+  animation: cqspin .8s linear infinite; flex-shrink: 0;
+}
+@keyframes cqspin { to { transform: rotate(360deg); } }
+.cq-quiz-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: #F7FBFF; border: 1px solid #D8EAF7; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.cq-quiz-info { flex: 1; min-width: 140px; }
+.cq-quiz-name { font-weight: 700; font-size: .92rem; color: var(--text-main); }
+.cq-quiz-meta { font-size: .76rem; color: var(--text-muted); margin-top: 2px; }
+.cq-quiz-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cq-quiz-actions input[type="number"] {
+  width: 64px; padding: 7px 8px; border: 1.5px solid #B0D4F0; border-radius: 6px;
+  font-family: var(--font); font-size: .82rem; background: #fff;
+}
+.cq-preview-list {
+  max-height: 260px; overflow-y: auto; border: 1px solid #D8EAF7; border-radius: 8px;
+  padding: 10px 12px; background: #F7FBFF; margin: 10px 0;
+}
+.cq-preview-q { font-size: .85rem; padding: 8px 0; border-bottom: 1px solid #E3F2FD; }
+.cq-preview-q:last-child { border-bottom: none; }
+.cq-preview-q .cq-pq-num { font-weight: 800; color: var(--accent); }
+.cq-preview-q .cq-pq-opt { padding-left: 16px; color: var(--text-muted); }
+.cq-preview-q .cq-pq-opt.cq-correct { color: var(--correct-fg); font-weight: 700; }
+
 .change-flow-section {
   background: var(--bg-card);
   border: 1px solid #B0D4F0;
@@ -727,6 +811,17 @@
     </div>
   </div>
 
+<!-- CUSTOM QUIZZES MODAL -->
+  <div id="customQuizOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeCustomQuizzes()">
+    <div class="stats-modal">
+      <div class="stats-modal-header">
+        <h2>🤖&nbsp; Custom Quizzes (AI)</h2>
+        <button class="stats-close-btn" onclick="closeCustomQuizzes()">✕</button>
+      </div>
+      <div class="stats-body" id="customQuizBody"></div>
+    </div>
+  </div>
+
   <!-- ══════════════════════════════════════════════
        HOME SCREEN
   ══════════════════════════════════════════════ -->
@@ -737,6 +832,7 @@
       <div id="authAreaHome" style="display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 6px;flex-wrap:wrap;"></div>
         <button class="stats-open-btn" onclick="openStats()">📊&nbsp; My Statistics</button>
         <button class="stats-open-btn" onclick="openRetake()">🔄&nbsp; Retake Wrong Qs</button>
+        <button class="stats-open-btn" onclick="openCustomQuizzes()">🤖&nbsp; Custom Quizzes</button>
     </div>
     <div class="home-body">
       <div class="card">
@@ -2049,6 +2145,418 @@ function dismissWaterFlood() {
 
   resetIdleTimer();
 })();
+
+/* ══════════════════════════════════════════════════════════
+   CUSTOM QUIZZES — AI-POWERED (GEMINI)
+══════════════════════════════════════════════════════════ */
+const CQ_KEY           = 'anu_msp_custom_quizzes_v1';
+const CQ_API_KEY_STORE = 'anu_msp_gemini_api_key';
+const CQ_MODEL         = 'gemini-2.5-flash';
+
+let cqSelectedFile      = null;
+let cqGeneratedQuestions = null;
+let cqGeneratedTitle    = '';
+let cqBusy              = false;
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function loadCustomQuizzes() {
+  try {
+    const raw = localStorage.getItem(CQ_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveCustomQuizzesList(arr) {
+  try { localStorage.setItem(CQ_KEY, JSON.stringify(arr)); } catch (e) {}
+}
+function getGeminiKey() {
+  try { return localStorage.getItem(CQ_API_KEY_STORE) || ''; } catch (e) { return ''; }
+}
+function setGeminiKey(key) {
+  try { localStorage.setItem(CQ_API_KEY_STORE, (key || '').trim()); } catch (e) {}
+}
+
+function openCustomQuizzes() {
+  cqSelectedFile = null;
+  cqGeneratedQuestions = null;
+  cqGeneratedTitle = '';
+  cqBusy = false;
+  document.getElementById('customQuizOverlay').classList.remove('hidden');
+  renderCustomQuizModal();
+}
+function closeCustomQuizzes() {
+  document.getElementById('customQuizOverlay').classList.add('hidden');
+}
+
+function toggleCQKeyVisibility() {
+  const input = document.getElementById('cqApiKeyInput');
+  const btn   = document.getElementById('cqToggleKeyBtn');
+  if (!input) return;
+  if (input.type === 'password') { input.type = 'text';     btn.textContent = '🙈'; }
+  else                            { input.type = 'password'; btn.textContent = '👁'; }
+}
+
+function renderCustomQuizModal() {
+  const body     = document.getElementById('customQuizBody');
+  const savedKey = getGeminiKey();
+  const quizzes  = loadCustomQuizzes();
+
+  let html = '';
+
+  /* ── Saved custom quizzes ── */
+  html += `<div class="cq-section">
+    <div class="cq-section-title">📚 Your Custom Quizzes</div>`;
+  if (!quizzes.length) {
+    html += `<div class="empty-state" style="padding:12px;">
+      <div class="empty-icon">📭</div>
+      No custom quizzes yet — create one below using AI.
+    </div>`;
+  } else {
+    quizzes.forEach(q => {
+      const defMins = Math.max(5, q.questions.length);
+      html += `<div class="cq-quiz-item">
+        <div class="cq-quiz-info">
+          <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
+          <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} · created ${new Date(q.createdAt).toLocaleDateString()}</div>
+        </div>
+        <div class="cq-quiz-actions">
+          <input type="number" id="cqMins_${q.id}" value="${defMins}" min="1" max="180" title="Duration (minutes)" />
+          <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Shuffle questions">
+            <input type="checkbox" id="cqShuffle_${q.id}" style="width:14px;height:14px;accent-color:var(--accent);" /> 🔀
+          </label>
+          <button class="cq-btn" onclick="startCustomQuiz('${q.id}')">▶ Start</button>
+          <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">🗑</button>
+        </div>
+      </div>`;
+    });
+  }
+  html += `</div>`;
+
+  /* ── Create new quiz with AI ── */
+  html += `<div class="cq-section">
+    <div class="cq-section-title">✨ Create a New Quiz with AI (Gemini)</div>
+    <div class="cq-help-box">
+      <strong>How to get a free Gemini API key:</strong>
+      <ol>
+        <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
+        <li>Sign in with your Google account</li>
+        <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
+        <li>Copy the generated key and paste it into the box below</li>
+      </ol>
+      Your key is saved only in this browser and is sent directly to Google's API — it never passes through any other server.
+    </div>
+    <div class="cq-input-row">
+      <input type="password" id="cqApiKeyInput" placeholder="Paste your Gemini API key here"
+             value="${escapeHtml(savedKey)}" oninput="setGeminiKey(this.value)" />
+      <button class="cq-btn cq-btn-secondary" id="cqToggleKeyBtn" onclick="toggleCQKeyVisibility()" type="button">👁</button>
+    </div>
+    <div class="cq-dropzone" id="cqDropzone" onclick="document.getElementById('cqFileInput').click()">
+      <div class="cq-dz-icon">📄🖼️</div>
+      <div class="cq-dz-text">Click to upload, or drag &amp; drop — an image or PDF of your quiz questions</div>
+      ${cqSelectedFile ? `<div class="cq-dz-file">✅ ${escapeHtml(cqSelectedFile.name)}</div>` : ''}
+    </div>
+    <input type="file" id="cqFileInput" accept="image/*,application/pdf" style="display:none;" onchange="handleCQFileSelect(event)" />
+    <div class="cq-input-row">
+      <input type="text" id="cqTitleInput" placeholder="Quiz title (e.g. 'Cardio Lecture 3')"
+             value="${escapeHtml(cqGeneratedTitle)}" oninput="cqGeneratedTitle = this.value" />
+      <button class="cq-btn" id="cqGenerateBtn" onclick="generateQuizFromAI()" ${cqBusy ? 'disabled' : ''}>
+        ${cqBusy ? '⏳ Generating…' : '✨ Generate Quiz'}
+      </button>
+    </div>
+    <div id="cqStatus"></div>
+    <div id="cqPreviewArea"></div>
+  </div>`;
+
+  body.innerHTML = html;
+
+  if (cqGeneratedQuestions) renderCQPreview();
+  setupCQDropzone();
+}
+
+function setupCQDropzone() {
+  const dz = document.getElementById('cqDropzone');
+  if (!dz) return;
+  ['dragenter', 'dragover'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.add('drag-over');
+  }));
+  ['dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag-over');
+  }));
+  dz.addEventListener('drop', e => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) acceptCQFile(file);
+  });
+}
+
+function handleCQFileSelect(event) {
+  const file = event.target.files && event.target.files[0];
+  if (file) acceptCQFile(file);
+}
+
+function acceptCQFile(file) {
+  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+  const statusEl = document.getElementById('cqStatus');
+
+  if (!isPdf && !isImage) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload an image (JPG/PNG/WEBP) or a PDF file.</div>`;
+    return;
+  }
+  if (file.size > 19 * 1024 * 1024) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File is too large (max ~19MB).</div>`;
+    return;
+  }
+
+  cqSelectedFile = file;
+  if (statusEl) statusEl.innerHTML = '';
+  renderCustomQuizModal();
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(new Error('Failed to read the file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+const CQ_EXTRACTION_PROMPT = `You are extracting multiple-choice quiz questions from an uploaded document (image or PDF).
+
+STRICT RULES — follow exactly, no exceptions:
+1. Extract EVERY single question that appears anywhere in the document. Do not skip, merge, summarize, or leave out any question — even ones that look incomplete, partial, blurry, or unusual.
+2. Reproduce each question's text EXACTLY as written in the source — same wording, numbers, punctuation, and even typos. Do NOT correct, rephrase, shorten, translate, or "improve" anything.
+3. Reproduce EVERY answer choice EXACTLY as written, in the same order, using the same labels (A, B, C, D, E, ... — convert numeric labels like 1,2,3 to A,B,C). Do not omit, reorder, merge, or reword any choice.
+4. If the document indicates which choice is correct (circled, bolded, underlined, highlighted, starred, checked, or listed in a separate answer key), use EXACTLY that choice as the "answer" for that question. Do not second-guess or change a marked answer.
+5. ONLY if a specific question has NO indicated correct answer anywhere in the document, then — and only then — use your own subject-matter knowledge to determine the single most likely correct answer for that question.
+6. Do not invent, add, duplicate, or remove any questions or options that are not present in the source document.
+
+Return ONLY a JSON array, one object per question, in exactly this format:
+[
+  {
+    "question": "exact question text",
+    "options": { "A": "exact choice text", "B": "exact choice text", "C": "exact choice text", "D": "exact choice text" },
+    "answer": "A"
+  }
+]
+
+The "answer" value must be one of the keys present in that question's "options" object. Output nothing besides this JSON array — no markdown fences, no commentary.`;
+
+const CQ_RESPONSE_SCHEMA = {
+  type: 'ARRAY',
+  items: {
+    type: 'OBJECT',
+    properties: {
+      question: { type: 'STRING' },
+      options: {
+        type: 'OBJECT',
+        properties: {
+          A: { type: 'STRING' }, B: { type: 'STRING' }, C: { type: 'STRING' }, D: { type: 'STRING' },
+          E: { type: 'STRING' }, F: { type: 'STRING' }, G: { type: 'STRING' }, H: { type: 'STRING' },
+          I: { type: 'STRING' }, J: { type: 'STRING' }
+        }
+      },
+      answer: { type: 'STRING' }
+    },
+    required: ['question', 'options', 'answer']
+  }
+};
+
+async function generateQuizFromAI() {
+  const apiKeyInput = document.getElementById('cqApiKeyInput');
+  const titleInput  = document.getElementById('cqTitleInput');
+  const statusEl    = document.getElementById('cqStatus');
+  const genBtn      = document.getElementById('cqGenerateBtn');
+
+  const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
+  const title  = (titleInput ? titleInput.value : cqGeneratedTitle).trim();
+
+  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
+  if (!cqSelectedFile){ statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload an image or PDF of your quiz first.</div>`; return; }
+  if (!title)         { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
+
+  setGeminiKey(apiKey);
+  cqGeneratedTitle = title;
+  cqBusy = true;
+  if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
+  statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions… this can take a moment for longer documents.</div>`;
+
+  try {
+    const base64Data = await fileToBase64(cqSelectedFile);
+    const mimeType = cqSelectedFile.type ||
+      (cqSelectedFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: mimeType, data: base64Data } },
+            { text: CQ_EXTRACTION_PROMPT }
+          ]
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: CQ_RESPONSE_SCHEMA,
+          temperature: 0,
+          maxOutputTokens: 65536
+        }
+      })
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      const msg = (data && data.error && data.error.message) || `Request failed (HTTP ${resp.status}).`;
+      throw new Error(msg);
+    }
+
+    const candidate = data && data.candidates && data.candidates[0];
+    if (!candidate) throw new Error('Gemini returned no result. The file may be unsupported or blocked — try a clearer image or PDF.');
+
+    const finishReason = candidate.finishReason;
+    const textOut = (candidate.content && candidate.content.parts || [])
+      .map(p => p.text || '').join('');
+    if (!textOut.trim()) throw new Error('Gemini returned an empty response. Please try again.');
+
+    let parsed;
+    try { parsed = JSON.parse(textOut); }
+    catch (e) { throw new Error('Could not understand the AI response. Please try again.'); }
+
+    if (!Array.isArray(parsed) || !parsed.length) {
+      throw new Error('No questions could be detected in the uploaded file.');
+    }
+
+    const cleaned = parsed.map(q => {
+      if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
+      const opts = {};
+      Object.entries(q.options).forEach(([k, v]) => {
+        if (typeof v === 'string' && v.trim() !== '') opts[k.toUpperCase()] = v;
+      });
+      if (!Object.keys(opts).length) return null;
+      let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
+      if (!opts[answer]) answer = Object.keys(opts)[0];
+      return { question: q.question, options: opts, answer };
+    }).filter(Boolean);
+
+    if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
+
+    cqGeneratedQuestions = cleaned;
+
+    let warn = '';
+    if (finishReason === 'MAX_TOKENS') {
+      warn = ` ⚠️ The response may have been cut off because the document is very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
+    }
+
+    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}. Review below, then save.${warn}</div>`;
+    renderCQPreview();
+
+  } catch (err) {
+    statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
+  } finally {
+    cqBusy = false;
+    const btn = document.getElementById('cqGenerateBtn');
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Generate Quiz'; }
+  }
+}
+
+function renderCQPreview() {
+  const area = document.getElementById('cqPreviewArea');
+  if (!area) return;
+  if (!cqGeneratedQuestions) { area.innerHTML = ''; return; }
+
+  let html = `<div class="cq-preview-list">`;
+  cqGeneratedQuestions.forEach((q, i) => {
+    html += `<div class="cq-preview-q"><div><span class="cq-pq-num">Q${i + 1}.</span> ${escapeHtml(q.question)}</div>`;
+    Object.entries(q.options).forEach(([k, v]) => {
+      const isCorrect = k === q.answer;
+      html += `<div class="cq-pq-opt${isCorrect ? ' cq-correct' : ''}">${escapeHtml(k)}. ${escapeHtml(v)}${isCorrect ? ' ✔' : ''}</div>`;
+    });
+    html += `</div>`;
+  });
+  html += `</div>
+  <div class="cq-input-row">
+    <button class="cq-btn" onclick="saveGeneratedCustomQuiz()">💾 Save Quiz</button>
+    <button class="cq-btn cq-btn-secondary" onclick="discardGeneratedQuiz()">✖ Discard</button>
+  </div>`;
+  area.innerHTML = html;
+}
+
+function discardGeneratedQuiz() {
+  cqGeneratedQuestions = null;
+  renderCustomQuizModal();
+}
+
+function saveGeneratedCustomQuiz() {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions.length) return;
+  const titleInput = document.getElementById('cqTitleInput');
+  const title = (titleInput && titleInput.value.trim()) || cqGeneratedTitle || 'Custom Quiz';
+
+  const quizzes = loadCustomQuizzes();
+  quizzes.unshift({
+    id: 'cq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    title,
+    questions: cqGeneratedQuestions,
+    createdAt: Date.now()
+  });
+  saveCustomQuizzesList(quizzes);
+
+  cqGeneratedQuestions = null;
+  cqSelectedFile = null;
+  cqGeneratedTitle = '';
+
+  renderCustomQuizModal();
+  const statusEl = document.getElementById('cqStatus');
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Quiz "${escapeHtml(title)}" saved! Start it from the list above.</div>`;
+}
+
+function deleteCustomQuiz(id) {
+  if (!confirm('Delete this custom quiz? This cannot be undone.')) return;
+  let quizzes = loadCustomQuizzes();
+  quizzes = quizzes.filter(q => q.id !== id);
+  saveCustomQuizzesList(quizzes);
+  renderCustomQuizModal();
+}
+
+function startCustomQuiz(id) {
+  const quizzes = loadCustomQuizzes();
+  const quiz = quizzes.find(q => q.id === id);
+  if (!quiz || !quiz.questions || !quiz.questions.length) return;
+
+  const minsInput     = document.getElementById('cqMins_' + id);
+  const shuffleInput  = document.getElementById('cqShuffle_' + id);
+  let mins = minsInput ? parseInt(minsInput.value, 10) : NaN;
+  if (!mins || mins <= 0) mins = Math.max(5, quiz.questions.length);
+  const shuffle = shuffleInput ? shuffleInput.checked : false;
+
+  let combined = JSON.parse(JSON.stringify(quiz.questions));
+  if (shuffle) {
+    for (let i = combined.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [combined[i], combined[j]] = [combined[j], combined[i]];
+    }
+  }
+
+  selectedSubject  = 'Custom Quizzes';
+  currentLecture   = quiz.title;
+  currentQuestions = combined;
+  currentIndex = 0; userAnswers = {}; markedSet = new Set();
+  questionTimes = {}; correctToWrong = 0; wrongToCorrect = 0; changeLog = [];
+  timeLeft = mins * 60;
+
+  closeCustomQuizzes();
+  showScreen('quiz');
+  renderQuestion();
+  startTimer();
+}
+
 function goHome() {
   stopTimer();
   showScreen('home');
