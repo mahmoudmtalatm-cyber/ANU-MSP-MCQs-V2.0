@@ -2656,11 +2656,10 @@ const CQ_RESPONSE_SCHEMA = {
   }
 };
 
-/* ── Retry helper: silently retries up to maxAttempts times.
-   Only surfaces an error to the caller if it's API-key-related
-   (HTTP 400 with API_KEY_INVALID / 401 / 403), otherwise keeps retrying.
-   Between retries it waits with exponential back-off (2s, 4s, 8s…). ──────── */
-async function callGeminiWithRetry(url, bodyObj, { maxAttempts = 5, onRetry } = {}) {
+/* ── Retry helper: retries indefinitely with exponential back-off (2s, 4s, 8s… capped at 30s).
+   Only surfaces an error immediately if it's API-key-related
+   (HTTP 400 with API_KEY_INVALID / 401 / 403). ──────── */
+async function callGeminiWithRetry(url, bodyObj, { onRetry } = {}) {
   const KEY_ERRORS = ['API_KEY_INVALID', 'API_KEY_NOT_VALID', 'INVALID_API_KEY',
                       'PERMISSION_DENIED', 'API key not valid'];
 
@@ -2672,8 +2671,9 @@ async function callGeminiWithRetry(url, bodyObj, { maxAttempts = 5, onRetry } = 
     return false;
   }
 
-  let lastErr;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  let attempt = 0;
+  while (true) {
+    attempt++;
     try {
       const resp = await fetch(url, {
         method: 'POST',
@@ -2689,26 +2689,18 @@ async function callGeminiWithRetry(url, bodyObj, { maxAttempts = 5, onRetry } = 
         err._apiData    = data;
         // Always surface key errors immediately — no point retrying
         if (isKeyError(resp.status, data)) throw Object.assign(err, { _keyError: true });
-        lastErr = err;
-        if (attempt < maxAttempts) {
-          if (onRetry) onRetry(attempt, maxAttempts);
-          await new Promise(r => setTimeout(r, Math.min(2000 * Math.pow(2, attempt - 1), 30000)));
-          continue;
-        }
-        throw err;
+        if (onRetry) onRetry(attempt);
+        await new Promise(r => setTimeout(r, Math.min(2000 * Math.pow(2, attempt - 1), 30000)));
+        continue;
       }
 
       return data; // success
     } catch (err) {
       if (err._keyError) throw err; // propagate key errors immediately
-      lastErr = err;
-      if (attempt < maxAttempts) {
-        if (onRetry) onRetry(attempt, maxAttempts);
-        await new Promise(r => setTimeout(r, Math.min(2000 * Math.pow(2, attempt - 1), 30000)));
-      }
+      if (onRetry) onRetry(attempt);
+      await new Promise(r => setTimeout(r, Math.min(2000 * Math.pow(2, attempt - 1), 30000)));
     }
   }
-  throw lastErr;
 }
 
 async function generateQuizFromAI() {
@@ -2751,8 +2743,8 @@ async function generateQuizFromAI() {
         maxOutputTokens: 65536
       }
     }, {
-      onRetry: (attempt, max) => {
-        if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions… (attempt ${attempt + 1} of ${max})</div>`;
+      onRetry: () => {
+        if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions… this may take a moment, please wait.</div>`;
       }
     });
 
@@ -2775,9 +2767,10 @@ async function generateQuizFromAI() {
     const cleaned = parsed.map(q => {
       if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
       const opts = {};
-      Object.entries(q.options).forEach(([k, v]) => {
-        if (typeof v === 'string' && v.trim() !== '') opts[k.toUpperCase()] = v;
-      });
+      Object.entries(q.options)
+        .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
+        .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
+        .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
       if (!Object.keys(opts).length) return null;
       let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
       if (!opts[answer]) answer = Object.keys(opts)[0];
@@ -2800,7 +2793,14 @@ async function generateQuizFromAI() {
     const isKeyErr = err._keyError ||
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
-      statusEl.innerHTML = `<div class="cq-status error">🔑 API key error: ${escapeHtml(err.message || String(err))}<br><small>Please check your Gemini API key and try again.</small></div>`;
+      statusEl.innerHTML = `<div class="cq-status error">🔑 Your API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
+        <strong>Please enter a new Gemini API key above and try again.</strong><br>
+        <small>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">aistudio.google.com/apikey</a></small>
+      </div>`;
+      // Clear the stored bad key and focus the input
+      setGeminiKey('');
+      const inp = document.getElementById('cqApiKeyInput');
+      if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
     } else {
       statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
     }
@@ -2932,8 +2932,8 @@ async function generateQuizFromLecture() {
     }
 
     const data = await callGeminiWithRetry(url, requestBody, {
-      onRetry: (attempt, max) => {
-        if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your lecture and generating questions… (attempt ${attempt + 1} of ${max})</div>`;
+      onRetry: () => {
+        if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your lecture and generating questions… this may take a moment, please wait.</div>`;
       }
     });
 
@@ -2958,9 +2958,10 @@ async function generateQuizFromLecture() {
     const cleaned = parsed.map(q => {
       if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
       const opts = {};
-      Object.entries(q.options).forEach(([k, v]) => {
-        if (typeof v === 'string' && v.trim() !== '') opts[k.toUpperCase()] = v;
-      });
+      Object.entries(q.options)
+        .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
+        .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
+        .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
       if (!Object.keys(opts).length) return null;
       let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
       if (!opts[answer]) answer = Object.keys(opts)[0];
@@ -2988,7 +2989,14 @@ async function generateQuizFromLecture() {
     const isKeyErr = err._keyError ||
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
-      statusEl.innerHTML = `<div class="cq-status error">🔑 API key error: ${escapeHtml(err.message || String(err))}<br><small>Please check your Gemini API key and try again.</small></div>`;
+      statusEl.innerHTML = `<div class="cq-status error">🔑 Your API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
+        <strong>Please enter a new Gemini API key above and try again.</strong><br>
+        <small>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">aistudio.google.com/apikey</a></small>
+      </div>`;
+      // Clear the stored bad key and focus the input
+      setGeminiKey('');
+      const inp = document.getElementById('cqApiKeyInput');
+      if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
     } else {
       statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
     }
