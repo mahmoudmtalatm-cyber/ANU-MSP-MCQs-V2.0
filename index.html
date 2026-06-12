@@ -953,79 +953,16 @@
 }
 
 /* ── AI EXPLANATION ── */
-.ai-explain-btn-row {
-  display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap;
-}
 .ai-explain-btn {
   display: inline-flex; align-items: center; gap: 5px;
   background: #EDE7F6; color: #4527A0; border: 1.5px solid #B39DDB;
   border-radius: 7px; padding: 5px 12px; font-family: var(--font);
   font-size: .8rem; font-weight: 700; cursor: pointer;
-  transition: all .15s;
+  transition: all .15s; margin-top: 8px;
 }
 .ai-explain-btn:hover:not(:disabled) { background: #D1C4E9; border-color: #7E57C2; }
 .ai-explain-btn:disabled { opacity: .55; cursor: not-allowed; }
 .ai-explain-btn.loading { background: #E8EAF6; color: #3949AB; }
-
-/* Stop button */
-.ai-stop-btn {
-  display: none; align-items: center; gap: 5px;
-  background: #FFEBEE; color: #C62828; border: 1.5px solid #EF9A9A;
-  border-radius: 7px; padding: 5px 10px; font-family: var(--font);
-  font-size: .8rem; font-weight: 700; cursor: pointer; transition: all .15s;
-}
-.ai-stop-btn.visible { display: inline-flex; }
-.ai-stop-btn:hover { background: #FFCDD2; border-color: #C62828; }
-
-/* API key icon button */
-.ai-apikey-icon-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px;
-  background: #F3E5F5; color: #7B1FA2; border: 1.5px solid #CE93D8;
-  border-radius: 7px; cursor: pointer; font-size: .9rem;
-  transition: all .15s; flex-shrink: 0; position: relative;
-}
-.ai-apikey-icon-btn:hover { background: #E1BEE7; border-color: #7B1FA2; }
-.ai-apikey-icon-btn[data-has-key="true"] { background: #E8F5E9; color: #2E7D32; border-color: #A5D6A7; }
-.ai-apikey-icon-btn[data-has-key="true"]:hover { background: #C8E6C9; }
-
-/* API key update popover */
-.ai-apikey-popover {
-  position: fixed; z-index: 15000;
-  background: white; border: 1.5px solid #CE93D8; border-radius: 10px;
-  padding: 14px 16px; width: 320px;
-  box-shadow: 0 8px 30px rgba(0,0,0,.18);
-}
-.ai-apikey-popover-title {
-  font-size: .85rem; font-weight: 800; color: #4527A0; margin-bottom: 4px;
-}
-.ai-apikey-popover-sub {
-  font-size: .75rem; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5;
-}
-.ai-apikey-popover-row {
-  display: flex; gap: 6px; align-items: center;
-}
-.ai-apikey-popover-row input {
-  flex: 1; padding: 8px 10px; border: 1.5px solid #B39DDB; border-radius: 6px;
-  font-family: var(--font); font-size: .82rem; outline: none;
-}
-.ai-apikey-popover-row input:focus { border-color: #7E57C2; }
-.ai-apikey-popover-save {
-  background: #7E57C2; color: white; border: none; border-radius: 6px;
-  padding: 8px 12px; font-family: var(--font); font-size: .82rem; font-weight: 700;
-  cursor: pointer; white-space: nowrap;
-}
-.ai-apikey-popover-save:hover { background: #6A1B9A; }
-.ai-apikey-popover-close {
-  position: absolute; top: 8px; right: 10px;
-  background: none; border: none; font-size: 1rem; cursor: pointer; color: var(--text-muted);
-}
-.ai-apikey-popover-hint {
-  font-size: .73rem; color: #E65100; font-weight: 700; margin-top: 8px;
-  background: #FFF3E0; border: 1px solid #FFB74D; border-radius: 6px;
-  padding: 7px 10px; display: none; line-height: 1.5;
-}
-.ai-apikey-popover-hint.visible { display: block; }
 
 .ai-explain-panel {
   margin-top: 10px; border-radius: 8px;
@@ -1072,23 +1009,6 @@
 }
 .ai-explain-all-btn:hover:not(:disabled) { background: #D1C4E9; }
 .ai-explain-all-btn:disabled { opacity: .5; cursor: not-allowed; }
-.ai-explain-all-stop-btn {
-  display: none; align-items: center; gap: 7px;
-  background: #FFEBEE; color: #C62828; border: 2px solid #EF9A9A;
-  border-radius: 8px; padding: 11px 22px; font-family: var(--font);
-  font-size: .95rem; font-weight: 700; cursor: pointer; transition: all .15s;
-}
-.ai-explain-all-stop-btn.visible { display: inline-flex; }
-.ai-explain-all-stop-btn:hover { background: #FFCDD2; }
-
-/* timeout warning in explain panel */
-.ai-exp-timeout-hint {
-  margin: 8px 14px 0; padding: 9px 12px;
-  background: #FFF3E0; border: 1px solid #FFB74D; border-radius: 7px;
-  font-size: .8rem; color: #E65100; font-weight: 700; line-height: 1.5;
-  display: none;
-}
-.ai-exp-timeout-hint.visible { display: block; }
 
 /* Concurrent explanation conflict panel */
 .ai-conflict-panel {
@@ -1346,13 +1266,9 @@
       <div class="results-score-badge" id="scoreBadge"></div>
     </div>
     <div class="results-body" id="resultsBody"></div>
-    <div class="results-footer" style="gap:8px;flex-wrap:wrap;">
+    <div class="results-footer">
       <button class="btn btn-home" onclick="goHome()">⟵&nbsp; Back to Home</button>
-      <div style="display:inline-flex;align-items:center;gap:6px;">
-        <button class="ai-explain-all-btn" id="explainAllBtn" onclick="explainAllQuestions()">🤖&nbsp; Explain All Questions</button>
-        <button class="ai-apikey-icon-btn" id="explainApiKeyIconBtn" title="Update Gemini API key" onclick="toggleApiKeyPopover(this)" data-has-key="false">🔑</button>
-      </div>
-      <button class="ai-explain-all-stop-btn" id="explainAllStopBtn" onclick="stopExplainAll()">⏹&nbsp; Stop All</button>
+      <button class="ai-explain-all-btn" id="explainAllBtn" onclick="explainAllQuestions()">🤖&nbsp; Explain All Questions</button>
     </div>
   </div>
 
@@ -2060,36 +1976,13 @@ if (changeLog.length > 0) {
       optsDiv.appendChild(row);
     });
 
-    // AI Explain button row
-    const explainRow = document.createElement('div');
-    explainRow.className = 'ai-explain-btn-row';
-
+    // AI Explain button
     const explainBtn = document.createElement('button');
     explainBtn.className = 'ai-explain-btn';
     explainBtn.id = `explainBtn_${i}`;
     explainBtn.innerHTML = '🤖 Explain';
     explainBtn.onclick = () => explainQuestion(i);
-    explainRow.appendChild(explainBtn);
-
-    // Stop button for this question
-    const stopBtn = document.createElement('button');
-    stopBtn.className = 'ai-stop-btn';
-    stopBtn.id = `explainStopBtn_${i}`;
-    stopBtn.innerHTML = '⏹ Stop';
-    stopBtn.title = 'Stop this explanation';
-    stopBtn.onclick = () => stopExplainQuestion(i);
-    explainRow.appendChild(stopBtn);
-
-    // API key icon next to each explain button
-    const apiIconPerQ = document.createElement('button');
-    apiIconPerQ.className = 'ai-apikey-icon-btn';
-    apiIconPerQ.title = getExplainKey() ? 'API key saved — click to update' : 'Set your Gemini API key';
-    apiIconPerQ.dataset.hasKey = getExplainKey() ? 'true' : 'false';
-    apiIconPerQ.innerHTML = '🔑';
-    apiIconPerQ.onclick = function() { toggleApiKeyPopover(this); };
-    explainRow.appendChild(apiIconPerQ);
-
-    card.querySelector('.r-content').appendChild(explainRow);
+    card.querySelector('.r-content').appendChild(explainBtn);
 
     // Placeholder for the explanation panel
     const explainPanel = document.createElement('div');
@@ -2608,118 +2501,6 @@ let   _explainAllBusy  = false;
 let   _explainInFlight = null;   // index currently being fetched, or null
 let   _explainQueued   = null;   // index queued to auto-run after in-flight finishes
 
-// Abort controllers — keyed by question index
-const _explainAbort = {};
-
-// Stop flags
-let _stopSingleIndex  = null;   // index to stop when it surfaces
-let _stopAllRequested = false;  // flag to stop explain-all loop
-
-/* ── API key popover (global, repositioned per icon) ── */
-let _apikeyPopoverTarget = null;
-function toggleApiKeyPopover(iconBtn) {
-  const existing = document.getElementById('aiApiKeyPopover');
-  if (existing) {
-    existing.remove();
-    _apikeyPopoverTarget = null;
-    return;
-  }
-  _apikeyPopoverTarget = iconBtn;
-  const rect = iconBtn.getBoundingClientRect();
-  const currentKey = getExplainKey();
-
-  const pop = document.createElement('div');
-  pop.id = 'aiApiKeyPopover';
-  pop.className = 'ai-apikey-popover';
-
-  // Position it above or below the icon
-  const spaceBelow = window.innerHeight - rect.bottom;
-  const popHeight = 160;
-  let top = spaceBelow > popHeight ? (rect.bottom + 8) : (rect.top - popHeight - 8);
-  let left = Math.max(8, Math.min(rect.left, window.innerWidth - 336));
-  pop.style.cssText = `top:${top + window.scrollY}px;left:${left}px;`;
-
-  pop.innerHTML = `
-    <button class="ai-apikey-popover-close" onclick="document.getElementById('aiApiKeyPopover').remove()">✕</button>
-    <div class="ai-apikey-popover-title">🔑 Gemini API Key</div>
-    <div class="ai-apikey-popover-sub">
-      Update your key anytime. It's saved in this browser only and sent directly to Google.<br>
-      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#4527A0;font-weight:700;">Get a free key → aistudio.google.com/apikey</a><br>
-      <span style="color:#E65100;font-size:.72rem;">⚠️ When creating a key, make sure to <strong>create a new project</strong> in Google AI Studio.</span>
-    </div>
-    <div id="apikeyPopoverHint" class="ai-apikey-popover-hint"></div>
-    <div class="ai-apikey-popover-row">
-      <input type="password" id="apikeyPopoverInput" placeholder="Paste your Gemini API key here"
-             value="${escapeHtml(currentKey)}" />
-      <button class="ai-apikey-popover-save" onclick="saveApiKeyFromPopover()">Save</button>
-    </div>`;
-
-  document.body.appendChild(pop);
-
-  // Close on outside click
-  setTimeout(() => {
-    document.addEventListener('click', function _close(e) {
-      const p = document.getElementById('aiApiKeyPopover');
-      if (p && !p.contains(e.target) && e.target !== iconBtn) {
-        p.remove();
-        document.removeEventListener('click', _close);
-        _apikeyPopoverTarget = null;
-      }
-    });
-  }, 0);
-}
-
-function showApiKeyPopoverHint(msg) {
-  const hint = document.getElementById('apikeyPopoverHint');
-  if (hint) { hint.textContent = msg; hint.classList.add('visible'); }
-}
-
-function saveApiKeyFromPopover() {
-  const inp = document.getElementById('apikeyPopoverInput');
-  const key = (inp ? inp.value : '').trim();
-  if (!key) { showApiKeyPopoverHint('⚠️ Please enter a valid API key.'); return; }
-  setExplainKey(key);
-  // Also sync CQ key input if open
-  const cqInp = document.getElementById('cqApiKeyInput');
-  if (cqInp) cqInp.value = key;
-  // Update icon states
-  updateApiKeyIconState();
-  // Close popover
-  const pop = document.getElementById('aiApiKeyPopover');
-  if (pop) pop.remove();
-  // If any question is in-flight, cancel it and restart with new key
-  if (_explainInFlight !== null) {
-    const idx = _explainInFlight;
-    _cancelInFlight(idx, true); // keep queue intact
-    // Give abort a tick to process, then restart
-    setTimeout(() => explainQuestion(idx), 50);
-  } else {
-    // Resume queued or stuck
-    _resumeQueuedAfterKeyUpdate(key);
-  }
-}
-
-function updateApiKeyIconState() {
-  const key = getExplainKey();
-  document.querySelectorAll('.ai-apikey-icon-btn').forEach(btn => {
-    btn.dataset.hasKey = key ? 'true' : 'false';
-    btn.title = key ? 'API key saved — click to update' : 'Set your Gemini API key';
-  });
-}
-
-// When a new key is saved, any waiting queued request should retry
-function _resumeQueuedAfterKeyUpdate(key) {
-  if (_explainQueued !== null) {
-    const q = _explainQueued;
-    _explainQueued = null;
-    const qb = document.getElementById(`explainBtn_${q}`);
-    if (qb) { qb.disabled = false; qb.innerHTML = '🤖 Explain'; }
-    explainQuestion(q);
-  } else if (_explainAllBusy) {
-    // nothing to do — loop will pick up the new key on the next iteration
-  }
-}
-
 /* ── Show the "busy model" conflict dialog ── */
 function showExplainConflictModal(newIndex, inFlightIndex) {
   // Remove any existing modal
@@ -2770,13 +2551,23 @@ function showExplainConflictModal(newIndex, inFlightIndex) {
 
   document.getElementById('ecReplace').onclick = () => {
     overlay.remove();
-    _cancelInFlight(inFlightIndex, false);
+    // Cancel in-flight: mark it as null so it won't set panel HTML when it finishes
+    _explainInFlight = null;
+    _explainQueued = null;
+    // Reset the in-flight question's button/panel state
+    const oldBtn = document.getElementById(`explainBtn_${inFlightIndex}`);
+    const oldPanel = document.getElementById(`explainPanel_${inFlightIndex}`);
+    if (oldBtn) { oldBtn.disabled = false; oldBtn.classList.remove('loading'); oldBtn.innerHTML = '🤖 Explain'; }
+    if (oldPanel) oldPanel.innerHTML = '';
+    _explainCache[inFlightIndex] = null;
+    // Start the new one
     explainQuestion(newIndex);
   };
 
   document.getElementById('ecQueue').onclick = () => {
     overlay.remove();
     _explainQueued = newIndex;
+    // Update the new question's button to show it's queued
     const btn = document.getElementById(`explainBtn_${newIndex}`);
     if (btn) { btn.disabled = true; btn.innerHTML = '🕐 Queued…'; }
   };
@@ -2784,44 +2575,6 @@ function showExplainConflictModal(newIndex, inFlightIndex) {
   document.getElementById('ecWait').onclick = () => {
     overlay.remove();
   };
-}
-
-/* ── Cancel a specific in-flight request ── */
-function _cancelInFlight(index, suppressQueue) {
-  if (_explainAbort[index]) {
-    try { _explainAbort[index].abort(); } catch(e) {}
-    delete _explainAbort[index];
-  }
-  _explainInFlight = null;
-  if (!suppressQueue) _explainQueued = null;
-  _explainCache[index] = null;
-  const oldBtn = document.getElementById(`explainBtn_${index}`);
-  const oldPanel = document.getElementById(`explainPanel_${index}`);
-  if (oldBtn) { oldBtn.disabled = false; oldBtn.classList.remove('loading'); oldBtn.innerHTML = '🤖 Explain'; }
-  if (oldPanel) oldPanel.innerHTML = '';
-  // Hide stop button for this question
-  const stopBtn = document.getElementById(`explainStopBtn_${index}`);
-  if (stopBtn) stopBtn.classList.remove('visible');
-}
-
-/* ── Stop a single explanation ── */
-function stopExplainQuestion(index) {
-  _stopSingleIndex = index;
-  _cancelInFlight(index, true); // suppressQueue=true so queued item stays
-  _stopSingleIndex = null;
-}
-
-/* ── Stop explain-all ── */
-function stopExplainAll() {
-  _stopAllRequested = true;
-  _explainAllBusy = false;
-  if (_explainInFlight !== null) {
-    _cancelInFlight(_explainInFlight);
-  }
-  const btn = document.getElementById('explainAllBtn');
-  const stopBtn = document.getElementById('explainAllStopBtn');
-  if (btn) { btn.disabled = false; btn.innerHTML = '🤖 Explain All Questions'; }
-  if (stopBtn) stopBtn.classList.remove('visible');
 }
 
 function getExplainKey() {
@@ -2880,8 +2633,7 @@ function renderExplainKeyPrompt(panelEl, onSave) {
         <div class="ai-key-prompt">
           <div class="ai-key-prompt-title">Enter your Gemini API key to enable AI explanations</div>
           <div class="ai-key-prompt-sub">Your key is saved in this browser only and sent directly to Google — never through any other server.<br>
-            Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#4527A0;font-weight:700;">aistudio.google.com/apikey</a><br>
-            <span style="color:#E65100;font-size:.75rem;">⚠️ When creating a key, <strong>create a new project</strong> in Google AI Studio.</span>
+            Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#4527A0;font-weight:700;">aistudio.google.com/apikey</a>
           </div>
           <div class="ai-key-prompt-row">
             <input type="password" id="explainKeyInput" placeholder="Paste your Gemini API key here" />
@@ -2890,6 +2642,7 @@ function renderExplainKeyPrompt(panelEl, onSave) {
         </div>
       </div>
     </div>`;
+  // Store callback so handleExplainKeySave can call it
   window._explainKeySaveCallback = onSave;
 }
 
@@ -2898,7 +2651,7 @@ function handleExplainKeySave() {
   const key = (inp ? inp.value : '').trim();
   if (!key) { if(inp) inp.style.borderColor='#C62828'; return; }
   setExplainKey(key);
-  updateApiKeyIconState();
+  // Also sync with the custom quiz key input if it's open
   const cqInp = document.getElementById('cqApiKeyInput');
   if (cqInp) cqInp.value = key;
   if (window._explainKeySaveCallback) {
@@ -2912,7 +2665,6 @@ function handleExplainKeySave() {
 async function explainQuestion(i) {
   const btn    = document.getElementById(`explainBtn_${i}`);
   const panel  = document.getElementById(`explainPanel_${i}`);
-  const stopBtn = document.getElementById(`explainStopBtn_${i}`);
   if (!btn || !panel) return;
 
   // Already shown — toggle off
@@ -2941,48 +2693,28 @@ async function explainQuestion(i) {
 
   _explainInFlight = i;
   _explainCache[i] = 'loading';
-  _stopAllRequested = false; // reset per-single stop; stopAll sets its own flag
   btn.disabled = true;
   btn.classList.add('loading');
   btn.innerHTML = '⏳ Explaining…';
-  if (stopBtn) stopBtn.classList.add('visible');
 
   panel.innerHTML = `
     <div class="ai-explain-panel">
       <div class="ai-explain-panel-header">
         <div class="ai-exp-spinner"></div> Getting AI explanation…
       </div>
-      <div class="ai-exp-timeout-hint" id="expTimeoutHint_${i}"></div>
     </div>`;
-
-  // 60-second timeout hint
-  const timeoutHintTimer = setTimeout(() => {
-    const hint = document.getElementById(`expTimeoutHint_${i}`);
-    if (hint) {
-      hint.innerHTML = '⏱ This is taking over a minute. Your API key may be rate-limited or invalid. '
-        + '<a href="#" style="color:#7B1FA2;font-weight:700;text-decoration:underline;" '
-        + `onclick="event.preventDefault();toggleApiKeyPopover(document.getElementById('explainApiKeyIconBtn'))">Update API key →</a>`;
-      hint.classList.add('visible');
-    }
-  }, 60000);
-
-  // Create abort controller for this request
-  const abortCtrl = new AbortController();
-  _explainAbort[i] = abortCtrl;
 
   try {
     const userAnswer = userAnswers[i] || '';
     const prompt     = buildExplainPrompt(q, userAnswer);
-    // Use the CURRENT key at the time of each call (supports mid-flight key updates for retries)
-    const url        = () => `https://generativelanguage.googleapis.com/v1beta/models/${AI_EXPLAIN_MODEL}:generateContent?key=${encodeURIComponent(getExplainKey())}`;
+    const url        = `https://generativelanguage.googleapis.com/v1beta/models/${AI_EXPLAIN_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const data = await callGeminiWithRetry(url, {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
     }, {
-      signal: abortCtrl.signal,
-      onRetry: (attempt) => {
-        // Silently keep the loading spinner — timeout hint handles user feedback
+      onRetry: () => {
+        // Silently keep the loading spinner — no retry hint shown to user
         const p = document.getElementById(`explainPanel_${i}`);
         if (p && !p.querySelector('.ai-exp-spinner')) {
           p.innerHTML = `
@@ -2990,14 +2722,13 @@ async function explainQuestion(i) {
               <div class="ai-explain-panel-header">
                 <div class="ai-exp-spinner"></div> Getting AI explanation…
               </div>
-              <div class="ai-exp-timeout-hint" id="expTimeoutHint_${i}"></div>
             </div>`;
         }
       }
     });
 
-    // If this request was cancelled (replaced by another or stopped), silently abort
-    if (_explainInFlight !== i) { clearTimeout(timeoutHintTimer); return; }
+    // If this request was cancelled (replaced by another), silently abort
+    if (_explainInFlight !== i) return;
 
     const text = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
     if (!text) throw new Error('Empty response from AI.');
@@ -3009,15 +2740,10 @@ async function explainQuestion(i) {
     if (p) p.innerHTML = html;
     const b = document.getElementById(`explainBtn_${i}`);
     if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '🤖 Hide'; }
-    if (stopBtn) stopBtn.classList.remove('visible');
 
   } catch(err) {
-    clearTimeout(timeoutHintTimer);
-    // If aborted/cancelled, restore quietly
-    if (_explainInFlight !== i || err.name === 'AbortError') {
-      if (stopBtn) stopBtn.classList.remove('visible');
-      return;
-    }
+    // If cancelled, restore quietly
+    if (_explainInFlight !== i) return;
 
     _explainCache[i] = null; // allow retry
     const isKeyErr = err._keyError || /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
@@ -3025,8 +2751,9 @@ async function explainQuestion(i) {
     if (p) {
       if (isKeyErr) {
         setExplainKey('');
-        updateApiKeyIconState();
+        // Show inline key prompt; on save, automatically re-run this explanation
         renderExplainKeyPrompt(p, (key) => {
+          // Clear the panel so explainQuestion starts fresh
           p.innerHTML = '';
           explainQuestion(i);
         });
@@ -3042,26 +2769,15 @@ async function explainQuestion(i) {
     }
     const b = document.getElementById(`explainBtn_${i}`);
     if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '🤖 Explain'; }
-    if (stopBtn) stopBtn.classList.remove('visible');
   } finally {
-    clearTimeout(timeoutHintTimer);
-    delete _explainAbort[i];
     // Clear in-flight tracker if this request was the active one
     if (_explainInFlight === i) {
       _explainInFlight = null;
-      // Auto-run queued explanation if there is one (and stopAll was not requested)
-      if (!_stopAllRequested && _explainQueued !== null && _explainQueued !== i) {
+      // Auto-run queued explanation if there is one
+      if (_explainQueued !== null && _explainQueued !== i) {
         const queued = _explainQueued;
         _explainQueued = null;
-        const qb = document.getElementById(`explainBtn_${queued}`);
-        if (qb) { qb.disabled = false; qb.innerHTML = '🤖 Explain'; }
-        explainQuestion(queued);
-      }
-    } else if (_explainInFlight === null) {
-      // Was cancelled externally (stop button) — still run the queue if any
-      if (!_stopAllRequested && _explainQueued !== null && _explainQueued !== i) {
-        const queued = _explainQueued;
-        _explainQueued = null;
+        // Reset queued button so explainQuestion can run it
         const qb = document.getElementById(`explainBtn_${queued}`);
         if (qb) { qb.disabled = false; qb.innerHTML = '🤖 Explain'; }
         explainQuestion(queued);
@@ -3072,152 +2788,11 @@ async function explainQuestion(i) {
 
 /* ── Parse AI text into structured HTML ── */
 function renderExplainText(text, q) {
+  // Split into named sections
   const sectionPatterns = [
     { key: 'overview',  re: /QUESTION OVERVIEW\s*:\s*/i,     label: 'Question Overview', cls: 'question-label' },
     { key: 'correct',   re: /CORRECT ANSWER[^:]*:\s*/i,      label: `✔ Correct — ${q.answer}. ${q.options[q.answer] || ''}`,    cls: 'correct-label'  },
   ];
-  const wrongSections = Object.entries(q.options)
-    .filter(([k]) => k !== q.answer)
-    .map(([k, v]) => ({
-      key: `wrong_${k}`,
-      re:  new RegExp(`WRONG[^:]*${k}[^:]*:\\s*`, 'i'),
-      label: `✘ Wrong — ${k}. ${v}`,
-      cls: 'wrong-label'
-    }));
-
-  const allSections = [...sectionPatterns, ...wrongSections];
-
-  const found = [];
-  allSections.forEach(s => {
-    const m = text.match(s.re);
-    if (m) {
-      const idx = text.search(s.re);
-      found.push({ ...s, start: idx, headerLen: m[0].length });
-    }
-  });
-  found.sort((a, b) => a.start - b.start);
-
-  let html = '<div class="ai-explain-panel"><div class="ai-explain-panel-header"><span>🤖</span> AI Explanation</div><div class="ai-explain-panel-body">';
-  found.forEach((sec, idx) => {
-    const bodyStart = sec.start + sec.headerLen;
-    const bodyEnd   = idx + 1 < found.length ? found[idx + 1].start : text.length;
-    const body      = text.slice(bodyStart, bodyEnd).trim();
-    html += `<div class="exp-section">
-      <div class="exp-label ${sec.cls}">${escapeHtml(sec.label)}</div>
-      <div>${escapeHtml(body)}</div>
-    </div>`;
-  });
-
-  if (!found.length) {
-    html += `<div class="exp-section"><div>${escapeHtml(text)}</div></div>`;
-  }
-
-  html += '</div></div>';
-  return html;
-}
-
-/* ── Explain ALL questions sequentially ── */
-async function explainAllQuestions() {
-  if (_explainAllBusy) return;
-
-  const apiKey = getExplainKey();
-  if (!apiKey) {
-    let tempPanel = document.getElementById('explainAllKeyPanel');
-    if (!tempPanel) {
-      tempPanel = document.createElement('div');
-      tempPanel.id = 'explainAllKeyPanel';
-      tempPanel.style.cssText = 'padding:0 24px 12px;';
-      const footer = document.querySelector('.results-footer');
-      if (footer) footer.insertAdjacentElement('afterend', tempPanel);
-    }
-    renderExplainKeyPrompt(tempPanel, (key) => { tempPanel.remove(); explainAllQuestions(); });
-    tempPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    return;
-  }
-
-  _explainAllBusy = true;
-  _stopAllRequested = false;
-  const btn = document.getElementById('explainAllBtn');
-  const stopBtn = document.getElementById('explainAllStopBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Explaining All…'; }
-  if (stopBtn) stopBtn.classList.add('visible');
-
-  for (let i = 0; i < currentQuestions.length; i++) {
-    // Check stop flag before each question
-    if (_stopAllRequested) break;
-
-    // Skip already-explained
-    if (_explainCache[i] && _explainCache[i] !== 'loading') {
-      const p = document.getElementById(`explainPanel_${i}`);
-      if (p && !p.innerHTML.trim()) p.innerHTML = _explainCache[i];
-      const b = document.getElementById(`explainBtn_${i}`);
-      if (b) b.innerHTML = '🤖 Hide';
-      continue;
-    }
-
-    _explainCache[i] = undefined;
-    await explainQuestion(i);
-
-    // Check stop flag after each question finishes
-    if (_stopAllRequested) break;
-
-    // After explainQuestion returns, check if a key prompt was shown (key error occurred)
-    const panel = document.getElementById(`explainPanel_${i}`);
-    if (panel && panel.querySelector('#explainKeyInput')) {
-      _explainAllBusy = false;
-      if (stopBtn) stopBtn.classList.remove('visible');
-      if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Explaining All…'; }
-      window._explainKeySaveCallback = (key) => {
-        panel.innerHTML = '';
-        (async () => {
-          _explainAllBusy = true;
-          _stopAllRequested = false;
-          if (stopBtn) stopBtn.classList.add('visible');
-          for (let j = i; j < currentQuestions.length; j++) {
-            if (_stopAllRequested) break;
-            if (_explainCache[j] && _explainCache[j] !== 'loading') {
-              const p2 = document.getElementById(`explainPanel_${j}`);
-              if (p2 && !p2.innerHTML.trim()) p2.innerHTML = _explainCache[j];
-              const b2 = document.getElementById(`explainBtn_${j}`);
-              if (b2) b2.innerHTML = '🤖 Hide';
-              continue;
-            }
-            _explainCache[j] = undefined;
-            await explainQuestion(j);
-            if (_stopAllRequested) break;
-            const p3 = document.getElementById(`explainPanel_${j}`);
-            if (p3 && p3.querySelector('#explainKeyInput')) {
-              _explainAllBusy = false;
-              if (stopBtn) stopBtn.classList.remove('visible');
-              window._explainKeySaveCallback = () => {
-                p3.innerHTML = '';
-                explainAllQuestions();
-              };
-              return;
-            }
-            await new Promise(r => setTimeout(r, 300));
-          }
-          _explainAllBusy = false;
-          if (stopBtn) stopBtn.classList.remove('visible');
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = _stopAllRequested ? '🤖 Explain All Questions' : '🤖 Explained ✓';
-          }
-        })();
-      };
-      return;
-    }
-
-    await new Promise(r => setTimeout(r, 300));
-  }
-
-  _explainAllBusy = false;
-  if (stopBtn) stopBtn.classList.remove('visible');
-  if (btn) {
-    btn.disabled = false;
-    btn.innerHTML = _stopAllRequested ? '🤖 Explain All Questions' : '🤖 Explained ✓';
-  }
-}
   // Build wrong answer patterns from actual options
   const wrongSections = Object.entries(q.options)
     .filter(([k]) => k !== q.answer)
@@ -3285,6 +2860,7 @@ async function explainAllQuestions() {
   _explainAllBusy = true;
   const btn = document.getElementById('explainAllBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Explaining All…'; }
+
   for (let i = 0; i < currentQuestions.length; i++) {
     // Skip already-explained or loading
     if (_explainCache[i] && _explainCache[i] !== 'loading') {
