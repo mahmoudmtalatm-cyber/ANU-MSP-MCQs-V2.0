@@ -490,53 +490,6 @@
 }
 .wf-btn:hover { background: var(--accent-dark); }
 
-    /* ── EXPLAIN CONFLICT MODAL ── */
-    .explain-conflict-overlay {
-      position: fixed; inset: 0; z-index: 8000;
-      background: rgba(0,0,0,.5);
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
-      animation: ecFadeIn .18s ease;
-    }
-    @keyframes ecFadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .explain-conflict-box {
-      background: #fff;
-      border-radius: 16px;
-      max-width: 400px; width: 100%;
-      box-shadow: 0 12px 48px rgba(0,0,0,.28);
-      overflow: hidden;
-      animation: ecSlideUp .2s cubic-bezier(.34,1.56,.64,1);
-    }
-    @keyframes ecSlideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .explain-conflict-header {
-      background: linear-gradient(135deg, #1B8AC4, #136B99);
-      color: white;
-      padding: 18px 22px 14px;
-    }
-    .explain-conflict-header .ec-icon { font-size: 1.8rem; margin-bottom: 6px; }
-    .explain-conflict-header h3 { font-size: 1.05rem; font-weight: 800; margin: 0; }
-    .explain-conflict-header p {
-      font-size: .82rem; opacity: .88; margin: 5px 0 0;
-      line-height: 1.45;
-    }
-    .explain-conflict-body { padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 10px; }
-    .ec-btn {
-      display: flex; align-items: flex-start; gap: 12px;
-      padding: 13px 16px; border-radius: 10px;
-      border: 2px solid #B0D4F0; background: #F7FBFF;
-      cursor: pointer; text-align: left;
-      font-family: var(--font); transition: all .15s;
-      width: 100%;
-    }
-    .ec-btn:hover { border-color: var(--accent); background: #EEF7FF; transform: translateY(-1px); box-shadow: 0 3px 10px rgba(27,138,196,.15); }
-    .ec-btn .ec-btn-icon { font-size: 1.35rem; flex-shrink: 0; margin-top: 1px; }
-    .ec-btn .ec-btn-label { font-size: .9rem; font-weight: 700; color: var(--text-main); line-height: 1.2; }
-    .ec-btn .ec-btn-sub   { font-size: .78rem; color: var(--text-muted); margin-top: 3px; line-height: 1.35; }
-    .ec-btn.ec-danger { border-color: #FFCDD2; background: #FFF5F5; }
-    .ec-btn.ec-danger:hover { border-color: #C62828; background: #FFEBEE; }
-    .ec-btn.ec-success { border-color: #C8E6C9; background: #F5FFF5; }
-    .ec-btn.ec-success:hover { border-color: #2E7D32; background: #E8F5E9; }
-
     /* Divider inside card */
     .card-divider {
       height: 1px; background: #D8EAF7; margin: 20px 0;
@@ -1009,46 +962,6 @@
 }
 .ai-explain-all-btn:hover:not(:disabled) { background: #D1C4E9; }
 .ai-explain-all-btn:disabled { opacity: .5; cursor: not-allowed; }
-
-/* Concurrent explanation conflict panel */
-.ai-conflict-panel {
-  margin-top: 10px; border-radius: 8px;
-  border: 1.5px solid #FFB74D; background: #FFF8E1;
-  overflow: hidden;
-}
-.ai-conflict-header {
-  background: #FFE0B2; padding: 9px 14px;
-  display: flex; align-items: center; gap: 7px;
-  font-size: .8rem; font-weight: 800; color: #E65100;
-  letter-spacing: .3px;
-}
-.ai-conflict-body {
-  padding: 12px 16px; font-size: .84rem; line-height: 1.6;
-  color: var(--text-main);
-}
-.ai-conflict-note {
-  margin-bottom: 12px; color: #5A4010;
-}
-.ai-conflict-actions {
-  display: flex; flex-direction: column; gap: 7px;
-}
-.ai-conflict-btn {
-  display: flex; align-items: center; gap: 9px;
-  padding: 10px 14px; border-radius: 7px;
-  border: 1.5px solid transparent; cursor: pointer;
-  font-family: var(--font); font-size: .84rem; font-weight: 700;
-  text-align: left; transition: filter .15s;
-  background: white;
-}
-.ai-conflict-btn:hover { filter: brightness(.96); }
-.ai-conflict-btn.cb-replace { border-color: #EF9A9A; color: #B71C1C; }
-.ai-conflict-btn.cb-replace:hover { background: #FFEBEE; }
-.ai-conflict-btn.cb-wait   { border-color: #90CAF9; color: #0D47A1; }
-.ai-conflict-btn.cb-wait:hover   { background: #E3F2FD; }
-.ai-conflict-btn.cb-queue  { border-color: #A5D6A7; color: #1B5E20; }
-.ai-conflict-btn.cb-queue:hover  { background: #E8F5E9; }
-.ai-conflict-btn .cb-icon  { font-size: 1.1rem; flex-shrink: 0; }
-.ai-conflict-btn .cb-desc  { font-weight: 600; font-size: .78rem; color: var(--text-muted); margin-top: 1px; }
 
 /* API key prompt for explanations */
 .ai-key-prompt {
@@ -1860,8 +1773,6 @@ function buildResults() {
   // Clear explanation cache for new results
   for (const k in _explainCache) delete _explainCache[k];
   _explainAllBusy = false;
-  _explainInFlight = null;
-  _explainQueued = null;
   const explainAllBtn = document.getElementById('explainAllBtn');
   if (explainAllBtn) { explainAllBtn.disabled = false; explainAllBtn.innerHTML = '🤖&nbsp; Explain All Questions'; }
 
@@ -2497,85 +2408,7 @@ const AI_EXPLAIN_MODEL     = 'gemini-2.5-flash';
 
 // Track which questions are loaded/loading to avoid duplicate calls
 const _explainCache = {};   // { qIndex: 'loading' | html-string }
-let   _explainAllBusy  = false;
-let   _explainInFlight = null;   // index currently being fetched, or null
-let   _explainQueued   = null;   // index queued to auto-run after in-flight finishes
-
-/* ── Show the "busy model" conflict dialog ── */
-function showExplainConflictModal(newIndex, inFlightIndex) {
-  // Remove any existing modal
-  const existing = document.getElementById('explainConflictOverlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'explainConflictOverlay';
-  overlay.className = 'explain-conflict-overlay';
-
-  overlay.innerHTML = `
-    <div class="explain-conflict-box">
-      <div class="explain-conflict-header">
-        <div class="ec-icon">⚡</div>
-        <h3>Model Is Already Busy</h3>
-        <p>You're requesting an explanation while Q${inFlightIndex + 1} is still being explained.
-           Since this uses a <strong>free API</strong>, running two requests at once puts extra load on the model.</p>
-      </div>
-      <div class="explain-conflict-body">
-        <button class="ec-btn ec-danger" id="ecReplace">
-          <span class="ec-btn-icon">⚡</span>
-          <div>
-            <div class="ec-btn-label">Explain Q${newIndex + 1} now</div>
-            <div class="ec-btn-sub">Cancel Q${inFlightIndex + 1} and start Q${newIndex + 1} immediately</div>
-          </div>
-        </button>
-        <button class="ec-btn ec-success" id="ecQueue">
-          <span class="ec-btn-icon">🕐</span>
-          <div>
-            <div class="ec-btn-label">Explain Q${newIndex + 1} after Q${inFlightIndex + 1} finishes</div>
-            <div class="ec-btn-sub">Wait for the current explanation, then automatically explain Q${newIndex + 1}</div>
-          </div>
-        </button>
-        <button class="ec-btn" id="ecWait">
-          <span class="ec-btn-icon">⏸️</span>
-          <div>
-            <div class="ec-btn-label">Keep waiting for Q${inFlightIndex + 1}</div>
-            <div class="ec-btn-sub">Do nothing — dismiss this notice and wait for Q${inFlightIndex + 1}</div>
-          </div>
-        </button>
-      </div>
-    </div>`;
-
-  document.body.appendChild(overlay);
-
-  // Close on backdrop click
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-
-  document.getElementById('ecReplace').onclick = () => {
-    overlay.remove();
-    // Cancel in-flight: mark it as null so it won't set panel HTML when it finishes
-    _explainInFlight = null;
-    _explainQueued = null;
-    // Reset the in-flight question's button/panel state
-    const oldBtn = document.getElementById(`explainBtn_${inFlightIndex}`);
-    const oldPanel = document.getElementById(`explainPanel_${inFlightIndex}`);
-    if (oldBtn) { oldBtn.disabled = false; oldBtn.classList.remove('loading'); oldBtn.innerHTML = '🤖 Explain'; }
-    if (oldPanel) oldPanel.innerHTML = '';
-    _explainCache[inFlightIndex] = null;
-    // Start the new one
-    explainQuestion(newIndex);
-  };
-
-  document.getElementById('ecQueue').onclick = () => {
-    overlay.remove();
-    _explainQueued = newIndex;
-    // Update the new question's button to show it's queued
-    const btn = document.getElementById(`explainBtn_${newIndex}`);
-    if (btn) { btn.disabled = true; btn.innerHTML = '🕐 Queued…'; }
-  };
-
-  document.getElementById('ecWait').onclick = () => {
-    overlay.remove();
-  };
-}
+let   _explainAllBusy = false;
 
 function getExplainKey() {
   try { return localStorage.getItem(AI_EXPLAIN_KEY_STORE) || ''; } catch(e) { return ''; }
@@ -2593,12 +2426,6 @@ function buildExplainPrompt(q, userAnswer) {
     ? `The student answered: ${userAnswer}. ${q.options[userAnswer] || ''}`
     : 'The student did not answer this question.';
 
-  const wrongOptLines = Object.entries(q.options)
-    .filter(([k]) => k !== q.answer)
-    .map(([k, v]) => `
-WRONG — ${k}. ${v}:
-[1–2 sentences: why this option is incorrect and what makes it a plausible distractor]`).join('');
-
   return `You are a medical education expert. Explain this MCQ question clearly for a medical student.
 
 QUESTION:
@@ -2610,14 +2437,16 @@ ${optLines}
 CORRECT ANSWER: ${q.answer}. ${q.options[q.answer] || ''}
 ${userLine}
 
-Provide a concise explanation in this EXACT structure (use these exact section headers). You MUST include a section for EVERY answer choice, both correct and wrong:
+Provide a concise explanation in this EXACT structure (use these exact section headers):
 
 QUESTION OVERVIEW:
 [One sentence explaining what concept/clinical scenario this question is testing]
 
 CORRECT ANSWER — ${q.answer}. ${q.options[q.answer] || ''}:
-[2–3 sentences explaining WHY this is correct, with the key medical reasoning]
-${wrongOptLines}
+[2-3 sentences explaining WHY this is correct, with the key medical reasoning]
+${Object.entries(q.options).filter(([k]) => k !== q.answer).map(([k, v]) => `
+WRONG — ${k}. ${v}:
+[1 sentence: why this is incorrect]`).join('')}
 
 Keep each section concise. Use plain text only — no markdown, no bullet points, no asterisks.`;
 }
@@ -2685,13 +2514,6 @@ async function explainQuestion(i) {
     return;
   }
 
-  // ── Conflict check: another explanation is already in flight ──
-  if (_explainInFlight !== null && _explainInFlight !== i) {
-    showExplainConflictModal(i, _explainInFlight);
-    return;
-  }
-
-  _explainInFlight = i;
   _explainCache[i] = 'loading';
   btn.disabled = true;
   btn.classList.add('loading');
@@ -2714,21 +2536,15 @@ async function explainQuestion(i) {
       generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
     }, {
       onRetry: () => {
-        // Silently keep the loading spinner — no retry hint shown to user
         const p = document.getElementById(`explainPanel_${i}`);
-        if (p && !p.querySelector('.ai-exp-spinner')) {
-          p.innerHTML = `
-            <div class="ai-explain-panel">
-              <div class="ai-explain-panel-header">
-                <div class="ai-exp-spinner"></div> Getting AI explanation…
-              </div>
-            </div>`;
-        }
+        if (p) p.innerHTML = `
+          <div class="ai-explain-panel">
+            <div class="ai-explain-panel-header">
+              <div class="ai-exp-spinner"></div> Still working… retrying automatically.
+            </div>
+          </div>`;
       }
     });
-
-    // If this request was cancelled (replaced by another), silently abort
-    if (_explainInFlight !== i) return;
 
     const text = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
     if (!text) throw new Error('Empty response from AI.');
@@ -2742,21 +2558,13 @@ async function explainQuestion(i) {
     if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '🤖 Hide'; }
 
   } catch(err) {
-    // If cancelled, restore quietly
-    if (_explainInFlight !== i) return;
-
     _explainCache[i] = null; // allow retry
     const isKeyErr = err._keyError || /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     const p = document.getElementById(`explainPanel_${i}`);
     if (p) {
       if (isKeyErr) {
         setExplainKey('');
-        // Show inline key prompt; on save, automatically re-run this explanation
-        renderExplainKeyPrompt(p, (key) => {
-          // Clear the panel so explainQuestion starts fresh
-          p.innerHTML = '';
-          explainQuestion(i);
-        });
+        renderExplainKeyPrompt(p, (key) => explainQuestion(i));
       } else {
         p.innerHTML = `
           <div class="ai-explain-panel">
@@ -2769,20 +2577,6 @@ async function explainQuestion(i) {
     }
     const b = document.getElementById(`explainBtn_${i}`);
     if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '🤖 Explain'; }
-  } finally {
-    // Clear in-flight tracker if this request was the active one
-    if (_explainInFlight === i) {
-      _explainInFlight = null;
-      // Auto-run queued explanation if there is one
-      if (_explainQueued !== null && _explainQueued !== i) {
-        const queued = _explainQueued;
-        _explainQueued = null;
-        // Reset queued button so explainQuestion can run it
-        const qb = document.getElementById(`explainBtn_${queued}`);
-        if (qb) { qb.disabled = false; qb.innerHTML = '🤖 Explain'; }
-        explainQuestion(queued);
-      }
-    }
   }
 }
 
@@ -2791,7 +2585,7 @@ function renderExplainText(text, q) {
   // Split into named sections
   const sectionPatterns = [
     { key: 'overview',  re: /QUESTION OVERVIEW\s*:\s*/i,     label: 'Question Overview', cls: 'question-label' },
-    { key: 'correct',   re: /CORRECT ANSWER[^:]*:\s*/i,      label: `✔ Correct — ${q.answer}. ${q.options[q.answer] || ''}`,    cls: 'correct-label'  },
+    { key: 'correct',   re: /CORRECT ANSWER[^:]*:\s*/i,      label: 'Correct Answer',    cls: 'correct-label'  },
   ];
   // Build wrong answer patterns from actual options
   const wrongSections = Object.entries(q.options)
@@ -2872,50 +2666,9 @@ async function explainAllQuestions() {
       continue;
     }
     // Trigger single explanation (reuses full retry logic)
+    // Temporarily make btn invisible to avoid toggle behaviour
     _explainCache[i] = undefined; // force re-fetch if needed
     await explainQuestion(i);
-
-    // After explainQuestion returns, check if a key prompt was shown (key error occurred)
-    // If so, pause the batch and wait for the user to enter a new key, then resume
-    const panel = document.getElementById(`explainPanel_${i}`);
-    if (panel && panel.querySelector('#explainKeyInput')) {
-      // Pause: replace the callback so that after key save, we resume the batch from index i
-      _explainAllBusy = false;
-      if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Explaining All…'; }
-      window._explainKeySaveCallback = (key) => {
-        panel.innerHTML = '';
-        // Re-run from this question onward
-        (async () => {
-          _explainAllBusy = true;
-          for (let j = i; j < currentQuestions.length; j++) {
-            if (_explainCache[j] && _explainCache[j] !== 'loading') {
-              const p2 = document.getElementById(`explainPanel_${j}`);
-              if (p2 && !p2.innerHTML.trim()) p2.innerHTML = _explainCache[j];
-              const b2 = document.getElementById(`explainBtn_${j}`);
-              if (b2) b2.innerHTML = '🤖 Hide';
-              continue;
-            }
-            _explainCache[j] = undefined;
-            await explainQuestion(j);
-            // Check again if another key error appeared
-            const p3 = document.getElementById(`explainPanel_${j}`);
-            if (p3 && p3.querySelector('#explainKeyInput')) {
-              _explainAllBusy = false;
-              window._explainKeySaveCallback = () => {
-                p3.innerHTML = '';
-                explainAllQuestions();
-              };
-              return;
-            }
-            await new Promise(r => setTimeout(r, 300));
-          }
-          _explainAllBusy = false;
-          if (btn) { btn.disabled = false; btn.innerHTML = '🤖 Explained ✓'; }
-        })();
-      };
-      return;
-    }
-
     // Small delay to avoid rate limiting
     await new Promise(r => setTimeout(r, 300));
   }
