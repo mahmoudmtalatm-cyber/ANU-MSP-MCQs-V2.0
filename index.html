@@ -761,11 +761,6 @@
   transition: border-color .15s, background .15s;
 }
 .cq-reextract-drop:hover { border-color: var(--accent); background: #EEF7FF; }
-  background: var(--bg-card);
-  border: 1px solid #B0D4F0;
-  border-radius: 10px;
-  padding: 16px 20px;
-}
 .change-flow-title {
   font-size: .78rem; font-weight: 700; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: .8px; margin-bottom: 12px;
@@ -3728,7 +3723,8 @@ const CQ_RESPONSE_SCHEMA = {
           A: { type: 'STRING' }, B: { type: 'STRING' }, C: { type: 'STRING' }, D: { type: 'STRING' },
           E: { type: 'STRING' }, F: { type: 'STRING' }, G: { type: 'STRING' }, H: { type: 'STRING' },
           I: { type: 'STRING' }, J: { type: 'STRING' }
-        }
+        },
+        additionalProperties: { type: 'STRING' }
       },
       answer: { type: 'STRING' },
       has_image: { type: 'BOOLEAN' }
@@ -3998,6 +3994,113 @@ async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType
   }
 }
 
+/* ── Helper: call Gemini once for extraction and return cleaned questions array ── */
+async function _extractQuestionsFromParts(parts, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const data = await callGeminiWithRetry(url, {
+    contents: [{ parts }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: CQ_RESPONSE_SCHEMA,
+      temperature: 0,
+      maxOutputTokens: 65536
+    }
+  }, {});
+
+  const candidate = data && data.candidates && data.candidates[0];
+  if (!candidate) return { questions: [], truncated: false };
+
+  const finishReason = candidate.finishReason;
+  const textOut = (candidate.content && candidate.content.parts || []).map(p => p.text || '').join('');
+  if (!textOut.trim()) return { questions: [], truncated: false };
+
+  let parsed;
+  try { parsed = JSON.parse(textOut); } catch (e) { return { questions: [], truncated: false }; }
+  if (!Array.isArray(parsed)) return { questions: [], truncated: false };
+
+  const cleaned = parsed.map(q => {
+    if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
+    const opts = {};
+    Object.entries(q.options)
+      .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
+      .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
+      .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
+    if (!Object.keys(opts).length) return null;
+    let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
+    if (!opts[answer]) answer = Object.keys(opts)[0];
+    const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
+    return { question: q.question, options: opts, optionsOrder, answer, has_image: !!q.has_image };
+  }).filter(Boolean);
+
+  return { questions: cleaned, truncated: finishReason === 'MAX_TOKENS' };
+}
+
+/* ── Split a parts array into two halves (image parts + shared text prompt) ── */
+function _splitImageParts(parts) {
+  // The last part is always the text prompt; image parts precede it
+  const textPart  = parts[parts.length - 1];
+  const imgParts  = parts.slice(0, parts.length - 1);
+  if (imgParts.length < 2) return null; // can't split further
+  const mid   = Math.ceil(imgParts.length / 2);
+  const half1 = [...imgParts.slice(0, mid),  textPart];
+  const half2 = [...imgParts.slice(mid),     textPart];
+  return [half1, half2];
+}
+
+/* ── Extract questions, automatically splitting the batch in half on MAX_TOKENS ── */
+async function _extractQuestionsFromPartsAutoSplit(parts, apiKey, depth = 0) {
+  const { questions, truncated } = await _extractQuestionsFromParts(parts, apiKey);
+
+  // If truncated and we can still split, recurse on each half
+  if (truncated && depth < 2) {
+    const halves = _splitImageParts(parts);
+    if (halves) {
+      const [half1, half2] = halves;
+      await new Promise(r => setTimeout(r, 300)); // brief pause before retry
+      const { questions: q1 } = await _extractQuestionsFromPartsAutoSplit(half1, apiKey, depth + 1);
+      await new Promise(r => setTimeout(r, 300));
+      const { questions: q2 } = await _extractQuestionsFromPartsAutoSplit(half2, apiKey, depth + 1);
+      return { questions: _deduplicateQuestions([...q1, ...q2]), truncated: false };
+    }
+  }
+
+  return { questions, truncated };
+}
+
+/* ── Helper: get page count of a PDF from base64 ── */
+async function getPdfPageCount(base64Data) {
+  try {
+    if (!window.pdfjsLib) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        script.onload  = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+    const binary = atob(base64Data);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
+    return pdf.numPages;
+  } catch (e) { return null; }
+}
+
+/* ── Deduplicate questions by text similarity across batches ── */
+function _deduplicateQuestions(questions) {
+  const seen = new Set();
+  return questions.filter(q => {
+    // Normalize: lowercase, collapse whitespace, take first 80 chars as fingerprint
+    const key = q.question.toLowerCase().replace(/\s+/g, ' ').trim().substring(0, 80);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function generateQuizFromAI() {
   const apiKeyInput = document.getElementById('cqApiKeyInput');
   const titleInput  = document.getElementById('cqTitleInput');
@@ -4021,73 +4124,102 @@ async function generateQuizFromAI() {
     const base64Data = await fileToBase64(cqSelectedFile);
     const mimeType = cqSelectedFile.type ||
       (cqSelectedFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    const isPdf = mimeType === 'application/pdf';
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    let allQuestions = [];
+    let anyTruncated = false;
 
-    const data = await callGeminiWithRetry(url, {
-      contents: [{
-        parts: [
+    if (isPdf) {
+      // For PDFs: detect page count, then chunk into batches of up to 10 pages
+      // Each batch is rendered as images and sent separately to avoid silent truncation
+      const pageCount = await getPdfPageCount(base64Data);
+
+      // Chunk size of 5 pages keeps per-batch output well within Gemini's token limit
+      const CHUNK_SIZE = 5;
+      if (pageCount && pageCount > CHUNK_SIZE) {
+        const numChunks = Math.ceil(pageCount / CHUNK_SIZE);
+
+        for (let chunk = 0; chunk < numChunks; chunk++) {
+          const startPage = chunk * CHUNK_SIZE + 1;
+          const endPage   = Math.min(startPage + CHUNK_SIZE - 1, pageCount);
+          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting questions from pages ${startPage}–${endPage} of ${pageCount} (batch ${chunk + 1}/${numChunks})…</div>`;
+
+          // Render pages in this chunk to images and send them all at once
+          const pageParts = [];
+          for (let p = startPage; p <= endPage; p++) {
+            try {
+              const { dataUrl } = await renderPdfPageToDataUrl(base64Data, p);
+              const pageBase64 = dataUrl.split(',')[1] || '';
+              pageParts.push({ inline_data: { mime_type: 'image/png', data: pageBase64 } });
+            } catch (e) { /* skip unrenderable pages */ }
+          }
+          if (!pageParts.length) continue;
+
+          // Add a context hint so the model knows these are consecutive pages
+          pageParts.push({ text: CQ_EXTRACTION_PROMPT + `\n\nNote: these are pages ${startPage}–${endPage} of a ${pageCount}-page document. Extract EVERY question visible on these pages.` });
+
+          // Auto-split the batch further if it gets truncated
+          const { questions: chunkQs, truncated } = await _extractQuestionsFromPartsAutoSplit(pageParts, apiKey);
+          if (truncated) anyTruncated = true;
+          allQuestions.push(...chunkQs);
+
+          // Small delay between chunks to be polite to the API
+          if (chunk < numChunks - 1) await new Promise(r => setTimeout(r, 400));
+        }
+
+        // Deduplicate in case page boundaries caused overlap
+        allQuestions = _deduplicateQuestions(allQuestions);
+
+      } else {
+        // Short PDF (≤5 pages): send whole document in one shot, auto-split if truncated
+        const parts = [
           { inline_data: { mime_type: mimeType, data: base64Data } },
           { text: CQ_EXTRACTION_PROMPT }
-        ]
-      }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: CQ_RESPONSE_SCHEMA,
-        temperature: 0,
-        maxOutputTokens: 65536
+        ];
+        const { questions, truncated } = await _extractQuestionsFromPartsAutoSplit(parts, apiKey);
+        allQuestions = questions;
+        if (truncated) anyTruncated = true;
       }
-    }, {});
 
-    const candidate = data && data.candidates && data.candidates[0];
-    if (!candidate) throw new Error('Gemini returned no result. The file may be unsupported or blocked — try a clearer image or PDF.');
+    } else {
+      // Image file: single pass with auto-split on truncation
+      const parts = [
+        { inline_data: { mime_type: mimeType, data: base64Data } },
+        { text: CQ_EXTRACTION_PROMPT }
+      ];
+      const { questions, truncated } = await _extractQuestionsFromPartsAutoSplit(parts, apiKey);
+      allQuestions = questions;
+      if (truncated) anyTruncated = true;
+    }
 
-    const finishReason = candidate.finishReason;
-    const textOut = (candidate.content && candidate.content.parts || [])
-      .map(p => p.text || '').join('');
-    if (!textOut.trim()) throw new Error('Gemini returned an empty response. Please try again.');
-
-    let parsed;
-    try { parsed = JSON.parse(textOut); }
-    catch (e) { throw new Error('Could not understand the AI response. Please try again.'); }
-
-    if (!Array.isArray(parsed) || !parsed.length) {
+    if (!allQuestions.length) {
       throw new Error('No questions could be detected in the uploaded file.');
     }
 
-    const cleaned = parsed.map(q => {
-      if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
-      const opts = {};
-      Object.entries(q.options)
-        .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
-        .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
-        .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
-      if (!Object.keys(opts).length) return null;
-      let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
-      if (!opts[answer]) answer = Object.keys(opts)[0];
-      const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
-      return { question: q.question, options: opts, optionsOrder, answer, has_image: !!q.has_image };
-    }).filter(Boolean);
-
-    if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
-
     // Extract embedded images for questions that have them
-    const imageQuestions = cleaned.filter(q => q.has_image);
+    const imageQuestions = allQuestions.filter(q => q.has_image);
     if (imageQuestions.length > 0) {
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting images for ${imageQuestions.length} question${imageQuestions.length !== 1 ? 's' : ''}… please wait.</div>`;
-      await extractImagesForQuestions(cleaned, base64Data, mimeType, apiKey);
+      await extractImagesForQuestions(allQuestions, base64Data, mimeType, apiKey);
     }
 
-    cqGeneratedQuestions = cleaned;
+    cqGeneratedQuestions = allQuestions;
 
-    let warn = '';
-    if (finishReason === 'MAX_TOKENS') {
-      warn = ` ⚠️ The response may have been cut off because the document is very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
-    }
-
-    const imgCount = cleaned.filter(q => q.image).length;
+    const imgCount = allQuestions.filter(q => q.image).length;
     const imgNote  = imgCount > 0 ? ` · 🖼️ ${imgCount} image${imgCount !== 1 ? 's' : ''} embedded` : '';
-    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}. Review below, then save.${warn}</div>`;
+
+    if (anyTruncated) {
+      // Prominent warning banner shown above the success line
+      statusEl.innerHTML = `
+        <div class="cq-status error" style="margin-bottom:8px;">
+          ⚠️ <strong>Possible missing questions.</strong> One or more batches hit the AI output limit even after auto-splitting.
+          The ${allQuestions.length} question${allQuestions.length !== 1 ? 's' : ''} below are what was captured — scroll through the preview carefully.
+          If questions are missing, try splitting the document into smaller files (e.g. 10 pages each) and uploading them separately.
+        </div>
+        <div class="cq-status success">✅ Extracted ${allQuestions.length} question${allQuestions.length !== 1 ? 's' : ''}${imgNote}. Review below, then save.</div>`;
+    } else {
+      statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${allQuestions.length} question${allQuestions.length !== 1 ? 's' : ''}${imgNote}. Review below, then save.</div>`;
+    }
     renderCQPreview();
 
   } catch (err) {
@@ -4190,97 +4322,174 @@ async function generateQuizFromLecture() {
   try {
     const isTxt = cqLectureFile.type === 'text/plain' || cqLectureFile.name.toLowerCase().endsWith('.txt');
     const generationPrompt = buildGenerationPrompt(qCount, prompt);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-    let requestBody;
-
-    if (isTxt) {
-      // Text file: send as plain text alongside the prompt
-      const lectureText = await fileToText(cqLectureFile);
-      if (!lectureText.trim()) throw new Error('The text file appears to be empty.');
-      requestBody = {
-        contents: [{
-          parts: [
-            { text: `LECTURE CONTENT:\n\n${lectureText}\n\n---\n\n${generationPrompt}` }
-          ]
-        }],
+    /* ── Helper: call Gemini once for generation and return cleaned questions ── */
+    const _generateFromParts = async (parts) => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const data = await callGeminiWithRetry(url, {
+        contents: [{ parts }],
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema: CQ_RESPONSE_SCHEMA,
           temperature: 0.7,
           maxOutputTokens: 65536
         }
-      };
+      }, {});
+      const candidate = data && data.candidates && data.candidates[0];
+      if (!candidate) return { questions: [], truncated: false };
+      const finishReason = candidate.finishReason;
+      const textOut = (candidate.content && candidate.content.parts || []).map(p => p.text || '').join('');
+      if (!textOut.trim()) return { questions: [], truncated: false };
+      let parsed;
+      try { const clean = textOut.replace(/```json|```/g, '').trim(); parsed = JSON.parse(clean); }
+      catch (e) { return { questions: [], truncated: false }; }
+      if (!Array.isArray(parsed)) return { questions: [], truncated: false };
+      const cleaned = parsed.map(q => {
+        if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
+        const opts = {};
+        Object.entries(q.options)
+          .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
+          .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
+          .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
+        if (!Object.keys(opts).length) return null;
+        let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
+        if (!opts[answer]) answer = Object.keys(opts)[0];
+        const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
+        return { question: q.question, options: opts, optionsOrder, answer };
+      }).filter(Boolean);
+      return { questions: cleaned, truncated: finishReason === 'MAX_TOKENS' };
+    };
+
+    /* ── Auto-split helper for generation (mirrors _extractQuestionsFromPartsAutoSplit) ── */
+    const _generateFromPartsAutoSplit = async (parts, depth = 0) => {
+      const { questions, truncated } = await _generateFromParts(parts);
+      if (truncated && depth < 2) {
+        const halves = _splitImageParts(parts);
+        if (halves) {
+          const [half1, half2] = halves;
+          await new Promise(r => setTimeout(r, 300));
+          const { questions: q1 } = await _generateFromPartsAutoSplit(half1, depth + 1);
+          await new Promise(r => setTimeout(r, 300));
+          const { questions: q2 } = await _generateFromPartsAutoSplit(half2, depth + 1);
+          return { questions: _deduplicateQuestions([...q1, ...q2]), truncated: false };
+        }
+      }
+      return { questions, truncated };
+    };
+
+    let allQuestions = [];
+    let anyTruncated = false;
+
+    if (isTxt) {
+      // Text file: chunk by ~4000 words to avoid silent truncation on long lectures
+      const lectureText = await fileToText(cqLectureFile);
+      if (!lectureText.trim()) throw new Error('The text file appears to be empty.');
+      const WORD_CHUNK = 4000;
+      const words = lectureText.split(/\s+/);
+      if (words.length > WORD_CHUNK) {
+        const numChunks = Math.ceil(words.length / WORD_CHUNK);
+        for (let i = 0; i < numChunks; i++) {
+          const chunkWords = words.slice(i * WORD_CHUNK, (i + 1) * WORD_CHUNK);
+          const chunkText = chunkWords.join(' ');
+          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Generating questions from text chunk ${i + 1} of ${numChunks}… please wait.</div>`;
+          const chunkPrompt = buildGenerationPrompt(
+            qCount ? String(Math.ceil(parseInt(qCount) / numChunks)) : null,
+            prompt
+          );
+          const parts = [{ text: `LECTURE CONTENT (part ${i + 1} of ${numChunks}):\n\n${chunkText}\n\n---\n\n${chunkPrompt}` }];
+          const { questions: chunkQs, truncated } = await _generateFromParts(parts);
+          if (truncated) anyTruncated = true;
+          allQuestions.push(...chunkQs);
+          if (i < numChunks - 1) await new Promise(r => setTimeout(r, 400));
+        }
+        allQuestions = _deduplicateQuestions(allQuestions);
+      } else {
+        // Short text: single pass
+        const parts = [{ text: `LECTURE CONTENT:\n\n${lectureText}\n\n---\n\n${generationPrompt}` }];
+        const { questions, truncated } = await _generateFromParts(parts);
+        allQuestions = questions;
+        if (truncated) anyTruncated = true;
+      }
     } else {
-      // PDF or image: send as base64
+      // PDF or image: use auto-split helper
       const base64Data = await fileToBase64(cqLectureFile);
       const mimeType = cqLectureFile.type ||
         (cqLectureFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-      requestBody = {
-        contents: [{
-          parts: [
+      const isPdf = mimeType === 'application/pdf';
+
+      if (isPdf) {
+        statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading PDF and generating questions… this may take a minute.</div>`;
+        const pageCount = await getPdfPageCount(base64Data);
+        const CHUNK_SIZE = 5;
+        if (pageCount && pageCount > CHUNK_SIZE) {
+          const numChunks = Math.ceil(pageCount / CHUNK_SIZE);
+          for (let chunk = 0; chunk < numChunks; chunk++) {
+            const startPage = chunk * CHUNK_SIZE + 1;
+            const endPage   = Math.min(startPage + CHUNK_SIZE - 1, pageCount);
+            statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Generating from pages ${startPage}–${endPage} of ${pageCount} (batch ${chunk + 1}/${numChunks})…</div>`;
+            const pageParts = [];
+            for (let p = startPage; p <= endPage; p++) {
+              try {
+              const { dataUrl } = await renderPdfPageToDataUrl(base64Data, p);
+              const pageBase64 = dataUrl.split(',')[1] || '';
+              if (pageBase64) pageParts.push({ inline_data: { mime_type: 'image/png', data: pageBase64 } });
+            } catch (e) { /* skip unrenderable pages */ }
+            }
+            const chunkPrompt = buildGenerationPrompt(
+              qCount ? String(Math.ceil(parseInt(qCount) / numChunks)) : null,
+              prompt
+            );
+            pageParts.push({ text: chunkPrompt + `\n\nNote: these are pages ${startPage}–${endPage} of a ${pageCount}-page document.` });
+            const { questions: chunkQs, truncated } = await _generateFromPartsAutoSplit(pageParts);
+            if (truncated) anyTruncated = true;
+            allQuestions.push(...chunkQs);
+            if (chunk < numChunks - 1) await new Promise(r => setTimeout(r, 400));
+          }
+          allQuestions = _deduplicateQuestions(allQuestions);
+        } else {
+          // Short PDF: single pass with auto-split
+          const parts = [
             { inline_data: { mime_type: mimeType, data: base64Data } },
             { text: generationPrompt }
-          ]
-        }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: CQ_RESPONSE_SCHEMA,
-          temperature: 0.7,
-          maxOutputTokens: 65536
+          ];
+          const { questions, truncated } = await _generateFromPartsAutoSplit(parts);
+          allQuestions = questions;
+          if (truncated) anyTruncated = true;
         }
-      };
+      } else {
+        // Image: single pass with auto-split
+        const parts = [
+          { inline_data: { mime_type: mimeType, data: base64Data } },
+          { text: generationPrompt }
+        ];
+        const { questions, truncated } = await _generateFromPartsAutoSplit(parts);
+        allQuestions = questions;
+        if (truncated) anyTruncated = true;
+      }
     }
 
-    const data = await callGeminiWithRetry(url, requestBody, {});
-
-    const candidate = data && data.candidates && data.candidates[0];
-    if (!candidate) throw new Error('Gemini returned no result. The file may be unsupported or too large — try splitting it into smaller sections.');
-
-    const finishReason = candidate.finishReason;
-    const textOut = (candidate.content && candidate.content.parts || [])
-      .map(p => p.text || '').join('');
-    if (!textOut.trim()) throw new Error('Gemini returned an empty response. Please try again.');
-
-    let parsed;
-    try {
-      const clean = textOut.replace(/```json|```/g, '').trim();
-      parsed = JSON.parse(clean);
-    } catch (e) { throw new Error('Could not understand the AI response. Please try again.'); }
-
-    if (!Array.isArray(parsed) || !parsed.length) {
+    if (!allQuestions.length) {
       throw new Error('No questions were generated. Try uploading a more detailed lecture or reducing the question count.');
     }
 
-    const cleaned = parsed.map(q => {
-      if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
-      const opts = {};
-      Object.entries(q.options)
-        .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
-        .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
-        .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
-      if (!Object.keys(opts).length) return null;
-      let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
-      if (!opts[answer]) answer = Object.keys(opts)[0];
-      const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
-      return { question: q.question, options: opts, optionsOrder, answer };
-    }).filter(Boolean);
+    cqGeneratedQuestions = allQuestions;
 
-    if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
-
-    cqGeneratedQuestions = cleaned;
-
-    let warn = '';
-    if (finishReason === 'MAX_TOKENS') {
-      warn = ` ⚠️ The response may have been cut off — try splitting very long documents into smaller files.`;
-    }
-
-    const clinicalCount = cleaned.filter(q =>
+    const clinicalCount = allQuestions.filter(q =>
       /\b(patient|presents|year.old|male|female|man|woman|child|boy|girl|case|history|examination|complains|admitted|brought|referred)\b/i.test(q.question)
     ).length;
-    const clinicalPct = Math.round((clinicalCount / cleaned.length) * 100);
+    const clinicalPct = Math.round((clinicalCount / allQuestions.length) * 100);
 
-    statusEl.innerHTML = `<div class="cq-status success">✅ Generated ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''} (${clinicalPct}% clinical scenarios). Review below, then save.${warn}</div>`;
+    if (anyTruncated) {
+      statusEl.innerHTML = `
+        <div class="cq-status error" style="margin-bottom:8px;">
+          ⚠️ <strong>Possible missing questions.</strong> One or more batches hit the AI output limit even after auto-splitting.
+          Only ${allQuestions.length} question${allQuestions.length !== 1 ? 's' : ''} were captured — scroll through the preview carefully.
+          If questions seem missing, try uploading a shorter document, reducing the question count, or splitting into multiple smaller files.
+        </div>
+        <div class="cq-status success">✅ Generated ${allQuestions.length} question${allQuestions.length !== 1 ? 's' : ''} (${clinicalPct}% clinical scenarios). Review below, then save.</div>`;
+    } else {
+      statusEl.innerHTML = `<div class="cq-status success">✅ Generated ${allQuestions.length} question${allQuestions.length !== 1 ? 's' : ''} (${clinicalPct}% clinical scenarios). Review below, then save.</div>`;
+    }
     renderCQPreview();
 
   } catch (err) {
@@ -4569,14 +4778,9 @@ async function shareCustomQuiz(id) {
     const sharedId = 'sq_' + window._currentUser.uid + '_' + id;
     const sharedRef = window._doc(window._db, 'sharedQuizzes', sharedId);
 
-    // Force-hydrate images from the personal subcollection before sharing,
-    // so q.image is guaranteed to be in memory even if background hydration
-    // hadn't finished (or never ran) when the user taps Share.
-    await hydrateQuizImages(quiz.questions);
-
     // Deep-clone so we never mutate the in-memory cached quiz
     const questionsForFirestore = JSON.parse(JSON.stringify(quiz.questions)).map(q => {
-      // Drop personal firestore:// sentinel — image is now hydrated into q.image
+      // Drop personal firestore:// sentinel — image is already hydrated in q.image
       if (q.imageUrl && q.imageUrl.startsWith('firestore://')) delete q.imageUrl;
       return q;
     });
