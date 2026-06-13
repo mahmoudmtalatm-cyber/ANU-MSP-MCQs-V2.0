@@ -1598,6 +1598,15 @@ function updateTimerDisplay() {
   el.classList.toggle('urgent', timeLeft <= 60);
 }
 
+/* ── Returns option [key, value] pairs in guaranteed original order.
+   Uses optionsOrder array if present, otherwise falls back to Object.entries. ── */
+function getOptionEntries(q) {
+  if (Array.isArray(q.optionsOrder) && q.optionsOrder.length) {
+    return q.optionsOrder.map(({ key, value }) => [key, value]);
+  }
+  return Object.entries(q.options);
+}
+
 /* ══════════════════════════════════════════════════════════
    RENDER QUESTION
 ══════════════════════════════════════════════════════════ */
@@ -1623,7 +1632,7 @@ function renderQuestion() {
   const list = document.getElementById('optionsList');
   list.innerHTML = '';
 
-  Object.entries(q.options).forEach(([key, val]) => {
+  getOptionEntries(q).forEach(([key, val]) => {
     const saved = userAnswers[currentIndex] || '';
     const label = document.createElement('label');
     label.className = 'option-label' + (saved === key ? ' selected' : '');
@@ -1868,7 +1877,7 @@ if (changeLog.length > 0) {
     `;
 
     const optsDiv = card.querySelector('.r-options');
-    Object.entries(q.options).forEach(([key, val]) => {
+    getOptionEntries(q).forEach(([key, val]) => {
       const isCorrectOpt = key === correct;
       const isUserOpt    = key === userAns;
 
@@ -2419,14 +2428,14 @@ function setExplainKey(key) {
 
 /* ── Build Gemini prompt for one question ── */
 function buildExplainPrompt(q, userAnswer) {
-  const optLines = Object.entries(q.options)
+  const optLines = getOptionEntries(q)
     .map(([k, v]) => `  ${k}. ${v}`)
     .join('\n');
   const userLine = userAnswer
     ? `The student answered: ${userAnswer}. ${q.options[userAnswer] || ''}`
     : 'The student did not answer this question.';
 
-  const wrongOptLines = Object.entries(q.options)
+  const wrongOptLines = getOptionEntries(q)
     .filter(([k]) => k !== q.answer)
     .map(([k, v]) => `
 WRONG — ${k}. ${v}:
@@ -2598,7 +2607,7 @@ function renderExplainText(text, q) {
   const sectionMeta = {};
   sectionMeta['__overview__'] = { label: 'Question Overview', cls: 'question-label' };
   sectionMeta['__correct__']  = { label: `✔ Correct — ${q.answer}. ${q.options[q.answer] || ''}`, cls: 'correct-label' };
-  Object.entries(q.options).forEach(([k, v]) => {
+  getOptionEntries(q).forEach(([k, v]) => {
     if (k !== q.answer) {
       sectionMeta[`__wrong_${k}__`] = { label: `✘ Wrong — ${k}. ${v}`, cls: 'wrong-label' };
     }
@@ -2609,8 +2618,7 @@ function renderExplainText(text, q) {
   const headerDefs = [
     { key: '__overview__', re: /QUESTION\s+OVERVIEW\s*:/i },
     { key: '__correct__',  re: /CORRECT\s+ANSWER\s*(?:—|-|–)?[^:\n]*:/i },
-    ...Object.keys(q.options)
-      .filter(k => k !== q.answer)
+    ...getOptionEntries(q).filter(([k]) => k !== q.answer).map(([k]) => k)
       .map(k => ({
         key: `__wrong_${k}__`,
         // Match "WRONG — K." or "WRONG — K ." or just "WRONG — K:" where K is the exact option key
@@ -3233,7 +3241,8 @@ async function generateQuizFromAI() {
       if (!Object.keys(opts).length) return null;
       let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
       if (!opts[answer]) answer = Object.keys(opts)[0];
-      return { question: q.question, options: opts, answer };
+      const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
+      return { question: q.question, options: opts, optionsOrder, answer };
     }).filter(Boolean);
 
     if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
@@ -3424,7 +3433,8 @@ async function generateQuizFromLecture() {
       if (!Object.keys(opts).length) return null;
       let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
       if (!opts[answer]) answer = Object.keys(opts)[0];
-      return { question: q.question, options: opts, answer };
+      const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
+      return { question: q.question, options: opts, optionsOrder, answer };
     }).filter(Boolean);
 
     if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
@@ -3474,7 +3484,7 @@ function renderCQPreview() {
   let html = `<div class="cq-preview-list">`;
   cqGeneratedQuestions.forEach((q, i) => {
     html += `<div class="cq-preview-q"><div><span class="cq-pq-num">Q${i + 1}.</span> ${escapeHtml(q.question)}</div>`;
-    Object.entries(q.options).forEach(([k, v]) => {
+    getOptionEntries(q).forEach(([k, v]) => {
       const isCorrect = k === q.answer;
       html += `<div class="cq-pq-opt${isCorrect ? ' cq-correct' : ''}">${escapeHtml(k)}. ${escapeHtml(v)}${isCorrect ? ' ✔' : ''}</div>`;
     });
@@ -3644,17 +3654,11 @@ async function shareCustomQuiz(id) {
     const sharedId = 'sq_' + window._currentUser.uid + '_' + id;
     const sharedRef = window._doc(window._db, 'sharedQuizzes', sharedId);
 
-    // Serialize options as an ordered array so Firestore cannot scramble key order.
-    const questionsToStore = quiz.questions.map(q => ({
-      ...q,
-      optionsOrder: Object.entries(q.options).map(([key, value]) => ({ key, value }))
-    }));
-
     await window._setDoc(sharedRef, {
       id: sharedId,
       originalId: id,
       title: quiz.title,
-      questions: questionsToStore,
+      questions: quiz.questions,  // optionsOrder is already embedded on every question
       authorUid: window._currentUser.uid,
       authorName: displayName,
       sharedAt: Date.now(),
