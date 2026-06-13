@@ -4569,9 +4569,14 @@ async function shareCustomQuiz(id) {
     const sharedId = 'sq_' + window._currentUser.uid + '_' + id;
     const sharedRef = window._doc(window._db, 'sharedQuizzes', sharedId);
 
+    // Force-hydrate images from the personal subcollection before sharing,
+    // so q.image is guaranteed to be in memory even if background hydration
+    // hadn't finished (or never ran) when the user taps Share.
+    await hydrateQuizImages(quiz.questions);
+
     // Deep-clone so we never mutate the in-memory cached quiz
     const questionsForFirestore = JSON.parse(JSON.stringify(quiz.questions)).map(q => {
-      // Drop personal firestore:// sentinel — image is already hydrated in q.image
+      // Drop personal firestore:// sentinel — image is now hydrated into q.image
       if (q.imageUrl && q.imageUrl.startsWith('firestore://')) delete q.imageUrl;
       return q;
     });
