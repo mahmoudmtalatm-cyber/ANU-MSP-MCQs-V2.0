@@ -3650,67 +3650,170 @@ function cancellableSleep(ms, cancelToken) {
   });
 }
 
-/* ── Extract images from source doc for questions flagged has_image ── */
-async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType, apiKey, geminiUrl) {
-  // Process questions with images sequentially to avoid rate limits
+/* ── Load an HTMLImageElement from a data-URL ── */
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload  = () => resolve(img);
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = dataUrl;
+  });
+}
+
+/* ── Render a single PDF page to a canvas using pdf.js, return dataURL ── */
+async function renderPdfPageToDataUrl(base64Data, pageNum) {
+  // Lazy-load pdf.js from CDN
+  if (!window.pdfjsLib) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload  = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+  const pdfLib = window.pdfjsLib;
+  const binary = atob(base64Data);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const pdf  = await pdfLib.getDocument({ data: bytes }).promise;
+  const page = await pdf.getPage(pageNum);
+  const scale    = 2;
+  const viewport = page.getViewport({ scale });
+  const canvas   = document.createElement('canvas');
+  canvas.width   = viewport.width;
+  canvas.height  = viewport.height;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
+}
+
+/* ── Ask Gemini for bounding boxes of visual elements for each image-bearing question ── */
+async function getBoundingBoxes(questions, sourceBase64, sourceMimeType, apiKey) {
+  const imageQs = questions.map((q, i) => ({ idx: i, q })).filter(({ q }) => q.has_image);
+  if (!imageQs.length) return;
+
+  const descriptions = imageQs.map(({ idx, q }) =>
+    `Q${idx + 1}: "${q.question.substring(0, 200)}"`
+  ).join('\n');
+
+  const prompt = `You are given a document. For each question below, locate the visual element (image, diagram, figure, table, chart, X-ray, ECG, histology slide, graph, etc.) associated with it.
+
+For each question, return the bounding box of ONLY that visual element on the page where it appears, as normalized coordinates (0.0 to 1.0 relative to the full page width and height). Also return the 1-based page number where the visual element appears.
+
+Questions:
+${descriptions}
+
+Return ONLY a JSON array — one entry per question — in exactly this format:
+[
+  { "q_index": 1, "page": 1, "x": 0.05, "y": 0.10, "w": 0.90, "h": 0.35 }
+]
+
+Where:
+- q_index matches the Q number above (1-based)
+- page is the 1-based page number containing this visual element
+- x, y = top-left corner of the bounding box (normalized 0–1)
+- w, h = width and height of the bounding box (normalized 0–1)
+
+If you cannot find a visual element for a question, omit that entry from the array.
+Output nothing besides the JSON array.`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: sourceMimeType, data: sourceBase64 } },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: { temperature: 0, maxOutputTokens: 4096 }
+      })
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const textOut = ((data.candidates || [])[0]?.content?.parts || [])
+      .map(p => p.text || '').join('').trim();
+    if (!textOut) return;
+    const clean = textOut.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch (e) {
+    return null;
+  }
+}
+
+/* ── Crop a region from a rendered image using Canvas ── */
+async function cropRegionFromDataUrl(pageDataUrl, pageWidth, pageHeight, box) {
+  const img = await loadImageFromDataUrl(pageDataUrl);
+  const sx = Math.max(0, Math.round(box.x * pageWidth));
+  const sy = Math.max(0, Math.round(box.y * pageHeight));
+  const sw = Math.min(Math.round(box.w * pageWidth),  pageWidth  - sx);
+  const sh = Math.min(Math.round(box.h * pageHeight), pageHeight - sy);
+  if (sw <= 0 || sh <= 0) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width  = sw;
+  canvas.height = sh;
+  canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  return canvas.toDataURL('image/png');
+}
+
+/* ── Main: extract images from source for all has_image questions ── */
+async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType, apiKey) {
+  const isPdf = sourceMimeType === 'application/pdf';
+
+  // Step 1: ask Gemini for bounding boxes of all image-bearing questions at once
+  const boxes = await getBoundingBoxes(questions, sourceBase64, sourceMimeType, apiKey);
+  if (!boxes || !Array.isArray(boxes) || !boxes.length) return;
+
+  // Build a map: question index (0-based) → box info
+  const boxMap = {};
+  boxes.forEach(b => {
+    if (typeof b.q_index === 'number') {
+      boxMap[b.q_index - 1] = b; // convert to 0-based
+    }
+  });
+
+  // Step 2: render pages and crop
+  const pageCache = {}; // page number → { dataUrl, width, height }
+
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     if (!q.has_image) continue;
-
-    const prompt = `You are given a document page. Locate the image, diagram, figure, chart, table, X-ray, ECG, histology slide, or other visual element that belongs to this question:
-
-"${q.question.substring(0, 300)}"
-
-Your task: render ONLY that visual element (and nothing else — no question text, no answer choices, no surrounding whitespace) as a self-contained image, then return it as a base64-encoded PNG.
-
-Respond with ONLY a JSON object in exactly this format:
-{"image_base64": "<base64 encoded PNG data>", "mime_type": "image/png"}
-
-If you cannot locate or render the image, respond with:
-{"image_base64": null, "mime_type": null}
-
-No markdown, no commentary — just the JSON object.`;
+    const box = boxMap[i];
+    if (!box) continue;
 
     try {
-      const resp = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: sourceMimeType, data: sourceBase64 } },
-              { text: prompt }
-            ]
-          }],
-          generationConfig: { temperature: 0, maxOutputTokens: 8192 }
-        })
-      });
+      const pageNum = box.page || 1;
 
-      if (!resp.ok) continue; // skip on error, don't block
-
-      const data = await resp.json();
-      const textOut = ((data.candidates || [])[0]?.content?.parts || [])
-        .map(p => p.text || '').join('').trim();
-
-      if (!textOut) continue;
-
-      let parsed;
-      try {
-        const clean = textOut.replace(/```json|```/g, '').trim();
-        parsed = JSON.parse(clean);
-      } catch (e) { continue; }
-
-      if (parsed && parsed.image_base64 && typeof parsed.image_base64 === 'string') {
-        const mime = parsed.mime_type || 'image/png';
-        q.image = `data:${mime};base64,${parsed.image_base64}`;
+      if (!pageCache[pageNum]) {
+        if (isPdf) {
+          pageCache[pageNum] = await renderPdfPageToDataUrl(sourceBase64, pageNum);
+        } else {
+          // Single image — treat as page 1
+          const img = await loadImageFromDataUrl(`data:${sourceMimeType};base64,${sourceBase64}`);
+          const canvas = document.createElement('canvas');
+          canvas.width  = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          pageCache[pageNum] = {
+            dataUrl: canvas.toDataURL('image/png'),
+            width: img.naturalWidth,
+            height: img.naturalHeight
+          };
+        }
       }
 
-    } catch (e) {
-      // Silently skip — image extraction failure shouldn't break quiz creation
-    }
+      const { dataUrl, width, height } = pageCache[pageNum];
+      const cropped = await cropRegionFromDataUrl(dataUrl, width, height, box);
+      if (cropped) q.image = cropped;
 
-    // Small delay between requests
-    await new Promise(r => setTimeout(r, 400));
+    } catch (e) {
+      // Skip silently
+    }
   }
 }
 
@@ -3791,7 +3894,7 @@ async function generateQuizFromAI() {
     const imageQuestions = cleaned.filter(q => q.has_image);
     if (imageQuestions.length > 0) {
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting images for ${imageQuestions.length} question${imageQuestions.length !== 1 ? 's' : ''}… please wait.</div>`;
-      await extractImagesForQuestions(cleaned, base64Data, mimeType, apiKey, url);
+      await extractImagesForQuestions(cleaned, base64Data, mimeType, apiKey);
     }
 
     cqGeneratedQuestions = cleaned;
