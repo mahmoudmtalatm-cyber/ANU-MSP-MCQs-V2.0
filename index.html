@@ -3305,13 +3305,14 @@ async function uploadQuizImagesToStorage(quizId, questions) {
     const q = questions[idx];
     if (!q.image) continue; // nothing to save
     try {
+      const compressed = await compressImageDataUrl(q.image);
       const imgRef = window._doc(
         window._db,
         'users', window._currentUser.uid,
         'customQuizzes', quizId,
         'images', String(idx)
       );
-      await window._setDoc(imgRef, { imageData: q.image });
+      await window._setDoc(imgRef, { imageData: compressed });
       q.imageUrl = `firestore://${quizId}/${idx}`; // sentinel: tells hydrate where to fetch from
       delete q.image; // don't inline base64 in the parent quiz document
     } catch (e) {
@@ -3920,6 +3921,27 @@ async function cropRegionFromDataUrl(pageDataUrl, pageWidth, pageHeight, box) {
   return canvas.toDataURL('image/png');
 }
 
+/* ── Compress / resize a base64 data URL so it fits well under Firestore's 1 MB doc limit.
+   Target: ≤ 800 px on the longest side, JPEG quality 0.82.
+   Returns the compressed data URL (always image/jpeg). ── */
+async function compressImageDataUrl(dataUrl, maxPx = 800, quality = 0.82) {
+  try {
+    const img = await loadImageFromDataUrl(dataUrl);
+    let { naturalWidth: w, naturalHeight: h } = img;
+    if (w > maxPx || h > maxPx) {
+      if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+      else        { w = Math.round(w * maxPx / h); h = maxPx; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width  = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', quality);
+  } catch (e) {
+    return dataUrl; // fallback: return original if compression fails
+  }
+}
+
 /* ── Main: extract images from source for all has_image questions ── */
 async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType, apiKey) {
   const isPdf = sourceMimeType === 'application/pdf';
@@ -3968,7 +3990,7 @@ async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType
 
       const { dataUrl, width, height } = pageCache[pageNum];
       const cropped = await cropRegionFromDataUrl(dataUrl, width, height, box);
-      if (cropped) q.image = cropped;
+      if (cropped) q.image = await compressImageDataUrl(cropped);
 
     } catch (e) {
       // Skip silently
@@ -4449,9 +4471,10 @@ async function confirmDisplayName() {
 }
 
 /* ══════════════════════════════════════════════════════════
-   SHARE CUSTOM QUIZ
+   FIRESTORE UTILITIES
 ══════════════════════════════════════════════════════════ */
-// Deep-clean an object for Firestore: remove undefined values, convert Sets/Maps, etc.
+
+// Deep-clean an object for Firestore: remove undefined values so Firestore never rejects the doc.
 function cleanForFirestore(obj) {
   if (Array.isArray(obj)) {
     return obj.map(cleanForFirestore).filter(v => v !== undefined);
@@ -4459,7 +4482,7 @@ function cleanForFirestore(obj) {
   if (obj !== null && typeof obj === 'object') {
     const out = {};
     for (const [k, v] of Object.entries(obj)) {
-      if (v === undefined) continue; // Firestore rejects undefined
+      if (v === undefined) continue;
       out[k] = cleanForFirestore(v);
     }
     return out;
@@ -4467,6 +4490,67 @@ function cleanForFirestore(obj) {
   return obj;
 }
 
+/* ══════════════════════════════════════════════════════════
+   SHARED QUIZ IMAGE HELPERS (subcollection per shared quiz)
+   Path: sharedQuizzes/{sharedId}/images/{questionIdx}
+══════════════════════════════════════════════════════════ */
+
+/* Upload images for a shared quiz into its images subcollection.
+   Compresses each image first, then replaces q.image with a sharedImageIdx sentinel. */
+async function uploadSharedQuizImages(sharedId, questions) {
+  for (let idx = 0; idx < questions.length; idx++) {
+    const q = questions[idx];
+    if (!q.image) continue;
+    try {
+      const compressed = await compressImageDataUrl(q.image);
+      const imgRef = window._doc(
+        window._db,
+        'sharedQuizzes', sharedId,
+        'images', String(idx)
+      );
+      await window._setDoc(imgRef, { imageData: compressed });
+      q.sharedImageIdx = idx; // sentinel for consumers
+      delete q.image;
+    } catch (e) {
+      console.warn('Shared image upload failed for question', idx, e);
+      // Keep inline as fallback
+    }
+  }
+}
+
+/* Fetch images for a shared quiz from its images subcollection. */
+async function hydrateSharedQuizImages(sharedId, questions) {
+  await Promise.all(questions.map(async (q) => {
+    if (q.image) return; // already in memory
+    if (typeof q.sharedImageIdx !== 'number') return; // no image
+    try {
+      const imgRef = window._doc(
+        window._db,
+        'sharedQuizzes', sharedId,
+        'images', String(q.sharedImageIdx)
+      );
+      const snap = await window._getDoc(imgRef);
+      if (snap.exists()) q.image = snap.data().imageData;
+    } catch (e) {
+      console.warn('Shared image fetch failed for question', q.sharedImageIdx, e);
+    }
+  }));
+}
+
+/* Delete all image subcollection docs for a shared quiz. */
+async function deleteSharedQuizImages(sharedId) {
+  try {
+    const col = window._collection(window._db, 'sharedQuizzes', sharedId, 'images');
+    const snap = await window._getDocs(col);
+    await Promise.all(snap.docs.map(d => window._deleteDoc(d.ref)));
+  } catch (e) {
+    console.warn('Shared image cleanup failed for quiz', sharedId, e);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   SHARE CUSTOM QUIZ
+══════════════════════════════════════════════════════════ */
 async function shareCustomQuiz(id) {
   if (!window._currentUser) {
     alert('Please sign in to share quizzes with the community.');
@@ -4485,19 +4569,16 @@ async function shareCustomQuiz(id) {
     const sharedId = 'sq_' + window._currentUser.uid + '_' + id;
     const sharedRef = window._doc(window._db, 'sharedQuizzes', sharedId);
 
-    // Build questions for the shared Firestore document.
-    // Images are inlined as base64 directly — no Storage needed.
-    // q.image is already hydrated in memory; if only a firestore:// sentinel exists,
-    // the image was already loaded into q.image by hydrateQuizImages on load.
-    const questionsForFirestore = quiz.questions.map(q => {
-      const out = { ...q };
-      // Remove the firestore:// sentinel — shared doc consumers use .image directly
-      if (out.imageUrl && out.imageUrl.startsWith('firestore://')) {
-        delete out.imageUrl;
-      }
-      // out.image (base64 data URL) is kept inline for recipients
-      return out;
+    // Deep-clone so we never mutate the in-memory cached quiz
+    const questionsForFirestore = JSON.parse(JSON.stringify(quiz.questions)).map(q => {
+      // Drop personal firestore:// sentinel — image is already hydrated in q.image
+      if (q.imageUrl && q.imageUrl.startsWith('firestore://')) delete q.imageUrl;
+      return q;
     });
+
+    // Compress + upload each image to sharedQuizzes/{sharedId}/images/{idx},
+    // replacing q.image with a lightweight sharedImageIdx sentinel in the doc
+    await uploadSharedQuizImages(sharedId, questionsForFirestore);
 
     await window._setDoc(sharedRef, cleanForFirestore({
       id: sharedId,
@@ -4633,9 +4714,10 @@ async function startCommunityQuizByIdx(idx) {
   const shuffle = shuffleInput ? shuffleInput.checked : false;
 
   let combined = restoreOptionsOrder(JSON.parse(JSON.stringify(quiz.questions)));
-  // Images are inlined as base64 in shared quiz docs — no fetch needed,
-  // but run hydrate in case any legacy Storage URLs remain.
-  await hydrateQuizImages(combined);
+  // Hydrate images: new quizzes use the shared subcollection (sharedImageIdx sentinel);
+  // legacy quizzes may have inline base64 or Storage URLs.
+  await hydrateSharedQuizImages(quiz.id, combined);
+  await hydrateQuizImages(combined); // handles any legacy Storage URLs still present
   if (shuffle) {
     for (let i = combined.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -4674,8 +4756,9 @@ async function importCommunityQuiz(sharedId) {
     if (alreadyExists) { alert('You already have this quiz saved.'); return; }
 
     const importedQuestions = restoreOptionsOrder(q.questions);
-    // Fetch images from Storage URLs so they work offline and in the quiz
-    await hydrateQuizImages(importedQuestions);
+    // Hydrate images: new quizzes use the shared subcollection; legacy may use Storage URLs
+    await hydrateSharedQuizImages(sharedId, importedQuestions);
+    await hydrateQuizImages(importedQuestions); // handles legacy Storage URLs
 
     quizzes.unshift({
       id: 'cq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
@@ -4703,6 +4786,7 @@ async function deleteCommunityQuiz(sharedId) {
       return;
     }
     await window._deleteDoc(ref);
+    await deleteSharedQuizImages(sharedId); // remove images subcollection too
 
     // Clear sharedAt from local quiz cache
     const quizzes = loadCustomQuizzes();
