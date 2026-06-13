@@ -3542,13 +3542,15 @@ STRICT RULES — follow exactly, no exceptions:
 4. If the document indicates which choice is correct (circled, bolded, underlined, highlighted, starred, checked, or listed in a separate answer key), use EXACTLY that choice as the "answer" for that question. Do not second-guess or change a marked answer.
 5. ONLY if a specific question has NO indicated correct answer anywhere in the document, then — and only then — use your own subject-matter knowledge to determine the single most likely correct answer for that question.
 6. Do not invent, add, duplicate, or remove any questions or options that are not present in the source document.
+7. For each question, set "has_image" to true if the question is accompanied by an image, diagram, figure, table, chart, graph, X-ray, CT scan, ECG, histology slide, or any other visual element that is part of that question. Set it to false otherwise.
 
 Return ONLY a JSON array, one object per question, in exactly this format:
 [
   {
     "question": "exact question text",
     "options": { "A": "exact choice text", "B": "exact choice text", "C": "exact choice text", "D": "exact choice text" },
-    "answer": "A"
+    "answer": "A",
+    "has_image": false
   }
 ]
 
@@ -3568,7 +3570,8 @@ const CQ_RESPONSE_SCHEMA = {
           I: { type: 'STRING' }, J: { type: 'STRING' }
         }
       },
-      answer: { type: 'STRING' }
+      answer: { type: 'STRING' },
+      has_image: { type: 'BOOLEAN' }
     },
     required: ['question', 'options', 'answer']
   }
@@ -3647,6 +3650,70 @@ function cancellableSleep(ms, cancelToken) {
   });
 }
 
+/* ── Extract images from source doc for questions flagged has_image ── */
+async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType, apiKey, geminiUrl) {
+  // Process questions with images sequentially to avoid rate limits
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    if (!q.has_image) continue;
+
+    const prompt = `You are given a document page. Locate the image, diagram, figure, chart, table, X-ray, ECG, histology slide, or other visual element that belongs to this question:
+
+"${q.question.substring(0, 300)}"
+
+Your task: render ONLY that visual element (and nothing else — no question text, no answer choices, no surrounding whitespace) as a self-contained image, then return it as a base64-encoded PNG.
+
+Respond with ONLY a JSON object in exactly this format:
+{"image_base64": "<base64 encoded PNG data>", "mime_type": "image/png"}
+
+If you cannot locate or render the image, respond with:
+{"image_base64": null, "mime_type": null}
+
+No markdown, no commentary — just the JSON object.`;
+
+    try {
+      const resp = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: sourceMimeType, data: sourceBase64 } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: { temperature: 0, maxOutputTokens: 8192 }
+        })
+      });
+
+      if (!resp.ok) continue; // skip on error, don't block
+
+      const data = await resp.json();
+      const textOut = ((data.candidates || [])[0]?.content?.parts || [])
+        .map(p => p.text || '').join('').trim();
+
+      if (!textOut) continue;
+
+      let parsed;
+      try {
+        const clean = textOut.replace(/```json|```/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch (e) { continue; }
+
+      if (parsed && parsed.image_base64 && typeof parsed.image_base64 === 'string') {
+        const mime = parsed.mime_type || 'image/png';
+        q.image = `data:${mime};base64,${parsed.image_base64}`;
+      }
+
+    } catch (e) {
+      // Silently skip — image extraction failure shouldn't break quiz creation
+    }
+
+    // Small delay between requests
+    await new Promise(r => setTimeout(r, 400));
+  }
+}
+
 async function generateQuizFromAI() {
   const apiKeyInput = document.getElementById('cqApiKeyInput');
   const titleInput  = document.getElementById('cqTitleInput');
@@ -3715,10 +3782,17 @@ async function generateQuizFromAI() {
       let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
       if (!opts[answer]) answer = Object.keys(opts)[0];
       const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
-      return { question: q.question, options: opts, optionsOrder, answer };
+      return { question: q.question, options: opts, optionsOrder, answer, has_image: !!q.has_image };
     }).filter(Boolean);
 
     if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
+
+    // Extract embedded images for questions that have them
+    const imageQuestions = cleaned.filter(q => q.has_image);
+    if (imageQuestions.length > 0) {
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting images for ${imageQuestions.length} question${imageQuestions.length !== 1 ? 's' : ''}… please wait.</div>`;
+      await extractImagesForQuestions(cleaned, base64Data, mimeType, apiKey, url);
+    }
 
     cqGeneratedQuestions = cleaned;
 
@@ -3727,7 +3801,9 @@ async function generateQuizFromAI() {
       warn = ` ⚠️ The response may have been cut off because the document is very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
     }
 
-    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}. Review below, then save.${warn}</div>`;
+    const imgCount = cleaned.filter(q => q.image).length;
+    const imgNote  = imgCount > 0 ? ` · 🖼️ ${imgCount} image${imgCount !== 1 ? 's' : ''} embedded` : '';
+    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}. Review below, then save.${warn}</div>`;
     renderCQPreview();
 
   } catch (err) {
@@ -3953,6 +4029,13 @@ function renderCQPreview() {
   let html = `<div class="cq-preview-list">`;
   cqGeneratedQuestions.forEach((q, i) => {
     html += `<div class="cq-preview-q"><div><span class="cq-pq-num">Q${i + 1}.</span> ${escapeHtml(q.question)}</div>`;
+    if (q.image) {
+      html += `<div style="margin:8px 0 4px;border-radius:6px;overflow:hidden;border:1.5px solid #B0D4F0;background:#F0F8FF;display:inline-flex;max-width:100%;">
+        <img src="${q.image}" alt="Question image" style="max-width:100%;max-height:180px;object-fit:contain;display:block;" />
+      </div>`;
+    } else if (q.has_image) {
+      html += `<div style="margin:6px 0 4px;padding:6px 10px;background:#FFF3E0;border:1px dashed #E65100;border-radius:6px;font-size:.78rem;color:#E65100;font-weight:700;">⚠️ Image could not be extracted from source</div>`;
+    }
     getOptionEntries(q).forEach(([k, v]) => {
       const isCorrect = k === q.answer;
       html += `<div class="cq-pq-opt${isCorrect ? ' cq-correct' : ''}">${escapeHtml(k)}. ${escapeHtml(v)}${isCorrect ? ' ✔' : ''}</div>`;
