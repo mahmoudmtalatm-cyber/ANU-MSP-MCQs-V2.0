@@ -4451,6 +4451,22 @@ async function confirmDisplayName() {
 /* ══════════════════════════════════════════════════════════
    SHARE CUSTOM QUIZ
 ══════════════════════════════════════════════════════════ */
+// Deep-clean an object for Firestore: remove undefined values, convert Sets/Maps, etc.
+function cleanForFirestore(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(cleanForFirestore).filter(v => v !== undefined);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === undefined) continue; // Firestore rejects undefined
+      out[k] = cleanForFirestore(v);
+    }
+    return out;
+  }
+  return obj;
+}
+
 async function shareCustomQuiz(id) {
   if (!window._currentUser) {
     alert('Please sign in to share quizzes with the community.');
@@ -4483,7 +4499,7 @@ async function shareCustomQuiz(id) {
       return out;
     });
 
-    await window._setDoc(sharedRef, {
+    await window._setDoc(sharedRef, cleanForFirestore({
       id: sharedId,
       originalId: id,
       title: quiz.title,
@@ -4492,7 +4508,7 @@ async function shareCustomQuiz(id) {
       authorName: displayName,
       sharedAt: Date.now(),
       questionCount: quiz.questions.length
-    });
+    }));
 
     // Mark quiz as shared locally
     quiz.sharedAt = Date.now();
