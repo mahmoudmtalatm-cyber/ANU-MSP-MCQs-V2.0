@@ -744,7 +744,23 @@
 .cq-preview-q .cq-pq-opt { padding-left: 16px; color: var(--text-muted); }
 .cq-preview-q .cq-pq-opt.cq-correct { color: var(--correct-fg); font-weight: 700; }
 
-.change-flow-section {
+.cq-reextract-banner {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 8px; padding: 8px 12px;
+  background: #FFF8E1; border: 1px dashed #FFB300; border-radius: 8px;
+  font-size: .8rem; font-weight: 600; color: #795500;
+}
+.cq-reextract-banner .cq-btn {
+  font-size: .78rem; padding: 6px 12px;
+}
+.cq-reextract-drop {
+  margin-top: 8px; padding: 10px 14px;
+  border: 2px dashed #B0D4F0; border-radius: 8px;
+  background: #F7FBFF; font-size: .82rem; color: var(--text-muted);
+  font-weight: 600; cursor: pointer; text-align: center;
+  transition: border-color .15s, background .15s;
+}
+.cq-reextract-drop:hover { border-color: var(--accent); background: #EEF7FF; }
   background: var(--bg-card);
   border: 1px solid #B0D4F0;
   border-radius: 10px;
@@ -3367,20 +3383,36 @@ function renderCustomQuizModal() {
   } else {
     quizzes.forEach(q => {
       const defMins = Math.max(5, q.questions.length);
-      html += `<div class="cq-quiz-item">
-        <div class="cq-quiz-info">
-          <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
-          <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} &middot; created ${new Date(q.createdAt).toLocaleDateString()}${q.sharedAt ? ' &middot; <span class="share-chip">&#127758; Shared</span>' : ''}</div>
+      const missingImages = q.questions.some(qq => qq.has_image && !qq.image);
+      html += `<div class="cq-quiz-item" style="flex-direction:column;align-items:stretch;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <div class="cq-quiz-info">
+            <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
+            <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} &middot; created ${new Date(q.createdAt).toLocaleDateString()}${q.sharedAt ? ' &middot; <span class="share-chip">&#127758; Shared</span>' : ''}${missingImages ? ' &middot; <span style="color:#E65100;">🖼️ images missing</span>' : ''}</div>
+          </div>
+          <div class="cq-quiz-actions">
+            <input type="number" id="cqMins_${q.id}" value="${defMins}" min="1" max="180" title="Duration (minutes)" />
+            <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Shuffle questions">
+              <input type="checkbox" id="cqShuffle_${q.id}" style="width:14px;height:14px;accent-color:var(--accent);" /> 🔀
+            </label>
+            <button class="cq-btn" onclick="startCustomQuiz('${q.id}')">&#9654; Start</button>
+            <button class="cq-share-btn" onclick="shareCustomQuiz('${q.id}')" title="Share with community">&#128279; Share</button>
+            <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">&#128465;</button>
+          </div>
         </div>
-        <div class="cq-quiz-actions">
-          <input type="number" id="cqMins_${q.id}" value="${defMins}" min="1" max="180" title="Duration (minutes)" />
-          <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Shuffle questions">
-            <input type="checkbox" id="cqShuffle_${q.id}" style="width:14px;height:14px;accent-color:var(--accent);" /> 🔀
-          </label>
-          <button class="cq-btn" onclick="startCustomQuiz('${q.id}')">&#9654; Start</button>
-          <button class="cq-share-btn" onclick="shareCustomQuiz('${q.id}')" title="Share with community">&#128279; Share</button>
-          <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">&#128465;</button>
+        ${missingImages ? `
+        <div class="cq-reextract-banner">
+          <span>🖼️ This quiz has questions with images that couldn't be shared. Upload the original source file to restore them.</span>
+          <button class="cq-btn" onclick="openReextractPanel('${q.id}')">Re-extract Images</button>
         </div>
+        <div id="reextractPanel_${q.id}" style="display:none;margin-top:8px;">
+          <div class="cq-reextract-drop" onclick="document.getElementById('reextractFile_${q.id}').click()">
+            📄 Click to upload the original image or PDF
+            <div id="reextractFileName_${q.id}" style="margin-top:4px;color:var(--accent);font-weight:700;"></div>
+          </div>
+          <input type="file" id="reextractFile_${q.id}" accept="image/*,application/pdf" style="display:none" onchange="handleReextractFile('${q.id}', this)" />
+          <div id="reextractStatus_${q.id}"></div>
+        </div>` : ''}
       </div>`;
     });
   }
@@ -4214,6 +4246,69 @@ async function saveGeneratedCustomQuiz() {
   renderCustomQuizModal();
   const statusEl = document.getElementById('cqStatus');
   if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Quiz "${escapeHtml(title)}" saved! Start it from the list above.</div>`;
+}
+
+function openReextractPanel(quizId) {
+  const panel = document.getElementById('reextractPanel_' + quizId);
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function handleReextractFile(quizId, inputEl) {
+  const file = inputEl && inputEl.files && inputEl.files[0];
+  if (!file) return;
+
+  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+  const statusEl = document.getElementById('reextractStatus_' + quizId);
+  const nameEl   = document.getElementById('reextractFileName_' + quizId);
+
+  if (!isPdf && !isImage) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">⚠️ Please upload an image (JPG/PNG) or PDF.</div>`;
+    return;
+  }
+  if (file.size > 19 * 1024 * 1024) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">⚠️ File too large (max ~19MB).</div>`;
+    return;
+  }
+
+  const apiKey = getGeminiKey();
+  if (!apiKey) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">⚠️ Please enter your Gemini API key above first.</div>`;
+    return;
+  }
+
+  if (nameEl) nameEl.textContent = '✅ ' + file.name;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="margin-top:6px;"><div class="cq-spinner"></div> Extracting images… this may take a moment.</div>`;
+
+  try {
+    const quizzes = loadCustomQuizzes();
+    const quiz = quizzes.find(q => q.id === quizId);
+    if (!quiz) throw new Error('Quiz not found.');
+
+    const base64Data = await fileToBase64(file);
+    const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+
+    // Run the same image extraction pipeline on only the has_image questions that still lack images
+    await extractImagesForQuestions(quiz.questions, base64Data, mimeType, apiKey);
+
+    const recovered = quiz.questions.filter(q => q.has_image && q.image).length;
+    const total     = quiz.questions.filter(q => q.has_image).length;
+
+    await saveCustomQuizzesList(quizzes);
+
+    if (recovered === 0) {
+      if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">⚠️ No images could be located in this file. Make sure it's the correct original source document.</div>`;
+    } else {
+      if (statusEl) statusEl.innerHTML = `<div class="cq-status success" style="margin-top:6px;">✅ Recovered ${recovered} of ${total} image${total !== 1 ? 's' : ''}. ${recovered < total ? 'Some images could not be matched — try a higher-resolution file.' : ''}</div>`;
+      // Re-render the modal after a short delay so the banner updates
+      setTimeout(() => renderCustomQuizModal(), 1200);
+    }
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">❌ ${escapeHtml(e.message || String(e))}</div>`;
+  }
+
+  inputEl.value = '';
 }
 
 async function deleteCustomQuiz(id) {
