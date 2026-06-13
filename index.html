@@ -3643,11 +3643,18 @@ async function shareCustomQuiz(id) {
   try {
     const sharedId = 'sq_' + window._currentUser.uid + '_' + id;
     const sharedRef = window._doc(window._db, 'sharedQuizzes', sharedId);
+
+    // Serialize options as an ordered array so Firestore cannot scramble key order.
+    const questionsToStore = quiz.questions.map(q => ({
+      ...q,
+      optionsOrder: Object.entries(q.options).map(([key, value]) => ({ key, value }))
+    }));
+
     await window._setDoc(sharedRef, {
       id: sharedId,
       originalId: id,
       title: quiz.title,
-      questions: quiz.questions,
+      questions: questionsToStore,
       authorUid: window._currentUser.uid,
       authorName: displayName,
       sharedAt: Date.now(),
@@ -3664,6 +3671,17 @@ async function shareCustomQuiz(id) {
   } catch(e) {
     alert('Failed to share quiz: ' + (e.message || e));
   }
+}
+
+/* ── Restore options object from optionsOrder array (set by shareCustomQuiz) ── */
+function restoreOptionsOrder(questions) {
+  return questions.map(q => {
+    if (!Array.isArray(q.optionsOrder) || !q.optionsOrder.length) return q;
+    const opts = {};
+    q.optionsOrder.forEach(({ key, value }) => { opts[key] = value; });
+    const { optionsOrder, ...rest } = q;
+    return { ...rest, options: opts };
+  });
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -3765,7 +3783,7 @@ function startCommunityQuizByIdx(idx) {
   if (!mins || mins <= 0) mins = Math.max(5, quiz.questions.length);
   const shuffle = shuffleInput ? shuffleInput.checked : false;
 
-  let combined = JSON.parse(JSON.stringify(quiz.questions));
+  let combined = restoreOptionsOrder(JSON.parse(JSON.stringify(quiz.questions)));
   if (shuffle) {
     for (let i = combined.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -3806,7 +3824,7 @@ async function importCommunityQuiz(sharedId) {
     quizzes.unshift({
       id: 'cq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
       title: q.title + ' (Community)',
-      questions: q.questions,
+      questions: restoreOptionsOrder(q.questions),
       createdAt: Date.now(),
       originalSharedId: sharedId,
       importedFrom: q.authorName
