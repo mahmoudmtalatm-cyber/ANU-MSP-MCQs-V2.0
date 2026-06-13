@@ -2577,8 +2577,12 @@ function buildExplainPrompt(q, userAnswer) {
 WRONG — ${k}. ${v}:
 [1–2 sentences: why this option is incorrect and what makes it a plausible distractor]`).join('');
 
-  return `You are a medical education expert. Explain this MCQ question clearly for a medical student.
+  const imageNote = q.image
+    ? '\nA visual element (image/diagram/figure) associated with this question is attached — refer to it in your explanation as needed.\n'
+    : '';
 
+  return `You are a medical education expert. Explain this MCQ question clearly for a medical student.
+${imageNote}
 QUESTION:
 ${q.question}
 
@@ -2695,8 +2699,17 @@ async function explainQuestion(i) {
     const prompt     = buildExplainPrompt(q, userAnswer);
     const url        = `https://generativelanguage.googleapis.com/v1beta/models/${AI_EXPLAIN_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
+    // Build parts — prepend the question image if this question has one
+    const parts = [];
+    if (q.image) {
+      const base64 = q.image.split(',')[1] || '';
+      const mime   = q.image.match(/^data:([^;]+)/)?.[1] || 'image/png';
+      parts.push({ inline_data: { mime_type: mime, data: base64 } });
+    }
+    parts.push({ text: prompt });
+
     const data = await callGeminiWithRetry(url, {
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [{ parts }],
       generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
     }, {
       cancelToken: token
@@ -2969,6 +2982,10 @@ ${optLines}
 CORRECT ANSWER: ${q.answer}. ${q.options[q.answer] || ''}
 ${userLine}`;
 
+  if (q.image) {
+    ctx += `\n\nThis question includes a visual element (image, diagram, figure, X-ray, ECG, histology slide, etc.) that has been provided to you alongside this conversation. Use it when answering questions about the image or any visual findings.`;
+  }
+
   const rawExplain = _explainRawText[i];
   if (rawExplain) {
     ctx += `\n\nAN AI-GENERATED EXPLANATION HAS ALREADY BEEN SHOWN TO THE STUDENT FOR THIS QUESTION:
@@ -3175,8 +3192,24 @@ async function runChatRequest(i) {
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${CHAT_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
+    // If this question has an embedded image, inject it as the first part of the
+    // first user turn so Gemini can see it throughout the conversation.
+    const q = currentQuestions[i];
+    let apiContents = buildApiContents(history);
+    if (q.image && apiContents.length > 0) {
+      const base64 = q.image.split(',')[1] || '';
+      const mime   = q.image.match(/^data:([^;]+)/)?.[1] || 'image/png';
+      const imagePart = { inline_data: { mime_type: mime, data: base64 } };
+      // Prepend image to the first user turn's parts
+      apiContents = apiContents.map((m, idx) =>
+        idx === 0 && m.role === 'user'
+          ? { ...m, parts: [imagePart, ...m.parts] }
+          : m
+      );
+    }
+
     const data = await callGeminiWithRetry(url, {
-      contents: buildApiContents(history),
+      contents: apiContents,
       systemInstruction: { parts: [{ text: buildChatSystemInstruction(i) }] },
       generationConfig: { temperature: 0.4, maxOutputTokens: 1536 }
     }, {
