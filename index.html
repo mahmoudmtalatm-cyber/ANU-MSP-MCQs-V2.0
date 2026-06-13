@@ -3291,6 +3291,96 @@ function escapeHtml(str) {
   }[c]));
 }
 
+/* ══════════════════════════════════════════════════════════
+   FIREBASE STORAGE — quiz image helpers
+══════════════════════════════════════════════════════════ */
+
+/* Save all base64 images in a quiz's questions to Firestore subcollection documents.
+   Each image goes into users/{uid}/customQuizzes/{quizId}/images/{idx}.
+   Replaces q.image (data URL) with q.imageUrl (firestore:// sentinel).
+   Returns the modified questions array (mutates in place too). */
+async function uploadQuizImagesToStorage(quizId, questions) {
+  if (!window._db || !window._currentUser) return questions;
+  for (let idx = 0; idx < questions.length; idx++) {
+    const q = questions[idx];
+    if (!q.image) continue; // nothing to save
+    try {
+      const imgRef = window._doc(
+        window._db,
+        'users', window._currentUser.uid,
+        'customQuizzes', quizId,
+        'images', String(idx)
+      );
+      await window._setDoc(imgRef, { imageData: q.image });
+      q.imageUrl = `firestore://${quizId}/${idx}`; // sentinel: tells hydrate where to fetch from
+      delete q.image; // don't inline base64 in the parent quiz document
+    } catch (e) {
+      console.warn('Image save to Firestore failed for question', idx, e);
+      // Keep image as-is so quiz still works locally
+    }
+  }
+  return questions;
+}
+
+/* Delete all Firestore image subcollection docs for a quiz (called on delete). */
+async function deleteQuizImagesFromStorage(quizId) {
+  if (!window._db || !window._currentUser) return;
+  try {
+    const col = window._collection(
+      window._db,
+      'users', window._currentUser.uid,
+      'customQuizzes', quizId,
+      'images'
+    );
+    const snap = await window._getDocs(col);
+    await Promise.all(snap.docs.map(d => window._deleteDoc(d.ref)));
+  } catch (e) {
+    console.warn('Image cleanup failed for quiz', quizId, e);
+  }
+}
+
+/* Fetch all images back into in-memory image (data URL) fields.
+   New quizzes use a firestore:// sentinel and read from the images subcollection.
+   Legacy quizzes with a real HTTPS Storage URL fall back to fetching that URL. */
+async function hydrateQuizImages(questions) {
+  await Promise.all(questions.map(async (q) => {
+    if (q.image || !q.imageUrl) return; // already hydrated or no image
+
+    if (q.imageUrl.startsWith('firestore://')) {
+      // New path: read from Firestore images subcollection
+      try {
+        const parts = q.imageUrl.replace('firestore://', '').split('/');
+        const storedQuizId = parts[0];
+        const imgIdx       = parts[1];
+        const imgRef = window._doc(
+          window._db,
+          'users', window._currentUser.uid,
+          'customQuizzes', storedQuizId,
+          'images', imgIdx
+        );
+        const snap = await window._getDoc(imgRef);
+        if (snap.exists()) q.image = snap.data().imageData;
+      } catch (e) {
+        console.warn('Firestore image fetch failed', q.imageUrl, e);
+      }
+    } else {
+      // Legacy path: real HTTPS URL from Firebase Storage
+      try {
+        const resp = await fetch(q.imageUrl);
+        const blob = await resp.blob();
+        await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => { q.image = reader.result; resolve(); };
+          reader.onerror = resolve;
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.warn('Legacy Storage image fetch failed', q.imageUrl, e);
+      }
+    }
+  }));
+}
+
 function loadCustomQuizzes() {
   return window._cachedCustomQuizzes || [];
 }
@@ -3303,6 +3393,8 @@ async function loadCustomQuizzesFromFirestore() {
     const quizzes = [];
     snap.forEach(d => quizzes.push(d.data()));
     quizzes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    // Hydrate images from Storage in the background
+    await Promise.all(quizzes.map(quiz => hydrateQuizImages(quiz.questions || [])));
     window._cachedCustomQuizzes = quizzes;
   } catch (e) {
     console.error('Failed to load custom quizzes:', e);
@@ -3312,6 +3404,7 @@ async function loadCustomQuizzesFromFirestore() {
     } catch (_) { window._cachedCustomQuizzes = []; }
   }
 }
+
 async function saveCustomQuizzesList(arr) {
   window._cachedCustomQuizzes = arr;
   if (window._currentUser) {
@@ -3321,14 +3414,31 @@ async function saveCustomQuizzesList(arr) {
       const existingIds = new Set();
       snap.forEach(d => existingIds.add(d.id));
       const newIds = new Set(arr.map(q => q.id));
+
+      // Delete removed quizzes and their Storage images
       for (const id of existingIds) {
         if (!newIds.has(id)) {
           await window._deleteDoc(window._doc(window._db, 'users', window._currentUser.uid, 'customQuizzes', id));
+          await deleteQuizImagesFromStorage(id);
         }
       }
+
       for (const quiz of arr) {
-        const ref = window._doc(window._db, 'users', window._currentUser.uid, 'customQuizzes', quiz.id);
-        await window._setDoc(ref, quiz);
+        // Deep-clone so we don't mutate the in-memory cached copy
+        const quizToSave = JSON.parse(JSON.stringify(quiz));
+
+        // Upload any new base64 images to Storage, replacing them with URLs
+        await uploadQuizImagesToStorage(quizToSave.id, quizToSave.questions || []);
+
+        // Also update the in-memory cache with the imageUrls so next save is a no-op
+        quiz.questions.forEach((q, idx) => {
+          if (quizToSave.questions[idx]?.imageUrl) {
+            q.imageUrl = quizToSave.questions[idx].imageUrl;
+          }
+        });
+
+        const ref = window._doc(window._db, 'users', window._currentUser.uid, 'customQuizzes', quizToSave.id);
+        await window._setDoc(ref, quizToSave);
       }
     } catch (e) { console.error('Failed to save custom quizzes:', e); }
   } else {
@@ -3383,36 +3493,20 @@ function renderCustomQuizModal() {
   } else {
     quizzes.forEach(q => {
       const defMins = Math.max(5, q.questions.length);
-      const missingImages = q.questions.some(qq => qq.has_image && !qq.image);
-      html += `<div class="cq-quiz-item" style="flex-direction:column;align-items:stretch;">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-          <div class="cq-quiz-info">
-            <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
-            <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} &middot; created ${new Date(q.createdAt).toLocaleDateString()}${q.sharedAt ? ' &middot; <span class="share-chip">&#127758; Shared</span>' : ''}${missingImages ? ' &middot; <span style="color:#E65100;">🖼️ images missing</span>' : ''}</div>
-          </div>
-          <div class="cq-quiz-actions">
-            <input type="number" id="cqMins_${q.id}" value="${defMins}" min="1" max="180" title="Duration (minutes)" />
-            <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Shuffle questions">
-              <input type="checkbox" id="cqShuffle_${q.id}" style="width:14px;height:14px;accent-color:var(--accent);" /> 🔀
-            </label>
-            <button class="cq-btn" onclick="startCustomQuiz('${q.id}')">&#9654; Start</button>
-            <button class="cq-share-btn" onclick="shareCustomQuiz('${q.id}')" title="Share with community">&#128279; Share</button>
-            <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">&#128465;</button>
-          </div>
+      html += `<div class="cq-quiz-item">
+        <div class="cq-quiz-info">
+          <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
+          <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} &middot; created ${new Date(q.createdAt).toLocaleDateString()}${q.sharedAt ? ' &middot; <span class="share-chip">&#127758; Shared</span>' : ''}</div>
         </div>
-        ${missingImages ? `
-        <div class="cq-reextract-banner">
-          <span>🖼️ This quiz has questions with images that couldn't be shared. Upload the original source file to restore them.</span>
-          <button class="cq-btn" onclick="openReextractPanel('${q.id}')">Re-extract Images</button>
+        <div class="cq-quiz-actions">
+          <input type="number" id="cqMins_${q.id}" value="${defMins}" min="1" max="180" title="Duration (minutes)" />
+          <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Shuffle questions">
+            <input type="checkbox" id="cqShuffle_${q.id}" style="width:14px;height:14px;accent-color:var(--accent);" /> 🔀
+          </label>
+          <button class="cq-btn" onclick="startCustomQuiz('${q.id}')">&#9654; Start</button>
+          <button class="cq-share-btn" onclick="shareCustomQuiz('${q.id}')" title="Share with community">&#128279; Share</button>
+          <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">&#128465;</button>
         </div>
-        <div id="reextractPanel_${q.id}" style="display:none;margin-top:8px;">
-          <div class="cq-reextract-drop" onclick="document.getElementById('reextractFile_${q.id}').click()">
-            📄 Click to upload the original image or PDF
-            <div id="reextractFileName_${q.id}" style="margin-top:4px;color:var(--accent);font-weight:700;"></div>
-          </div>
-          <input type="file" id="reextractFile_${q.id}" accept="image/*,application/pdf" style="display:none" onchange="handleReextractFile('${q.id}', this)" />
-          <div id="reextractStatus_${q.id}"></div>
-        </div>` : ''}
       </div>`;
     });
   }
@@ -4248,73 +4342,11 @@ async function saveGeneratedCustomQuiz() {
   if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Quiz "${escapeHtml(title)}" saved! Start it from the list above.</div>`;
 }
 
-function openReextractPanel(quizId) {
-  const panel = document.getElementById('reextractPanel_' + quizId);
-  if (!panel) return;
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-}
-
-async function handleReextractFile(quizId, inputEl) {
-  const file = inputEl && inputEl.files && inputEl.files[0];
-  if (!file) return;
-
-  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  const isImage = file.type.startsWith('image/');
-  const statusEl = document.getElementById('reextractStatus_' + quizId);
-  const nameEl   = document.getElementById('reextractFileName_' + quizId);
-
-  if (!isPdf && !isImage) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">⚠️ Please upload an image (JPG/PNG) or PDF.</div>`;
-    return;
-  }
-  if (file.size > 19 * 1024 * 1024) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">⚠️ File too large (max ~19MB).</div>`;
-    return;
-  }
-
-  const apiKey = getGeminiKey();
-  if (!apiKey) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">⚠️ Please enter your Gemini API key above first.</div>`;
-    return;
-  }
-
-  if (nameEl) nameEl.textContent = '✅ ' + file.name;
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="margin-top:6px;"><div class="cq-spinner"></div> Extracting images… this may take a moment.</div>`;
-
-  try {
-    const quizzes = loadCustomQuizzes();
-    const quiz = quizzes.find(q => q.id === quizId);
-    if (!quiz) throw new Error('Quiz not found.');
-
-    const base64Data = await fileToBase64(file);
-    const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-
-    // Run the same image extraction pipeline on only the has_image questions that still lack images
-    await extractImagesForQuestions(quiz.questions, base64Data, mimeType, apiKey);
-
-    const recovered = quiz.questions.filter(q => q.has_image && q.image).length;
-    const total     = quiz.questions.filter(q => q.has_image).length;
-
-    await saveCustomQuizzesList(quizzes);
-
-    if (recovered === 0) {
-      if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">⚠️ No images could be located in this file. Make sure it's the correct original source document.</div>`;
-    } else {
-      if (statusEl) statusEl.innerHTML = `<div class="cq-status success" style="margin-top:6px;">✅ Recovered ${recovered} of ${total} image${total !== 1 ? 's' : ''}. ${recovered < total ? 'Some images could not be matched — try a higher-resolution file.' : ''}</div>`;
-      // Re-render the modal after a short delay so the banner updates
-      setTimeout(() => renderCustomQuizModal(), 1200);
-    }
-  } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="margin-top:6px;">❌ ${escapeHtml(e.message || String(e))}</div>`;
-  }
-
-  inputEl.value = '';
-}
-
 async function deleteCustomQuiz(id) {
   if (!confirm('Delete this custom quiz? This cannot be undone.')) return;
   let quizzes = loadCustomQuizzes();
   quizzes = quizzes.filter(q => q.id !== id);
+  await deleteQuizImagesFromStorage(id);
   await saveCustomQuizzesList(quizzes);
   renderCustomQuizModal();
 }
@@ -4437,10 +4469,19 @@ async function shareCustomQuiz(id) {
     const sharedId = 'sq_' + window._currentUser.uid + '_' + id;
     const sharedRef = window._doc(window._db, 'sharedQuizzes', sharedId);
 
-    // Strip embedded base64 images before saving to Firestore (Firestore
-    // rejects large strings / nested arrays that exceed its document limits).
-    // Images remain in localStorage only, attached to the local quiz copy.
-    const questionsForFirestore = quiz.questions.map(({ image, ...rest }) => rest);
+    // Build questions for the shared Firestore document.
+    // Images are inlined as base64 directly — no Storage needed.
+    // q.image is already hydrated in memory; if only a firestore:// sentinel exists,
+    // the image was already loaded into q.image by hydrateQuizImages on load.
+    const questionsForFirestore = quiz.questions.map(q => {
+      const out = { ...q };
+      // Remove the firestore:// sentinel — shared doc consumers use .image directly
+      if (out.imageUrl && out.imageUrl.startsWith('firestore://')) {
+        delete out.imageUrl;
+      }
+      // out.image (base64 data URL) is kept inline for recipients
+      return out;
+    });
 
     await window._setDoc(sharedRef, {
       id: sharedId,
@@ -4565,7 +4606,7 @@ async function renderCommunityQuizzes() {
   body.innerHTML = html;
 }
 
-function startCommunityQuizByIdx(idx) {
+async function startCommunityQuizByIdx(idx) {
   const quiz = (window._commQuizCache || [])[idx];
   if (!quiz || !quiz.questions || !quiz.questions.length) return;
 
@@ -4576,6 +4617,9 @@ function startCommunityQuizByIdx(idx) {
   const shuffle = shuffleInput ? shuffleInput.checked : false;
 
   let combined = restoreOptionsOrder(JSON.parse(JSON.stringify(quiz.questions)));
+  // Images are inlined as base64 in shared quiz docs — no fetch needed,
+  // but run hydrate in case any legacy Storage URLs remain.
+  await hydrateQuizImages(combined);
   if (shuffle) {
     for (let i = combined.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -4613,10 +4657,14 @@ async function importCommunityQuiz(sharedId) {
     const alreadyExists = quizzes.some(cq => cq.originalSharedId === sharedId);
     if (alreadyExists) { alert('You already have this quiz saved.'); return; }
 
+    const importedQuestions = restoreOptionsOrder(q.questions);
+    // Fetch images from Storage URLs so they work offline and in the quiz
+    await hydrateQuizImages(importedQuestions);
+
     quizzes.unshift({
       id: 'cq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
       title: q.title + ' (Community)',
-      questions: restoreOptionsOrder(q.questions),
+      questions: importedQuestions,
       createdAt: Date.now(),
       originalSharedId: sharedId,
       importedFrom: q.authorName
@@ -4660,6 +4708,7 @@ async function deleteCommunityQuiz(sharedId) {
   import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+
   // ── REPLACE THIS WITH YOUR OWN CONFIG FROM STEP 1.7 ──
   // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
@@ -4673,10 +4722,9 @@ const firebaseConfig = {
 };
 
   // Initialize Firebase
-  const app  = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db   = getFirestore(app);
-
+  const app     = initializeApp(firebaseConfig);
+  const auth    = getAuth(app);
+  const db      = getFirestore(app);
   // Expose to the rest of your app's scripts
   window._auth             = auth;
   window._db               = db;
