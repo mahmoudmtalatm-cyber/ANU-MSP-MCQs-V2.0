@@ -3756,12 +3756,21 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) 
     }
     attempt++;
     try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyObj)
-      });
-      const data = await resp.json();
+      // 90-second timeout per attempt — if Gemini hangs silently, abort and retry
+      const controller = new AbortController();
+      const timeoutId  = setTimeout(() => controller.abort(), 90000);
+      let resp, data;
+      try {
+        resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyObj),
+          signal: controller.signal
+        });
+        data = await resp.json();
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!resp.ok) {
         const msg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
@@ -3784,6 +3793,12 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) 
       return data; // success
     } catch (err) {
       if (err._keyError || err._cancelled) throw err; // propagate immediately
+      // AbortError means our 90s timeout fired — treat as a retryable timeout
+      if (err.name === 'AbortError') {
+        if (onRetry) onRetry(attempt);
+        await cancellableSleep(Math.min(2000 * Math.pow(2, attempt - 1), 30000), cancelToken);
+        continue;
+      }
       if (onRetry) onRetry(attempt);
       await cancellableSleep(Math.min(2000 * Math.pow(2, attempt - 1), 30000), cancelToken);
     }
@@ -3836,7 +3851,7 @@ async function renderPdfPageToDataUrl(base64Data, pageNum) {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   const pdf  = await pdfLib.getDocument({ data: bytes }).promise;
   const page = await pdf.getPage(pageNum);
-  const scale    = 2;
+  const scale    = 1.5; // reduced from 2 — smaller payload per batch, less chance of timeout
   const viewport = page.getViewport({ scale });
   const canvas   = document.createElement('canvas');
   canvas.width   = viewport.width;
