@@ -4309,11 +4309,16 @@ async function shareCustomQuiz(id) {
     const sharedId = 'sq_' + window._currentUser.uid + '_' + id;
     const sharedRef = window._doc(window._db, 'sharedQuizzes', sharedId);
 
+    // Strip embedded base64 images before saving to Firestore (Firestore
+    // rejects large strings / nested arrays that exceed its document limits).
+    // Images remain in localStorage only, attached to the local quiz copy.
+    const questionsForFirestore = quiz.questions.map(({ image, ...rest }) => rest);
+
     await window._setDoc(sharedRef, {
       id: sharedId,
       originalId: id,
       title: quiz.title,
-      questions: quiz.questions,  // optionsOrder is already embedded on every question
+      questions: questionsForFirestore,
       authorUid: window._currentUser.uid,
       authorName: displayName,
       sharedAt: Date.now(),
