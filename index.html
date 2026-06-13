@@ -2677,12 +2677,12 @@ async function explainQuestion(i) {
   btn.classList.add('loading');
   btn.innerHTML = '⏳ Explaining…';
 
-  const loadingHTML = (retrying = false) => `
+  const loadingHTML = () => `
     <div class="ai-explain-panel">
       <div class="ai-explain-panel-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
         <span style="display:flex;align-items:center;gap:8px;">
           <div class="ai-exp-spinner"></div>
-          ${retrying ? 'Retrying…' : 'Getting AI explanation…'}
+          Getting AI explanation…
         </span>
         <button onclick="stopExplainQuestion(${i})" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:var(--font);flex-shrink:0;">⏹ Stop</button>
       </div>
@@ -2699,11 +2699,7 @@ async function explainQuestion(i) {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
     }, {
-      cancelToken: token,
-      onRetry: () => {
-        const p = document.getElementById(`explainPanel_${i}`);
-        if (p) p.innerHTML = loadingHTML(true);
-      }
+      cancelToken: token
     });
 
     const text = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
@@ -3141,6 +3137,7 @@ async function sendChatMessage(i) {
   if (text) parts.push({ text });
   pending.forEach(a => parts.push({ inline_data: { mime_type: a.mimeType, data: a.base64 }, _name: a.name }));
 
+  if (!_chatHistory[i]) _chatHistory[i] = [];
   _chatHistory[i].push({ role: 'user', parts });
   _chatPending[i] = [];
   _chatError[i] = null;
@@ -3183,11 +3180,7 @@ async function runChatRequest(i) {
       systemInstruction: { parts: [{ text: buildChatSystemInstruction(i) }] },
       generationConfig: { temperature: 0.4, maxOutputTokens: 1536 }
     }, {
-      cancelToken: token,
-      onRetry: () => {
-        const lbl = document.getElementById(`chatLoadingLabel_${i}`);
-        if (lbl) lbl.textContent = 'Retrying…';
-      }
+      cancelToken: token
     });
 
     const replyText = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
@@ -3693,11 +3686,7 @@ async function generateQuizFromAI() {
         temperature: 0,
         maxOutputTokens: 65536
       }
-    }, {
-      onRetry: () => {
-        if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions… this may take a moment, please wait.</div>`;
-      }
-    });
+    }, {});
 
     const candidate = data && data.candidates && data.candidates[0];
     if (!candidate) throw new Error('Gemini returned no result. The file may be unsupported or blocked — try a clearer image or PDF.');
@@ -3883,11 +3872,7 @@ async function generateQuizFromLecture() {
       };
     }
 
-    const data = await callGeminiWithRetry(url, requestBody, {
-      onRetry: () => {
-        if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your lecture and generating questions… this may take a moment, please wait.</div>`;
-      }
-    });
+    const data = await callGeminiWithRetry(url, requestBody, {});
 
     const candidate = data && data.candidates && data.candidates[0];
     if (!candidate) throw new Error('Gemini returned no result. The file may be unsupported or too large — try splitting it into smaller sections.');
