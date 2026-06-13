@@ -2584,6 +2584,16 @@ async function explainQuestion(i) {
     const text = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
     if (!text) throw new Error('Empty response from AI.');
 
+    // If the user hit Stop while this request was finishing up, don't render the result
+    if (token.cancelled) {
+      _explainCache[i] = null;
+      const p = document.getElementById(`explainPanel_${i}`);
+      if (p) p.innerHTML = '';
+      const b = document.getElementById(`explainBtn_${i}`);
+      if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '🤖 Explain'; }
+      return;
+    }
+
     const html = renderExplainText(text, q);
     _explainCache[i] = html;
 
@@ -3188,6 +3198,11 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) 
         // Cancellable sleep between retries
         await cancellableSleep(Math.min(2000 * Math.pow(2, attempt - 1), 30000), cancelToken);
         continue;
+      }
+
+      // Even on success, honor a cancellation that happened while this request was in flight
+      if (cancelToken && cancelToken.cancelled) {
+        const e = new Error('cancelled'); e._cancelled = true; throw e;
       }
 
       return data; // success
