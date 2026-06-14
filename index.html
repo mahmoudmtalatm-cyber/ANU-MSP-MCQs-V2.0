@@ -373,6 +373,50 @@
 
     /* ── UTILS ── */
     .hidden { display: none !important; }
+
+    /* ── QUIZ MOVE/COPY MODAL ── */
+    .qm-overlay {
+      position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,.45); display: flex;
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    .qm-modal {
+      background: #fff; border-radius: 14px; padding: 24px 26px;
+      max-width: 480px; width: 100%;
+      box-shadow: 0 8px 40px rgba(0,0,0,.25);
+      max-height: 90vh; overflow-y: auto;
+    }
+    .qm-title { font-size: 1.05rem; font-weight: 800; color: var(--text-main); margin-bottom: 14px; }
+    .qm-field { margin-bottom: 12px; }
+    .qm-field label { font-size: .8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .7px; display: block; margin-bottom: 5px; }
+    .qm-field select, .qm-field input { width: 100%; padding: 10px 12px; border: 1.5px solid #B0D4F0; border-radius: 8px; font-family: var(--font); font-size: .93rem; color: var(--text-main); background: #F7FBFF; outline: none; }
+    .qm-field select:focus, .qm-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.13); }
+    .qm-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+    .qm-btn { flex: 1; padding: 11px 14px; border: none; border-radius: 8px; font-family: var(--font); font-size: .9rem; font-weight: 700; cursor: pointer; transition: filter .15s; }
+    .qm-btn:hover { filter: brightness(1.08); }
+    .qm-btn.primary { background: var(--accent); color: white; }
+    .qm-btn.secondary { background: #78909C; color: white; }
+    .qm-btn.danger { background: #C62828; color: white; }
+    .qm-status { margin-top: 10px; font-size: .85rem; font-weight: 600; padding: 8px 12px; border-radius: 7px; }
+    .qm-status.ok { background: #E8F5E9; color: #2E7D32; }
+    .qm-status.err { background: #FFEBEE; color: #C62828; }
+
+    /* ── CURR-ITEM EDITABLE (years / modules / subjects with delete/rename) ── */
+    .curr-item-row {
+      display: flex; align-items: center; gap: 6px;
+      background: #F7FBFF; border: 1px solid #D8EAF7;
+      border-radius: 8px; padding: 7px 10px; margin-bottom: 6px;
+    }
+    .curr-item-name { flex: 1; font-size: .88rem; font-weight: 700; color: var(--text-main); }
+    .curr-item-sub { font-size: .74rem; color: var(--text-muted); font-weight: 500; }
+    .curr-item-btn {
+      border: none; border-radius: 6px; padding: 5px 9px;
+      font-family: var(--font); font-size: .75rem; font-weight: 700;
+      cursor: pointer; transition: filter .15s; white-space: nowrap;
+    }
+    .curr-item-btn:hover { filter: brightness(1.1); }
+    .curr-item-btn.edit { background: #EDE7F6; color: #4527A0; }
+    .curr-item-btn.del  { background: #FFEBEE; color: #C62828; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #B0D4F0; border-radius: 3px; }
@@ -6086,7 +6130,9 @@ async function renderAdminAssignedList() {
         </div>
         <button class="admin-remove-btn" style="background:#EDE7F6;color:#4527A0;border:1.5px solid #B39DDB;"
           onclick="adminEditPublished('${e.id}')">✏️ Edit</button>
-        <button class="admin-remove-btn" onclick="adminRemovePublished('${e.id}')">Remove</button>
+        <button class="admin-remove-btn" style="background:#E3F2FD;color:#0D47A1;border:1.5px solid #90CAF9;"
+          onclick="adminOpenMoveQuiz('${e.id}', '${(e.lectureName||e.id).replace(/'/g,"\'")}')">📋 Copy/Move</button>
+        <button class="admin-remove-btn" onclick="adminRemovePublished('${e.id}')">🗑 Delete</button>
       </div>
       <div id="adminPublishedEditorArea_${e.id}"></div>`;
   });
@@ -6369,7 +6415,12 @@ function renderAdminCurriculumPanel() {
         </div>
         <div class="curr-status" id="currYearStatus"></div>
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Years</div>
-        <div class="curr-list">${years.length ? years.map(y => `<span class="curr-tag">${escapeHtml(y)}</span>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
+        <div id="currYearList">${years.length ? years.map(y => `
+          <div class="curr-item-row">
+            <span class="curr-item-name">${escapeHtml(y)}</span>
+            <button class="curr-item-btn edit" onclick="adminRenameYear('${escapeHtml(y)}')">✏️ Rename</button>
+            <button class="curr-item-btn del"  onclick="adminDeleteYear('${escapeHtml(y)}')">🗑 Delete</button>
+          </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
       </div>
 
       <div class="curr-section">
@@ -6387,7 +6438,15 @@ function renderAdminCurriculumPanel() {
         </div>
         <div class="curr-status" id="currModuleStatus"></div>
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Modules</div>
-        <div class="curr-list">${Object.keys(allModules).length ? Object.keys(allModules).map(m => `<span class="curr-tag mod" title="In ${allModules[m]}">${escapeHtml(m)}</span>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
+        <div id="currModuleList">${Object.keys(allModules).length ? Object.keys(allModules).map(m => `
+          <div class="curr-item-row">
+            <div style="flex:1;">
+              <div class="curr-item-name">${escapeHtml(m)}</div>
+              <div class="curr-item-sub">in ${escapeHtml(allModules[m])}</div>
+            </div>
+            <button class="curr-item-btn edit" onclick="adminRenameModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">✏️ Rename</button>
+            <button class="curr-item-btn del"  onclick="adminDeleteModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">🗑 Delete</button>
+          </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
       </div>
 
       <div class="curr-section">
@@ -6523,7 +6582,14 @@ async function adminLoadCurrSubjList() {
     el.innerHTML = keys.length
       ? keys.map(k => {
           const s = ext[k];
-          return `<span class="curr-tag subj" title="${escapeHtml(s.year||'')} → ${escapeHtml(s.module||'')}">${escapeHtml(s.icon||'📘')} ${escapeHtml(s.label||k)}</span>`;
+          return `<div class="curr-item-row">
+            <div style="flex:1;">
+              <div class="curr-item-name">${escapeHtml(s.icon||'📘')} ${escapeHtml(s.label||k)}</div>
+              <div class="curr-item-sub">${escapeHtml(s.year||'')} → ${escapeHtml(s.module||'')} · key: ${escapeHtml(k)}</div>
+            </div>
+            <button class="curr-item-btn edit" onclick="adminEditSubject('${k}')">✏️ Edit</button>
+            <button class="curr-item-btn del"  onclick="adminDeleteSubject('${k}')">🗑 Delete</button>
+          </div>`;
         }).join('')
       : '<span style="color:var(--text-muted);font-size:.8rem;">No admin-created subjects yet.</span>';
   } catch(e) {
@@ -6605,6 +6671,333 @@ async function saveCurriculumStructure() {
   } catch (e) {
     console.warn('Failed to save curriculum structure:', e);
   }
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   QUIZ COPY / MOVE BETWEEN SECTIONS
+══════════════════════════════════════════════════════════ */
+
+let _moveQuizLectureId   = null;
+let _moveQuizLectureName = null;
+let _moveQuizModal       = null;
+
+function adminOpenMoveQuiz(lectureId, encodedName) {
+  _moveQuizLectureId   = lectureId;
+  _moveQuizLectureName = decodeURIComponent(encodedName);
+
+  // Build year options
+  const years = Object.keys(curriculum);
+  const yearOpts = years.map(y =>
+    `<option value="${escapeHtml(y)}" ${y === adminTargetYear ? 'selected' : ''}>${escapeHtml(y)}</option>`
+  ).join('');
+
+  // Build module options for selected year
+  const mods = adminTargetYear ? Object.keys(curriculum[adminTargetYear] || {}) : [];
+  const modOpts = mods.map(m =>
+    `<option value="${escapeHtml(m)}" ${m === adminTargetModule ? 'selected' : ''}>${escapeHtml(m)}</option>`
+  ).join('') || `<option value="">— No modules —</option>`;
+
+  // Build subject options for selected year+module
+  const subs = (adminTargetYear && adminTargetModule)
+    ? (curriculum[adminTargetYear][adminTargetModule] || []).filter(k => subjects[k])
+    : [];
+  const subjOpts = subs.map(s =>
+    `<option value="${escapeHtml(s)}">${escapeHtml(subjects[s].label || s)}</option>`
+  ).join('') || `<option value="">— No subjects —</option>`;
+
+  const el = document.createElement('div');
+  el.className = 'qm-overlay';
+  el.id = 'moveQuizModal';
+  el.innerHTML = `
+    <div class="qm-modal">
+      <div class="qm-title">📋 Copy / Move Quiz</div>
+      <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:14px;">
+        Quiz: <strong>${escapeHtml(_moveQuizLectureName)}</strong><br>
+        From: <strong>${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)} → ${escapeHtml(subjects[adminTargetSubject]?.label || adminTargetSubject)}</strong>
+      </div>
+      <div class="qm-field">
+        <label>Destination Year</label>
+        <select id="mqYear" onchange="mqYearChange(this.value)">${yearOpts}</select>
+      </div>
+      <div class="qm-field">
+        <label>Destination Module</label>
+        <select id="mqModule" onchange="mqModuleChange(this.value)">${modOpts}</select>
+      </div>
+      <div class="qm-field">
+        <label>Destination Subject</label>
+        <select id="mqSubject">${subjOpts}</select>
+      </div>
+      <div class="qm-field">
+        <label>Quiz Name (in destination)</label>
+        <input type="text" id="mqName" value="${escapeHtml(_moveQuizLectureName)}" maxlength="120" />
+      </div>
+      <div id="mqStatus"></div>
+      <div class="qm-actions">
+        <button class="qm-btn primary" onclick="adminExecMoveQuiz(false)">📋 Copy</button>
+        <button class="qm-btn danger"  onclick="adminExecMoveQuiz(true)">✂️ Move (delete original)</button>
+        <button class="qm-btn secondary" onclick="adminCloseMoveQuiz()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  _moveQuizModal = el;
+}
+
+function mqYearChange(yr) {
+  const mods = yr ? Object.keys(curriculum[yr] || {}) : [];
+  document.getElementById('mqModule').innerHTML = mods.map(m =>
+    `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`
+  ).join('') || `<option value="">— No modules —</option>`;
+  mqModuleChange(mods[0] || '');
+}
+
+function mqModuleChange(mod) {
+  const yr   = document.getElementById('mqYear').value;
+  const subs = (yr && mod) ? (curriculum[yr][mod] || []).filter(k => subjects[k]) : [];
+  document.getElementById('mqSubject').innerHTML = subs.map(s =>
+    `<option value="${escapeHtml(s)}">${escapeHtml(subjects[s].label || s)}</option>`
+  ).join('') || `<option value="">— No subjects —</option>`;
+}
+
+async function adminExecMoveQuiz(andDelete) {
+  const destYear    = document.getElementById('mqYear')?.value;
+  const destModule  = document.getElementById('mqModule')?.value;
+  const destSubject = document.getElementById('mqSubject')?.value;
+  const destName    = (document.getElementById('mqName')?.value || '').trim() || _moveQuizLectureName;
+  const statusEl    = document.getElementById('mqStatus');
+
+  if (!destYear || !destModule || !destSubject) {
+    statusEl.className = 'qm-status err';
+    statusEl.textContent = '⚠️ Please select a destination year, module, and subject.';
+    return;
+  }
+  if (destSubject === adminTargetSubject && !andDelete) {
+    statusEl.className = 'qm-status err';
+    statusEl.textContent = '⚠️ Source and destination subject are the same.';
+    return;
+  }
+
+  statusEl.className = 'qm-status';
+  statusEl.textContent = '⏳ Working…';
+
+  try {
+    // Fetch the source lecture (with questions + images)
+    const srcRef  = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', _moveQuizLectureId);
+    const srcSnap = await window._getDoc(srcRef);
+    if (!srcSnap.exists()) throw new Error('Source lecture not found.');
+    const srcData = srcSnap.data();
+
+    // Hydrate images so they are inline in the copied object
+    const questions = JSON.parse(JSON.stringify(srcData.questions || []));
+    await hydratePublishedLectureImages(adminTargetSubject, _moveQuizLectureId, questions);
+
+    // Create new lecture in destination
+    const newId = 'pub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const cleanQ = questions.map(q => { delete q.pubImageIdx; return q; });
+    await uploadPublishedLectureImages(destSubject, newId, cleanQ);
+
+    const destRef = window._doc(window._db, 'publishedQuestions', destSubject, 'lectures', newId);
+    await window._setDoc(destRef, cleanForFirestore({
+      id: newId,
+      lectureName: destName,
+      questions: cleanQ,
+      sourceTitle: srcData.sourceTitle || _moveQuizLectureName,
+      sourceType:  srcData.sourceType  || 'copy',
+      publishedBy: window._currentUser ? window._currentUser.uid : null,
+      publishedAt: Date.now()
+    }));
+
+    // Update in-memory for destination subject
+    if (!subjects[destSubject].lectures) subjects[destSubject].lectures = {};
+    const hydrated = JSON.parse(JSON.stringify(cleanQ));
+    await hydratePublishedLectureImages(destSubject, newId, hydrated);
+    subjects[destSubject].lectures[destName] = hydrated;
+
+    // If move: delete original
+    if (andDelete) {
+      await deletePublishedLectureImages(adminTargetSubject, _moveQuizLectureId);
+      await window._deleteDoc(srcRef);
+      const srcLecName = srcData.lectureName || _moveQuizLectureId;
+      if (subjects[adminTargetSubject].lectures) {
+        delete subjects[adminTargetSubject].lectures[srcLecName];
+      }
+    }
+
+    statusEl.className = 'qm-status ok';
+    statusEl.textContent = andDelete
+      ? `✅ Moved to ${subjects[destSubject].label || destSubject}!`
+      : `✅ Copied to ${subjects[destSubject].label || destSubject}!`;
+
+    // Refresh views
+    if (selectedSubject === adminTargetSubject || selectedSubject === destSubject) {
+      selectSubject(selectedSubject);
+    }
+    renderAdminAssignedList();
+
+    setTimeout(() => adminCloseMoveQuiz(), 1000);
+  } catch (e) {
+    statusEl.className = 'qm-status err';
+    statusEl.textContent = '❌ ' + (e.message || String(e));
+  }
+}
+
+function adminCloseMoveQuiz() {
+  if (_moveQuizModal) { _moveQuizModal.remove(); _moveQuizModal = null; }
+  _moveQuizLectureId = null; _moveQuizLectureName = null;
+}
+
+/* ══════════════════════════════════════════════════════════
+   CURRICULUM — DELETE / RENAME  Years, Modules, Subjects
+══════════════════════════════════════════════════════════ */
+
+/* ── YEAR ── */
+async function adminRenameYear(oldName) {
+  const newName = prompt(`Rename year "${oldName}" to:`, oldName);
+  if (!newName || newName.trim() === oldName) return;
+  const n = newName.trim();
+  if (curriculum[n]) { alert(`"${n}" already exists.`); return; }
+  // Migrate in-memory curriculum
+  curriculum[n] = curriculum[oldName];
+  delete curriculum[oldName];
+  // Migrate extensions subjects
+  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+  const extSnap = await window._getDoc(extRef);
+  const ext = extSnap.exists() ? extSnap.data() : {};
+  // Update subjects that referenced old year
+  if (ext.subjects) {
+    Object.values(ext.subjects).forEach(s => { if (s.year === oldName) s.year = n; });
+  }
+  // Update modules map
+  if (ext.modules && ext.modules[oldName]) {
+    ext.modules[n] = ext.modules[oldName];
+    delete ext.modules[oldName];
+  }
+  ext.years = Object.keys(curriculum);
+  await window._setDoc(extRef, cleanForFirestore(ext));
+  buildYearGrid();
+  renderAdminCurriculumPanel();
+}
+
+async function adminDeleteYear(name) {
+  const modCount  = Object.keys(curriculum[name] || {}).length;
+  const subjCount = Object.values(curriculum[name] || {}).reduce((a, arr) => a + arr.length, 0);
+  if (!confirm(`Delete year "${name}"?
+This also removes ${modCount} module(s) and ${subjCount} subject placement(s) from the UI.
+(Published quizzes are NOT deleted — they stay in Firestore.)`)) return;
+  delete curriculum[name];
+  // Remove from extensions
+  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+  const extSnap = await window._getDoc(extRef);
+  const ext = extSnap.exists() ? extSnap.data() : {};
+  ext.years = Object.keys(curriculum);
+  if (ext.modules) delete ext.modules[name];
+  // Remove subjects that belonged to this year
+  if (ext.subjects) {
+    Object.keys(ext.subjects).forEach(k => { if (ext.subjects[k].year === name) delete ext.subjects[k]; });
+  }
+  await window._setDoc(extRef, cleanForFirestore(ext));
+  buildYearGrid();
+  renderAdminCurriculumPanel();
+}
+
+/* ── MODULE ── */
+async function adminRenameModule(year, oldMod) {
+  const newMod = prompt(`Rename module "${oldMod}" (in ${year}) to:`, oldMod);
+  if (!newMod || newMod.trim() === oldMod) return;
+  const n = newMod.trim();
+  if (curriculum[year][n]) { alert(`"${n}" already exists in ${year}.`); return; }
+  curriculum[year][n] = curriculum[year][oldMod];
+  delete curriculum[year][oldMod];
+  // Update subjects in extensions
+  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+  const extSnap = await window._getDoc(extRef);
+  const ext = extSnap.exists() ? extSnap.data() : {};
+  if (ext.subjects) {
+    Object.values(ext.subjects).forEach(s => { if (s.year === year && s.module === oldMod) s.module = n; });
+  }
+  if (ext.modules && ext.modules[year]) {
+    ext.modules[year] = Object.keys(curriculum[year]);
+  }
+  ext.years = Object.keys(curriculum);
+  await window._setDoc(extRef, cleanForFirestore(ext));
+  buildYearGrid();
+  renderAdminCurriculumPanel();
+}
+
+async function adminDeleteModule(year, mod) {
+  const arr = curriculum[year][mod] || [];
+  if (!confirm(`Delete module "${mod}" from ${year}?
+This also removes ${arr.length} subject placement(s).
+(Published quizzes are NOT deleted.)`)) return;
+  delete curriculum[year][mod];
+  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+  const extSnap = await window._getDoc(extRef);
+  const ext = extSnap.exists() ? extSnap.data() : {};
+  if (ext.modules && ext.modules[year]) {
+    ext.modules[year] = Object.keys(curriculum[year]);
+  }
+  if (ext.subjects) {
+    Object.keys(ext.subjects).forEach(k => { if (ext.subjects[k].year === year && ext.subjects[k].module === mod) delete ext.subjects[k]; });
+  }
+  ext.years = Object.keys(curriculum);
+  await window._setDoc(extRef, cleanForFirestore(ext));
+  buildYearGrid();
+  renderAdminCurriculumPanel();
+}
+
+/* ── SUBJECT ── */
+async function adminEditSubject(key) {
+  const s = subjects[key];
+  if (!s) return;
+  const newLabel = prompt(`Edit label for subject "${s.label || key}":`, s.label || key);
+  if (!newLabel || newLabel.trim() === (s.label || key)) return;
+  const newIcon  = prompt('Edit icon (emoji):', s.icon || '📘') || s.icon || '📘';
+  subjects[key].label = newLabel.trim();
+  subjects[key].icon  = newIcon.trim();
+  // Persist
+  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+  const extSnap = await window._getDoc(extRef);
+  const ext = extSnap.exists() ? extSnap.data() : {};
+  if (!ext.subjects) ext.subjects = {};
+  if (ext.subjects[key]) {
+    ext.subjects[key].label = subjects[key].label;
+    ext.subjects[key].icon  = subjects[key].icon;
+  }
+  await window._setDoc(extRef, cleanForFirestore(ext));
+  buildYearGrid();
+  adminLoadCurrSubjList();
+}
+
+async function adminDeleteSubject(key) {
+  const s = subjects[key];
+  const lbl = s?.label || key;
+  if (!confirm(`Delete subject "${lbl}"?
+This removes it from all year/module placements.
+(Published quizzes for this subject remain in Firestore.)`)) return;
+  // Remove from curriculum placements
+  Object.keys(curriculum).forEach(yr => {
+    Object.keys(curriculum[yr] || {}).forEach(mod => {
+      curriculum[yr][mod] = (curriculum[yr][mod] || []).filter(k => k !== key);
+    });
+  });
+  // Remove from memory
+  delete subjects[key];
+  // Persist
+  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+  const extSnap = await window._getDoc(extRef);
+  const ext = extSnap.exists() ? extSnap.data() : {};
+  if (ext.subjects) delete ext.subjects[key];
+  // Update modules placements
+  const modulesMap = {};
+  Object.keys(curriculum).forEach(yr => {
+    const mods = Object.keys(curriculum[yr] || {});
+    if (mods.length) modulesMap[yr] = mods;
+  });
+  ext.modules = modulesMap;
+  ext.years   = Object.keys(curriculum);
+  await window._setDoc(extRef, cleanForFirestore(ext));
+  buildYearGrid();
+  adminLoadCurrSubjList();
 }
 
 /* Persist a newly-created Subject (and its Year/Module placement) */
