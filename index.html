@@ -5388,6 +5388,13 @@ async function deleteCommunityQuiz(sharedId) {
     const localQuiz = quizzes.find(q => 'sq_' + window._currentUser.uid + '_' + q.id === sharedId);
     if (localQuiz) { delete localQuiz.sharedAt; await saveCustomQuizzesList(quizzes); }
 
+    renderCommunityQuizzes();
+    renderCustomQuizModal();
+  } catch(e) {
+    alert('Failed to remove quiz: ' + (e.message || e));
+  }
+}
+
 /* ══════════════════════════════════════════════════════════
    ADMIN PANEL — Publish quizzes (custom or community) into
    the official question bank under a chosen Module/Subject.
@@ -5746,7 +5753,7 @@ async function loadPublishedQuestionsIntoSubjects() {
   // If a subject is already open, refresh its lecture list
   if (selectedSubject) selectSubject(selectedSubject);
 }
-
+</script>
 <script type="module">
   import { initializeApp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
