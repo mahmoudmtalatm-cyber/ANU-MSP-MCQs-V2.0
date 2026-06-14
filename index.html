@@ -1384,80 +1384,127 @@
   cursor: pointer; white-space: nowrap;
 }
 .ai-key-prompt-row button:hover { background: #6A1B9A; }
+    /* ══════════════════════════════════════════════
+         SORA AI — sigil + chat
+    ══════════════════════════════════════════════ */
+    .sora-launch-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg,#7C4DFF,#18C9D6);
+      border: 2px solid rgba(255,255,255,.5);
+      color: white; padding: 7px 16px; border-radius: 8px;
+      font-family: var(--font); font-size: .88rem; font-weight: 700;
+      cursor: pointer; margin-top: 12px;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .sora-launch-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(124,77,255,.45); }
 
-/* ── API KEY MANAGEMENT MODAL ── */
-.apikey-overlay {
-  position: fixed; inset: 0; z-index: 13000;
-  background: rgba(0,0,0,.5); backdrop-filter: blur(3px);
-  display: flex; align-items: center; justify-content: center; padding: 20px;
-}
-.apikey-modal {
-  background: white; border-radius: 16px;
-  max-width: 460px; width: 100%;
-  box-shadow: 0 8px 40px rgba(0,0,0,.3);
-  overflow: hidden;
-}
-.apikey-modal-header {
-  background: #4527A0; color: white;
-  padding: 16px 22px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.apikey-modal-header h2 { font-size: 1.05rem; font-weight: 800; }
-.apikey-modal-close {
-  background: rgba(255,255,255,.2); border: none; color: white;
-  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
-  font-size: 1.1rem; font-weight: 700;
-  display: flex; align-items: center; justify-content: center; font-family: var(--font);
-}
-.apikey-modal-close:hover { background: rgba(255,255,255,.35); }
-.apikey-modal-body { padding: 20px 22px; }
-.apikey-help-box {
-  background: #F0F8FF; border: 1px solid #B0D4F0; border-radius: 8px;
-  padding: 12px 14px; font-size: .85rem; line-height: 1.65; color: var(--text-main);
-  margin-bottom: 16px;
-}
-.apikey-help-box ol { margin: 6px 0 0 18px; }
-.apikey-help-box a { color: #4527A0; font-weight: 700; text-decoration: none; }
-.apikey-help-box a:hover { text-decoration: underline; }
-.apikey-input-row {
-  display: flex; gap: 8px; align-items: center; margin-bottom: 12px;
-}
-.apikey-input-row input {
-  flex: 1; padding: 11px 13px; border: 1.5px solid #B39DDB; border-radius: 8px;
-  font-family: var(--font); font-size: .92rem; background: white; outline: none; color: var(--text-main);
-}
-.apikey-input-row input:focus { border-color: #7E57C2; box-shadow: 0 0 0 3px rgba(126,87,194,.15); }
-.apikey-toggle-btn {
-  background: #EDE7F6; border: 1.5px solid #B39DDB; border-radius: 8px;
-  padding: 10px 12px; cursor: pointer; font-size: 1rem;
-}
-.apikey-save-btn {
-  width: 100%; background: #7E57C2; color: white; border: none; border-radius: 8px;
-  padding: 12px; font-family: var(--font); font-size: .95rem; font-weight: 700;
-  cursor: pointer; transition: background .15s;
-}
-.apikey-save-btn:hover { background: #6A1B9A; }
-.apikey-clear-btn {
-  width: 100%; background: #FFEBEE; color: #C62828; border: 1px solid #EF9A9A;
-  border-radius: 8px; padding: 10px; font-family: var(--font); font-size: .85rem;
-  font-weight: 700; cursor: pointer; margin-top: 8px; transition: background .15s;
-}
-.apikey-clear-btn:hover { background: #FFCDD2; }
-.apikey-status-saved {
-  background: #E8F5E9; color: #2E7D32; border: 1px solid #A5D6A7;
-  border-radius: 8px; padding: 9px 14px; font-size: .84rem; font-weight: 700;
-  margin-bottom: 12px; display: flex; align-items: center; gap: 7px;
-}
+    .sora-sigil { width: 22px; height: 22px; flex-shrink: 0; }
+    .sora-sigil .ring {
+      fill: none; stroke: currentColor; stroke-width: 2.2;
+      transform-origin: center; transform-box: fill-box;
+      animation: sora-spin 6s linear infinite;
+    }
+    .sora-sigil .ring2 { animation-direction: reverse; animation-duration: 9s; opacity:.6; }
+    .sora-sigil .core { fill: currentColor; animation: sora-pulse 2.2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+    @keyframes sora-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes sora-pulse { 0%,100% { transform: scale(1); opacity:.85; } 50% { transform: scale(1.25); opacity:1; } }
 
-/* API key button in results footer */
-.btn-apikey {
-  background: #EDE7F6; color: #4527A0; border: 2px solid #9575CD;
-  border-radius: 8px; padding: 10px 18px; font-family: var(--font);
-  font-size: .88rem; font-weight: 700; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-  transition: background .15s;
-}
-.btn-apikey:hover { background: #D1C4E9; }
+    .sora-overlay {
+      position: fixed; inset: 0; background: rgba(10,8,30,.6);
+      z-index: 2500; display: flex; align-items: center; justify-content: center;
+      padding: 16px; backdrop-filter: blur(2px);
+    }
+    .sora-modal {
+      background: var(--bg-card); border-radius: 18px;
+      width: 100%; max-width: 760px; height: min(86vh, 760px);
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 10px 50px rgba(0,0,0,.4);
+    }
+    .sora-modal-header {
+      background: linear-gradient(135deg,#5B2EFF,#18C9D6); color: white;
+      padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .sora-modal-header h2 { font-size: 1.1rem; font-weight: 800; display:flex; align-items:center; gap:8px; }
+    .sora-close-btn {
+      background: rgba(255,255,255,.2); border: none; color: white;
+      width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+      font-size: 1.2rem; font-weight: 700; display:flex; align-items:center; justify-content:center;
+    }
+    .sora-close-btn:hover { background: rgba(255,255,255,.35); }
+
+    .sora-body { flex:1; display:flex; flex-direction:column; min-height:0; }
+
+    /* setup screen */
+    .sora-setup { padding: 18px 20px; overflow-y: auto; display:flex; flex-direction:column; gap: 14px; }
+    .sora-notice {
+      background: #F3EFFF; border: 1.5px solid #D5C6FF; border-radius: 10px;
+      padding: 12px 14px; font-size: .82rem; color: #4A2DBA; line-height: 1.5;
+    }
+    .sora-section-title { font-size: .82rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; }
+    .sora-key-row { display:flex; gap:8px; align-items:center; }
+    .sora-key-row input {
+      flex:1; padding: 10px 12px; border: 1.5px solid #B0D4F0; border-radius: 8px;
+      font-family: var(--font); font-size: .88rem;
+    }
+    .sora-key-row input.bad { border-color: #C62828; }
+    .sora-key-row input.good { border-color: #2E7D32; }
+    .sora-key-status { font-size: .78rem; font-weight: 700; min-width: 70px; text-align:center; }
+    .sora-key-status.ok { color: #2E7D32; }
+    .sora-key-status.err { color: #C62828; }
+    .sora-key-status.pending { color: var(--text-muted); }
+    .sora-progress { font-size: .8rem; color: var(--text-muted); font-weight: 700; }
+
+    .sora-lecture-list {
+      max-height: 220px; overflow-y: auto; border: 1.5px solid #B0D4F0; border-radius: 8px;
+      background: #F7FBFF; padding: 8px 10px; display:flex; flex-direction:column; gap:6px;
+    }
+    .sora-lecture-list label { display:flex; align-items:center; gap:8px; font-size:.86rem; cursor:pointer; }
+    .sora-lecture-list input { width:16px; height:16px; accent-color:#7C4DFF; }
+
+    /* chat screen */
+    .sora-chat { flex:1; display:flex; flex-direction:column; min-height:0; }
+    .sora-chat-meta {
+      padding: 8px 16px; font-size: .76rem; color: var(--text-muted);
+      border-bottom: 1px solid #E3F0FB; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;
+    }
+    .sora-chat-meta button {
+      background: none; border: 1px solid #B0D4F0; color: var(--accent);
+      border-radius: 6px; padding: 4px 10px; font-size: .74rem; font-weight: 700; cursor:pointer; font-family: var(--font);
+    }
+    .sora-messages { flex:1; overflow-y:auto; padding: 14px 16px; display:flex; flex-direction:column; gap: 12px; }
+    .sora-msg { max-width: 82%; padding: 10px 14px; border-radius: 12px; font-size: .9rem; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+    .sora-msg.user { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 3px; }
+    .sora-msg.ai { align-self: flex-start; background: #F0EBFF; color: #2A1D5C; border-bottom-left-radius: 3px; }
+    .sora-msg.ai.loading { color: var(--text-muted); font-style: italic; }
+    .sora-msg .sora-file-chip {
+      display:inline-flex; align-items:center; gap:5px; background: rgba(255,255,255,.25);
+      border-radius: 6px; padding: 2px 8px; font-size: .75rem; margin-top:6px;
+    }
+    .sora-input-bar {
+      border-top: 1px solid #E3F0FB; padding: 10px 14px; display:flex; gap:8px; align-items:flex-end;
+    }
+    .sora-input-bar textarea {
+      flex:1; resize: none; border: 1.5px solid #B0D4F0; border-radius: 10px;
+      padding: 10px 12px; font-family: var(--font); font-size: .9rem; max-height: 120px; min-height: 40px;
+    }
+    .sora-attach-btn, .sora-send-btn {
+      flex-shrink:0; border:none; cursor:pointer; border-radius: 10px;
+      width: 42px; height: 42px; display:flex; align-items:center; justify-content:center; font-size: 1.1rem;
+    }
+    .sora-attach-btn { background: #F0EBFF; color: #5B2EFF; }
+    .sora-send-btn { background: linear-gradient(135deg,#7C4DFF,#18C9D6); color: white; }
+    .sora-send-btn:disabled { opacity:.5; cursor:not-allowed; }
+    .sora-attach-preview { display:flex; flex-wrap:wrap; gap:6px; padding: 0 14px 8px; }
+    .sora-attach-preview .chip {
+      display:flex; align-items:center; gap:6px; background:#F0EBFF; color:#5B2EFF;
+      border-radius: 8px; padding: 4px 10px; font-size:.78rem; font-weight:700;
+    }
+    .sora-attach-preview .chip button { border:none; background:none; color:#5B2EFF; cursor:pointer; font-weight:800; }
+    .sora-quick-actions { display:flex; gap:8px; padding: 8px 14px 0; flex-wrap:wrap; }
+    .sora-quick-actions button {
+      background:#F7FBFF; border:1.5px solid #B0D4F0; color: var(--accent);
+      border-radius: 999px; padding: 6px 14px; font-size:.78rem; font-weight:700; cursor:pointer; font-family: var(--font);
+    }
   </style>
 </head>
 <body>
@@ -1539,6 +1586,24 @@
     </div>
   </div>
 
+<!-- SORA AI MODAL -->
+  <div id="soraOverlay" class="sora-overlay hidden" onclick="if(event.target===this)closeSora()">
+    <div class="sora-modal">
+      <div class="sora-modal-header">
+        <h2>
+          <svg class="sora-sigil" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+            <circle class="ring" cx="20" cy="20" r="17"/>
+            <circle class="ring ring2" cx="20" cy="20" r="11"/>
+            <circle class="core" cx="20" cy="20" r="4"/>
+          </svg>
+          Sora AI
+        </h2>
+        <button class="sora-close-btn" onclick="closeSora()">✕</button>
+      </div>
+      <div class="sora-body" id="soraBody"></div>
+    </div>
+  </div>
+
   <!-- ══════════════════════════════════════════════
        HOME SCREEN
   ══════════════════════════════════════════════ -->
@@ -1552,6 +1617,14 @@
         <button class="stats-open-btn" onclick="openCustomQuizzes()">🤖&nbsp; Custom Quizzes</button>
         <button class="stats-open-btn" onclick="openCommunityQuizzes()">🌐&nbsp; Community Quizzes</button>
         <button class="stats-open-btn admin-btn hidden" id="adminOpenBtn" onclick="openAdminPanel()">🛠️&nbsp; Admin Panel</button>
+        <button class="sora-launch-btn" onclick="openSora()">
+          <svg class="sora-sigil" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+            <circle class="ring" cx="20" cy="20" r="17"/>
+            <circle class="ring ring2" cx="20" cy="20" r="11"/>
+            <circle class="core" cx="20" cy="20" r="4"/>
+          </svg>
+          Sora AI
+        </button>
     </div>
     <div class="home-body">
       <div class="card">
@@ -1665,23 +1738,11 @@
       <div class="results-score-badge" id="scoreBadge"></div>
     </div>
     <div class="results-body" id="resultsBody"></div>
-    <div class="results-footer" style="gap:10px;flex-wrap:wrap;">
+    <div class="results-footer">
       <button class="btn btn-home" onclick="goHome()">⟵&nbsp; Back to Home</button>
-      <button class="btn-apikey" onclick="openApiKeyModal()" title="Add or update your Gemini API key">🔑&nbsp; API Key</button>
       <button class="ai-explain-all-btn" id="explainAllBtn" onclick="explainAllQuestions()">🤖&nbsp; Explain All Questions</button>
     </div>
   </div>
-
-<!-- API KEY MANAGEMENT MODAL -->
-<div id="apikeyOverlay" class="apikey-overlay hidden" onclick="if(event.target===this)closeApiKeyModal()">
-  <div class="apikey-modal">
-    <div class="apikey-modal-header">
-      <h2>🔑&nbsp; Gemini API Key</h2>
-      <button class="apikey-modal-close" onclick="closeApiKeyModal()">✕</button>
-    </div>
-    <div class="apikey-modal-body" id="apikeyModalBody"></div>
-  </div>
-</div>
 
 </div>
 <script src="data/git_module.js"></script>
@@ -3030,16 +3091,9 @@ function renderExplainKeyPrompt(panelEl, onSave) {
       </div>
       <div class="ai-explain-panel-body">
         <div class="ai-key-prompt">
-          <div class="ai-key-prompt-title">Enter your free Gemini API key to enable AI explanations</div>
-          <div class="cq-help-box" style="margin-bottom:12px;">
-            <strong>How to get a free Gemini API key:</strong>
-            <ol>
-              <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
-              <li>Sign in with your Google account</li>
-              <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
-              <li>Copy the generated key and paste it in the box below</li>
-            </ol>
-            Your key is saved only in this browser and is sent directly to Google — never through any other server.
+          <div class="ai-key-prompt-title">Enter your Gemini API key to enable AI explanations</div>
+          <div class="ai-key-prompt-sub">Your key is saved in this browser only and sent directly to Google — never through any other server.<br>
+            Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#4527A0;font-weight:700;">aistudio.google.com/apikey</a>
           </div>
           <div class="ai-key-prompt-row">
             <input type="password" id="explainKeyInput" placeholder="Paste your Gemini API key here" />
@@ -7118,85 +7172,524 @@ async function saveCurriculumExtensionSubject(key, info) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   API KEY MANAGEMENT MODAL
+   SORA AI — chat assistant with shared API-key pool,
+   lecture-aware context, attachments, and self-learning memory
 ══════════════════════════════════════════════════════════ */
-function openApiKeyModal() {
-  const overlay = document.getElementById('apikeyOverlay');
-  const body    = document.getElementById('apikeyModalBody');
-  if (!overlay || !body) return;
 
-  const currentKey = getExplainKey();
+// Raw GitHub JSON file listing lectures Sora can use as preset context.
+// Each entry: { "subject": "...", "lecture": "...", "url": "https://raw.githubusercontent.com/.../file.txt" }
+const SORA_LECTURES_URL = 'https://raw.githubusercontent.com/YOUR_GH_USERNAME/YOUR_REPO/main/sora-lectures.json';
+
+const SORA_MIN_KEYS = 3;
+let soraLectureCatalog   = null;
+let soraSelectedLectures = [];
+let soraMessages         = [];
+let soraAttachments      = [];   // [{name, mime, size, dataB64 or text}]
+let soraSessionId        = null;
+let soraSetupDone        = false;
+
+/* ---------- Key pool storage (Firestore — SHARED across all users) ----------
+   Pool lives in collection 'soraKeyPool', one doc per key:
+     { key: '<api key>', addedBy: uid, addedAt, uses, lastUsed, status }
+   Each user's own contributed keys are tracked at users/{uid}.soraKeys (array)
+   so we can enforce "≥3 keys contributed" and so the keys are flagged as
+   "Sora-only" and rejected if reused by other in-app AI tools.
+------------------------------------------------------------------------- */
+
+function getSoraLocalKeys() {
+  try { return JSON.parse(localStorage.getItem('sora_my_keys') || '[]'); } catch(e) { return []; }
+}
+function setSoraLocalKeys(arr) {
+  try { localStorage.setItem('sora_my_keys', JSON.stringify(arr)); } catch(e) {}
+}
+
+// Validate a Gemini API key by making a minimal request
+async function soraValidateKey(key) {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: 'ping' }] }] })
+    });
+    if (res.status === 400 || res.status === 403) return { ok: false, reason: 'Invalid or restricted key' };
+    if (!res.ok && res.status !== 429) return { ok: false, reason: `Key check failed (${res.status})` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: 'Network error checking key' };
+  }
+}
+
+// Check this key isn't already registered as a "general purpose" key used by
+// the explain/custom-quiz features — Sora keys must be exclusive to Sora.
+function soraKeyConflictsWithOtherFeatures(key) {
+  const explainKey = getExplainKey();
+  const cqKey = (() => { try { return localStorage.getItem('anu_msp_custom_quiz_gemini_key_store') || ''; } catch(e){ return ''; } })();
+  return key === (explainKey || '').trim() || key === (cqKey || '').trim();
+}
+
+// Add a key to the shared pool (Firestore). Falls back to a local-only pool
+// (this browser only) if Firestore isn't available, with a warning shown to the user.
+async function soraAddKeyToPool(key) {
+  key = (key || '').trim();
+  if (!key) return { ok: false, reason: 'Empty key' };
+  if (soraKeyConflictsWithOtherFeatures(key)) {
+    return { ok: false, reason: 'This key is already used for Explain/Custom Quizzes. Sora keys must be used only for Sora.' };
+  }
+  const validation = await soraValidateKey(key);
+  if (!validation.ok) return validation;
+
+  const uid = window._currentUser ? window._currentUser.uid : 'anon_' + (localStorage.getItem('sora_anon_id') || (() => {
+    const id = 'a_' + Math.random().toString(36).slice(2,10);
+    try { localStorage.setItem('sora_anon_id', id); } catch(e) {}
+    return id;
+  })());
+
+  try {
+    if (window._db && window._doc && window._setDoc) {
+      const keyId = 'k_' + btoa(unescape(encodeURIComponent(key))).replace(/[^a-zA-Z0-9]/g,'').slice(0, 40);
+      const ref = window._doc(window._db, 'soraKeyPool', keyId);
+      const existing = await window._getDoc(ref);
+      if (existing.exists()) {
+        return { ok: false, reason: 'This key is already in the Sora pool.' };
+      }
+      await window._setDoc(ref, {
+        key, addedBy: uid, addedAt: Date.now(), uses: 0, lastUsed: null, status: 'active', soraOnly: true
+      });
+    } else {
+      throw new Error('no-db');
+    }
+  } catch (e) {
+    // Fallback: local-only pool (won't be shared across users)
+    const local = JSON.parse(localStorage.getItem('sora_local_pool') || '[]');
+    if (!local.includes(key)) local.push(key);
+    localStorage.setItem('sora_local_pool', JSON.stringify(local));
+  }
+
+  const mine = getSoraLocalKeys();
+  if (!mine.includes(key)) { mine.push(key); setSoraLocalKeys(mine); }
+
+  return { ok: true };
+}
+
+// Fetch the shared pool of keys
+async function soraGetPool() {
+  const pool = [];
+  try {
+    if (window._db && window._collection && window._getDocs) {
+      const col = window._collection(window._db, 'soraKeyPool');
+      const snap = await window._getDocs(col);
+      snap.forEach(d => {
+        const data = d.data();
+        if (data && data.key && data.status !== 'disabled') pool.push({ id: d.id, key: data.key, uses: data.uses || 0 });
+      });
+    }
+  } catch (e) { /* ignore */ }
+  // Always merge in the local fallback pool too
+  try {
+    const local = JSON.parse(localStorage.getItem('sora_local_pool') || '[]');
+    local.forEach(k => { if (!pool.some(p => p.key === k)) pool.push({ id: null, key: k, uses: 0 }); });
+  } catch(e) {}
+  return pool;
+}
+
+// Pick the least-recently-used key from the pool (simple round robin by uses count)
+async function soraPickKey() {
+  const pool = await soraGetPool();
+  if (!pool.length) return null;
+  pool.sort((a,b) => (a.uses||0) - (b.uses||0));
+  return pool[0];
+}
+
+async function soraMarkKeyUsed(entry) {
+  if (!entry || !entry.id) return;
+  try {
+    if (window._db && window._doc && window._setDoc && window._getDoc) {
+      const ref = window._doc(window._db, 'soraKeyPool', entry.id);
+      const snap = await window._getDoc(ref);
+      const data = snap.exists() ? snap.data() : { uses: 0 };
+      await window._setDoc(ref, { ...data, uses: (data.uses||0) + 1, lastUsed: Date.now() });
+    }
+  } catch(e) {}
+}
+
+/* ---------- Lecture catalog from GitHub ---------- */
+async function soraLoadLectureCatalog() {
+  if (soraLectureCatalog) return soraLectureCatalog;
+  try {
+    const res = await fetch(SORA_LECTURES_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('fetch failed');
+    soraLectureCatalog = await res.json();
+  } catch (e) {
+    soraLectureCatalog = [];
+  }
+  return soraLectureCatalog;
+}
+
+/* ---------- Self-learning memory ----------
+   Stores lightweight, anonymized "lessons" derived from past chats:
+   what kinds of requests worked well, preferred response style, common
+   topics. Stored per-user (if signed in) AND aggregated globally so Sora
+   improves for everyone over time.
+------------------------------------------------------------------------- */
+async function soraGetMemory() {
+  let userMem = null, globalMem = null;
+  try {
+    if (window._db && window._currentUser) {
+      const ref = window._doc(window._db, 'soraMemory', window._currentUser.uid);
+      const snap = await window._getDoc(ref);
+      if (snap.exists()) userMem = snap.data();
+    }
+  } catch(e) {}
+  try {
+    if (window._db) {
+      const ref = window._doc(window._db, 'soraMemory', '_global');
+      const snap = await window._getDoc(ref);
+      if (snap.exists()) globalMem = snap.data();
+    }
+  } catch(e) {}
+  return { userMem, globalMem };
+}
+
+// After each exchange, distill a short "lesson" and merge it into memory.
+async function soraLearnFromExchange(userMsg, aiReply) {
+  try {
+    const lessonPrompt = `In one short sentence (max 25 words), note a reusable preference or pattern ` +
+      `for future answers based on this exchange (e.g. preferred format, topic focus, depth level). ` +
+      `Reply with ONLY that sentence, nothing else.\n\nUser: ${userMsg}\nAssistant: ${aiReply}`;
+    const keyEntry = await soraPickKey();
+    if (!keyEntry) return;
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(keyEntry.key)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: lessonPrompt }] }] })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const lesson = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    if (!lesson) return;
+
+    const ts = Date.now();
+    if (window._db && window._currentUser) {
+      const ref = window._doc(window._db, 'soraMemory', window._currentUser.uid);
+      const snap = await window._getDoc(ref);
+      const data2 = snap.exists() ? snap.data() : { lessons: [] };
+      const lessons = (data2.lessons || []).slice(-19);
+      lessons.push({ text: lesson, ts });
+      await window._setDoc(ref, { lessons });
+    }
+    if (window._db) {
+      const ref = window._doc(window._db, 'soraMemory', '_global');
+      const snap = await window._getDoc(ref);
+      const data2 = snap.exists() ? snap.data() : { lessons: [] };
+      const lessons = (data2.lessons || []).slice(-49);
+      lessons.push({ text: lesson, ts });
+      await window._setDoc(ref, { lessons });
+    }
+  } catch(e) { /* learning is best-effort, never block chat */ }
+}
+
+function soraBuildMemoryContext(userMem, globalMem) {
+  const lines = [];
+  (globalMem?.lessons || []).slice(-10).forEach(l => lines.push('- ' + l.text));
+  (userMem?.lessons || []).slice(-10).forEach(l => lines.push('- ' + l.text));
+  if (!lines.length) return '';
+  return `Lessons learned from previous conversations (apply these to improve your response style):\n${lines.join('\n')}`;
+}
+
+/* ---------- Overlay open/close ---------- */
+async function openSora() {
+  document.getElementById('soraOverlay').classList.remove('hidden');
+  const mine = getSoraLocalKeys();
+  if (mine.length < SORA_MIN_KEYS) {
+    soraSetupDone = false;
+    renderSoraSetup();
+  } else {
+    soraSetupDone = true;
+    await renderSoraChat();
+  }
+}
+function closeSora() {
+  document.getElementById('soraOverlay').classList.add('hidden');
+}
+
+/* ---------- Setup screen: disclosure + key contribution + lecture pick ---------- */
+function renderSoraSetup() {
+  const mine = getSoraLocalKeys();
+  const remaining = Math.max(0, SORA_MIN_KEYS - mine.length);
+  const body = document.getElementById('soraBody');
   body.innerHTML = `
-    <div class="cq-help-box" style="margin-bottom:16px;">
-      <strong>How to get a free Gemini API key:</strong>
-      <ol>
-        <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
-        <li>Sign in with your Google account</li>
-        <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
-        <li>Copy the generated key and paste it into the box below</li>
-      </ol>
-      Your key is saved only in this browser and sent directly to Google — never through any other server.
+    <div class="sora-setup">
+      <div class="sora-notice">
+        🔒 <strong>How your API key is used:</strong> Any Gemini API key(s) you add here are stored
+        and used <strong>only for Sora</strong> — they are never used by the Explain or Custom Quiz
+        features, and the app checks for this automatically. Your key(s) are added to a
+        <strong>shared pool</strong> that Sora draws from for <strong>all users</strong>, which lets
+        everyone use Sora without hitting per-key limits. To help keep this pool healthy, each user
+        is asked to contribute at least <strong>${SORA_MIN_KEYS} keys</strong> before chatting.
+      </div>
+      <div>
+        <div class="sora-section-title">Your Gemini API Keys (${mine.length}/${SORA_MIN_KEYS} added)</div>
+        <div id="soraKeyRows" style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+          ${Array.from({length: Math.max(remaining, 1)}).map((_,i) => `
+            <div class="sora-key-row">
+              <input type="password" id="soraKeyInput_${i}" placeholder="Paste Gemini API key #${mine.length + i + 1}" />
+              <span class="sora-key-status" id="soraKeyStatus_${i}"></span>
+            </div>`).join('')}
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px;" onclick="soraSubmitKeys()">Add Keys & Continue</button>
+        <div class="sora-progress" id="soraKeyProgress" style="margin-top:6px;"></div>
+      </div>
+      <div style="font-size:.78rem;color:var(--text-muted);">
+        Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a>.
+        Keys are validated before being added.
+      </div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
-      <input type="password" id="apikeyModalInput"
-             placeholder="Paste your Gemini API key here"
-             value="${escapeHtml(currentKey)}"
-             style="flex:1;padding:10px 12px;border:1.5px solid #ccc;border-radius:8px;font-size:.9rem;font-family:inherit;"
-             oninput="document.getElementById('apikeyModalStatus').textContent=''" />
-      <button onclick="(function(){
-        const inp=document.getElementById('apikeyModalInput');
-        inp.type=inp.type==='password'?'text':'password';
-        this.textContent=inp.type==='password'?'👁':'🙈';
-      }).call(this)"
-        style="padding:9px 12px;border:1.5px solid #ccc;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:1rem;">👁</button>
+  `;
+}
+
+async function soraSubmitKeys() {
+  const mine = getSoraLocalKeys();
+  const remaining = Math.max(0, SORA_MIN_KEYS - mine.length);
+  const count = Math.max(remaining, 1);
+  const progress = document.getElementById('soraKeyProgress');
+  let added = 0;
+
+  for (let i = 0; i < count; i++) {
+    const inp = document.getElementById(`soraKeyInput_${i}`);
+    const status = document.getElementById(`soraKeyStatus_${i}`);
+    const key = inp ? inp.value.trim() : '';
+    if (!key) continue;
+    if (status) { status.textContent = 'Checking…'; status.className = 'sora-key-status pending'; }
+    const result = await soraAddKeyToPool(key);
+    if (result.ok) {
+      if (status) { status.textContent = '✅ Added'; status.className = 'sora-key-status ok'; }
+      if (inp) inp.classList.add('good');
+      added++;
+    } else {
+      if (status) { status.textContent = result.reason || '❌ Invalid'; status.className = 'sora-key-status err'; }
+      if (inp) inp.classList.add('bad');
+    }
+  }
+
+  const total = getSoraLocalKeys().length;
+  if (progress) progress.textContent = `${total}/${SORA_MIN_KEYS} keys contributed.`;
+
+  if (total >= SORA_MIN_KEYS) {
+    soraSetupDone = true;
+    setTimeout(() => renderSoraChat(), 600);
+  } else {
+    setTimeout(() => renderSoraSetup(), 600);
+  }
+}
+
+/* ---------- Chat screen ---------- */
+async function renderSoraChat() {
+  const body = document.getElementById('soraBody');
+  body.innerHTML = `
+    <div class="sora-chat">
+      <div class="sora-chat-meta">
+        <span id="soraLectureLabel">📚 Loading lectures…</span>
+        <button onclick="soraOpenLecturePicker()">Choose Lectures</button>
+      </div>
+      <div class="sora-messages" id="soraMessages"></div>
+      <div class="sora-quick-actions">
+        <button onclick="soraQuickPrompt('quiz')">📝 Make a quiz</button>
+        <button onclick="soraQuickPrompt('summary')">📄 Summarize</button>
+        <button onclick="soraQuickPrompt('explain')">💡 Explain a topic</button>
+      </div>
+      <div class="sora-attach-preview" id="soraAttachPreview"></div>
+      <div class="sora-input-bar">
+        <button class="sora-attach-btn" onclick="document.getElementById('soraFileInput').click()" title="Attach file">📎</button>
+        <input type="file" id="soraFileInput" multiple style="display:none" onchange="soraHandleFiles(event)" />
+        <textarea id="soraInput" placeholder="Ask Sora to make a quiz, summary, or explanation…" onkeydown="soraInputKeydown(event)"></textarea>
+        <button class="sora-send-btn" id="soraSendBtn" onclick="soraSend()">➤</button>
+      </div>
     </div>
-    <div id="apikeyModalStatus" style="font-size:.82rem;color:#2E7D32;min-height:18px;margin-bottom:12px;"></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button onclick="saveApiKeyFromModal()"
-        style="flex:1;padding:10px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;">
-        💾&nbsp; Save Key
-      </button>
-      ${currentKey ? `<button onclick="clearApiKeyFromModal()"
-        style="padding:10px 18px;background:#FFEBEE;color:#C62828;border:1.5px solid #FFCDD2;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;">
-        🗑&nbsp; Remove Key
-      </button>` : ''}
-    </div>`;
-
-  overlay.classList.remove('hidden');
+  `;
+  soraRenderMessages();
+  await soraLoadLectureCatalog();
+  soraUpdateLectureLabel();
 }
 
-function saveApiKeyFromModal() {
-  const inp = document.getElementById('apikeyModalInput');
-  const key = (inp ? inp.value : '').trim();
-  if (!key) { if (inp) inp.style.borderColor = '#C62828'; return; }
-  if (inp) inp.style.borderColor = '#ccc';
-
-  // Save to shared storage (works for both AI explain + custom quizzes)
-  setExplainKey(key);
-
-  // Also sync custom quiz key input if open
-  const cqInp = document.getElementById('cqApiKeyInput');
-  if (cqInp) cqInp.value = key;
-
-  const status = document.getElementById('apikeyModalStatus');
-  if (status) { status.textContent = '✅ Key saved successfully!'; status.style.color = '#2E7D32'; }
-
-  // Refresh modal to show Remove button
-  setTimeout(() => { closeApiKeyModal(); openApiKeyModal(); }, 900);
+function soraUpdateLectureLabel() {
+  const lbl = document.getElementById('soraLectureLabel');
+  if (!lbl) return;
+  if (!soraLectureCatalog || !soraLectureCatalog.length) {
+    lbl.textContent = '📚 No preset lectures available';
+  } else if (!soraSelectedLectures.length) {
+    lbl.textContent = `📚 ${soraLectureCatalog.length} lectures available — none selected`;
+  } else {
+    lbl.textContent = `📚 ${soraSelectedLectures.length} lecture(s) selected`;
+  }
 }
 
-function clearApiKeyFromModal() {
-  setExplainKey('');
-  const cqInp = document.getElementById('cqApiKeyInput');
-  if (cqInp) cqInp.value = '';
-  closeApiKeyModal();
-  openApiKeyModal();
+function soraOpenLecturePicker() {
+  const body = document.getElementById('soraBody');
+  const list = (soraLectureCatalog || []).map((l, i) => `
+    <label>
+      <input type="checkbox" value="${i}" ${soraSelectedLectures.includes(i) ? 'checked' : ''}
+             onchange="soraToggleLecture(${i}, this.checked)" />
+      ${escapeHtml(l.subject || '')} — ${escapeHtml(l.lecture || '')}
+    </label>`).join('') || `<div style="color:var(--text-muted);font-size:.85rem;padding:8px;">No lectures found in the GitHub catalog.</div>`;
+
+  body.innerHTML = `
+    <div class="sora-setup">
+      <div class="sora-section-title">Choose Lectures for Sora's Context</div>
+      <div class="sora-lecture-list">${list}</div>
+      <button class="btn btn-primary" onclick="renderSoraChat()">Done</button>
+    </div>
+  `;
+}
+function soraToggleLecture(idx, checked) {
+  if (checked) { if (!soraSelectedLectures.includes(idx)) soraSelectedLectures.push(idx); }
+  else { soraSelectedLectures = soraSelectedLectures.filter(i => i !== idx); }
 }
 
-function closeApiKeyModal() {
-  const overlay = document.getElementById('apikeyOverlay');
-  if (overlay) overlay.classList.add('hidden');
+/* ---------- Messages rendering ---------- */
+function soraRenderMessages() {
+  const wrap = document.getElementById('soraMessages');
+  if (!wrap) return;
+  wrap.innerHTML = soraMessages.map(m => `
+    <div class="sora-msg ${m.role}${m.loading ? ' loading' : ''}">${escapeHtml(m.text)}${
+      (m.files && m.files.length) ? m.files.map(f => `<div class="sora-file-chip">📎 ${escapeHtml(f.name)}</div>`).join('') : ''
+    }</div>
+  `).join('');
+  wrap.scrollTop = wrap.scrollHeight;
 }
+
+function soraInputKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); soraSend(); }
+}
+function soraQuickPrompt(kind) {
+  const inp = document.getElementById('soraInput');
+  const prompts = {
+    quiz: 'Create a quiz from the selected lecture(s) / attached file(s).',
+    summary: 'Summarize the selected lecture(s) / attached file(s) into key points.',
+    explain: 'Explain the main concepts from the selected lecture(s) / attached file(s) in simple terms.'
+  };
+  if (inp) { inp.value = prompts[kind] || ''; inp.focus(); }
+}
+
+/* ---------- Attachments — accept any size, read as base64 for binary, text for text files ---------- */
+function soraHandleFiles(e) {
+  const files = Array.from(e.target.files || []);
+  files.forEach(file => {
+    const reader = new FileReader();
+    const isText = /^text\/|json|csv/.test(file.type) || /\.(txt|csv|md|json)$/i.test(file.name);
+    reader.onload = () => {
+      soraAttachments.push({
+        name: file.name,
+        mime: file.type || 'application/octet-stream',
+        size: file.size,
+        text: isText ? reader.result : null,
+        dataB64: isText ? null : (reader.result.split(',')[1] || '')
+      });
+      soraRenderAttachPreview();
+    };
+    if (isText) reader.readAsText(file); else reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+}
+function soraRenderAttachPreview() {
+  const wrap = document.getElementById('soraAttachPreview');
+  if (!wrap) return;
+  wrap.innerHTML = soraAttachments.map((f, i) => `
+    <div class="chip">📎 ${escapeHtml(f.name)} <button onclick="soraRemoveAttachment(${i})">✕</button></div>
+  `).join('');
+}
+function soraRemoveAttachment(i) {
+  soraAttachments.splice(i, 1);
+  soraRenderAttachPreview();
+}
+
+/* ---------- Send message ---------- */
+async function soraSend() {
+  const inp = document.getElementById('soraInput');
+  const sendBtn = document.getElementById('soraSendBtn');
+  const text = (inp ? inp.value : '').trim();
+  if (!text && !soraAttachments.length) return;
+
+  const userMsg = { role: 'user', text: text || '(attachment(s) only)', files: soraAttachments.map(f => ({ name: f.name })) };
+  soraMessages.push(userMsg);
+  const attachmentsForThisMsg = soraAttachments;
+  soraAttachments = [];
+  if (inp) inp.value = '';
+  soraRenderAttachPreview();
+  soraMessages.push({ role: 'ai', text: 'Thinking…', loading: true });
+  soraRenderMessages();
+  if (sendBtn) sendBtn.disabled = true;
+
+  try {
+    const keyEntry = await soraPickKey();
+    if (!keyEntry) {
+      soraMessages.pop();
+      soraMessages.push({ role: 'ai', text: '⚠️ No API keys available in the Sora pool yet. Please add at least one key in setup.' });
+      soraRenderMessages();
+      return;
+    }
+
+    const { userMem, globalMem } = await soraGetMemory();
+    const memoryContext = soraBuildMemoryContext(userMem, globalMem);
+
+    const lectureContext = (soraSelectedLectures.length)
+      ? `Selected lecture context:\n` + soraSelectedLectures.map(i => {
+          const l = soraLectureCatalog[i];
+          return `- ${l.subject || ''}: ${l.lecture || ''} (source: ${l.url || ''})`;
+        }).join('\n')
+      : '';
+
+    const systemPreamble = [
+      `You are Sora, a friendly study assistant for medical students. Your main jobs: create quizzes, write summaries, and produce clear explanations of medical/lecture content.`,
+      memoryContext,
+      lectureContext,
+      `Conversation history is provided for context.`
+    ].filter(Boolean).join('\n\n');
+
+    const parts = [{ text: systemPreamble + '\n\n---\n\nUser message:\n' + text }];
+    attachmentsForThisMsg.forEach(f => {
+      if (f.text) {
+        parts.push({ text: `\n\nAttached file "${f.name}":\n${f.text.slice(0, 50000)}` });
+      } else if (f.dataB64) {
+        parts.push({ inlineData: { mimeType: f.mime, data: f.dataB64 } });
+      }
+    });
+
+    // include recent history (last 10 messages) for continuity
+    const historyParts = soraMessages.filter(m => !m.loading).slice(-11, -1).map(m =>
+      `${m.role === 'user' ? 'User' : 'Sora'}: ${m.text}`
+    ).join('\n');
+    if (historyParts) parts.unshift({ text: 'Recent conversation:\n' + historyParts + '\n\n' });
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(keyEntry.key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }] })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `Request failed (${res.status})`);
+    }
+    const data = await res.json();
+    const reply = (data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '').trim() || '(No response)';
+
+    await soraMarkKeyUsed(keyEntry);
+
+    soraMessages.pop();
+    soraMessages.push({ role: 'ai', text: reply });
+    soraRenderMessages();
+
+    // Self-improvement: learn from this exchange in the background
+    soraLearnFromExchange(text, reply);
+
+  } catch (e) {
+    soraMessages.pop();
+    soraMessages.push({ role: 'ai', text: `⚠️ ${e.message || 'Something went wrong.'}` });
+    soraRenderMessages();
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
 </script>
 <script type="module">
   import { initializeApp }
