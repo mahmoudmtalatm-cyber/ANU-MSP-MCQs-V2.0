@@ -2220,6 +2220,9 @@ function buildResults() {
   // Clear explanation cache for new results
   for (const k in _explainCache) delete _explainCache[k];
   for (const k in _explainRawText) delete _explainRawText[k];
+  // Snapshot any shared (Firestore) explanations for this quiz so they can be reused
+  // instantly instead of re-generated, and so newly-generated ones can be shared too.
+  _explainPoolLoadPromise = _loadExplainPool(currentQuestions);
   // Cancel and clear any in-progress/previous chats
   Object.keys(_chatCancelToken).forEach(k => { if (_chatCancelToken[k]) _chatCancelToken[k].cancelled = true; delete _chatCancelToken[k]; });
   for (const k in _chatHistory) delete _chatHistory[k];
@@ -2802,9 +2805,6 @@ function renderRetakeSelector() {
     startRetakeQuiz(allWrong);
   };
   body.appendChild(retakeBtn);
-
-  // Snapshot explanation pool for this session (non-blocking)
-  _loadExplainPool(currentQuestions);
 }
 function launchWaterFlood() {
   document.getElementById('app').classList.add('flush-app');
@@ -2890,6 +2890,7 @@ let   _allCancelToken    = null; // { cancelled: bool } | null
 // don't interfere with each other while reviewing.  New generations update
 // Firestore immediately but other in-progress sessions are unaffected.
 let _explainSessionPool = {}; // { questionHash: { text, html } } — frozen at session start
+let _explainPoolLoadPromise = null; // resolves once the pool snapshot for the current results view is ready
 
 async function _qHash(text) {
   // Fast deterministic hash for question text used as Firestore document ID
@@ -2927,7 +2928,7 @@ async function _saveExplainToPool(questionText, rawText, html) {
     _explainSessionPool[hash] = { text: rawText, html };
     if (!window._db) return;
     const ref = window._doc(window._db, 'explanations', hash);
-    await window._setDoc(ref, { text: rawText, html, updatedAt: Date.now() });
+    await window._setDoc(ref, cleanForFirestore({ text: rawText, html, updatedAt: Date.now() }));
   } catch(e) { /* non-fatal */ }
 }
 
@@ -3032,28 +3033,6 @@ function stopExplainQuestion(i) {
   if (_singleCancelToken[i]) _singleCancelToken[i].cancelled = true;
 }
 
-/* ── "Create another explanation" subtle button ── */
-function _makeNewExplanationBtn(i) {
-  return `<div style="text-align:right;margin-top:6px;">` +
-    `<button onclick="regenerateExplanation(${i})" ` +
-    `style="background:none;border:none;color:#9E9E9E;font-size:.72rem;cursor:pointer;` +
-    `font-family:var(--font);padding:2px 4px;opacity:.55;transition:opacity .15s;" ` +
-    `onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='.55'">↻ create another explanation</button></div>`;
-}
-
-async function regenerateExplanation(i) {
-  const btn   = document.getElementById(`explainBtn_${i}`);
-  const panel = document.getElementById(`explainPanel_${i}`);
-  if (!btn || !panel) return;
-  const apiKey = getExplainKey();
-  if (!apiKey) { renderExplainKeyPrompt(panel, () => regenerateExplanation(i)); return; }
-  // Clear cache so explainQuestion runs fresh, then call the core generate path directly
-  _explainCache[i] = null;
-  _explainRawText[i] = null;
-  // We bypass the pool for regeneration — force a new API call
-  await _runExplainGeneration(i);
-}
-
 /* ── Core: fetch explanation for one question index ── */
 async function explainQuestion(i) {
   const btn    = document.getElementById(`explainBtn_${i}`);
@@ -3063,44 +3042,33 @@ async function explainQuestion(i) {
   // Already shown — toggle off
   if (_explainCache[i] && _explainCache[i] !== 'loading') {
     if (panel.innerHTML.trim()) { panel.innerHTML = ''; btn.innerHTML = '🤖 Explain'; return; }
-    panel.innerHTML = _explainCache[i] + _makeNewExplanationBtn(i);
+    panel.innerHTML = _explainCache[i];
     btn.innerHTML = '🤖 Hide';
     return;
   }
   if (_explainCache[i] === 'loading') return;
 
-  const apiKey = getExplainKey();
   const q = currentQuestions[i];
+
+  // Shared explanation pool — if another user already generated this explanation,
+  // reuse it instantly (no API key required).
+  if (_explainPoolLoadPromise) { try { await _explainPoolLoadPromise; } catch(e) {} }
+  const pooled = await _getExplainFromPool(q.question);
+  if (pooled && pooled.html) {
+    _explainCache[i] = pooled.html;
+    _explainRawText[i] = pooled.text;
+    panel.innerHTML = pooled.html;
+    btn.innerHTML = '🤖 Hide';
+    return;
+  }
+
+  const apiKey = getExplainKey();
 
   // No key — show inline prompt
   if (!apiKey) {
     renderExplainKeyPrompt(panel, (key) => explainQuestion(i));
     return;
   }
-
-  // Check shared pool first — serve cached explanation instantly
-  const pooled = await _getExplainFromPool(q.question);
-  if (pooled && pooled.html) {
-    _explainCache[i] = pooled.html;
-    _explainRawText[i] = pooled.text || '';
-    panel.innerHTML = pooled.html + _makeNewExplanationBtn(i);
-    btn.disabled = false;
-    btn.classList.remove('loading');
-    btn.innerHTML = '🤖 Hide';
-    return;
-  }
-
-  await _runExplainGeneration(i);
-}
-
-/* ── Internal: call API and render a fresh explanation for question index i ── */
-async function _runExplainGeneration(i) {
-  const btn   = document.getElementById(`explainBtn_${i}`);
-  const panel = document.getElementById(`explainPanel_${i}`);
-  if (!btn || !panel) return;
-
-  const apiKey = getExplainKey();
-  const q = currentQuestions[i];
 
   // Create a fresh cancel token for this question
   const token = { cancelled: false };
@@ -3162,13 +3130,13 @@ async function _runExplainGeneration(i) {
     _explainCache[i] = html;
     _explainRawText[i] = text;
 
-    // Save to shared pool (non-blocking)
-    _saveExplainToPool(q.question, text, html);
-
     const p = document.getElementById(`explainPanel_${i}`);
-    if (p) p.innerHTML = html + _makeNewExplanationBtn(i);
+    if (p) p.innerHTML = html;
     const b = document.getElementById(`explainBtn_${i}`);
     if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '🤖 Hide'; }
+
+    // Share this explanation so other users reviewing the same question get it instantly
+    _saveExplainToPool(q.question, text, html);
 
   } catch(err) {
     if (err._cancelled) {
