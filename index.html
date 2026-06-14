@@ -2943,6 +2943,7 @@ Keep each section concise. Use plain text only — no markdown, no bullet points
 
 /* ── Render the API-key prompt inside an explain panel ── */
 function renderExplainKeyPrompt(panelEl, onSave) {
+  const savedKey = getExplainKey();
   panelEl.innerHTML = `
     <div class="ai-explain-panel">
       <div class="ai-explain-panel-header">
@@ -2950,19 +2951,39 @@ function renderExplainKeyPrompt(panelEl, onSave) {
       </div>
       <div class="ai-explain-panel-body">
         <div class="ai-key-prompt">
-          <div class="ai-key-prompt-title">Enter your Gemini API key to enable AI explanations</div>
-          <div class="ai-key-prompt-sub">Your key is saved in this browser only and sent directly to Google — never through any other server.<br>
-            Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#4527A0;font-weight:700;">aistudio.google.com/apikey</a>
+          <div class="cq-help-box" style="margin-bottom:12px;">
+            <strong>How to get a free Gemini API key:</strong>
+            <ol>
+              <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
+              <li>Sign in with your Google account</li>
+              <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
+              <li>Copy the generated key and paste it into the box below</li>
+            </ol>
+            Your key is saved only in this browser and sent directly to Google's API — it never passes through any other server.
+            The same key is used for AI explanations and custom quiz generation everywhere in the app.
           </div>
-          <div class="ai-key-prompt-row">
-            <input type="password" id="explainKeyInput" placeholder="Paste your Gemini API key here" />
-            <button onclick="handleExplainKeySave()">Save &amp; Explain</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="password" id="explainKeyInput" placeholder="Paste your Gemini API key here"
+              value="${escapeHtml(savedKey)}"
+              style="flex:1;min-width:180px;padding:11px 13px;border:1.5px solid #B0D4F0;border-radius:8px;font-family:var(--font);font-size:.92rem;color:var(--text-main);background:#F7FBFF;outline:none;" />
+            <button id="explainToggleKeyBtn" onclick="handleExplainToggleKey()"
+              style="background:#E8F5E9;border:1.5px solid #A5D6A7;border-radius:8px;padding:10px 12px;font-size:1rem;cursor:pointer;flex-shrink:0;" title="Show/hide key">👁</button>
+            <button onclick="handleExplainKeySave()"
+              style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:11px 18px;font-family:var(--font);font-size:.9rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Save &amp; Use</button>
           </div>
         </div>
       </div>
     </div>`;
-  // Store callback so handleExplainKeySave can call it
   window._explainKeySaveCallback = onSave;
+  setTimeout(() => { const inp = document.getElementById('explainKeyInput'); if (inp) inp.focus(); }, 50);
+}
+
+function handleExplainToggleKey() {
+  const inp = document.getElementById('explainKeyInput');
+  const btn = document.getElementById('explainToggleKeyBtn');
+  if (!inp) return;
+  if (inp.type === 'password') { inp.type = 'text';     if (btn) btn.textContent = '🙈'; }
+  else                          { inp.type = 'password'; if (btn) btn.textContent = '👁'; }
 }
 
 function handleExplainKeySave() {
@@ -2970,7 +2991,7 @@ function handleExplainKeySave() {
   const key = (inp ? inp.value : '').trim();
   if (!key) { if(inp) inp.style.borderColor='#C62828'; return; }
   setExplainKey(key);
-  // Also sync with the custom quiz key input if it's open
+  // Sync with the custom quiz key input if open (same localStorage key, keep DOM in sync)
   const cqInp = document.getElementById('cqApiKeyInput');
   if (cqInp) cqInp.value = key;
   if (window._explainKeySaveCallback) {
