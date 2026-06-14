@@ -5436,6 +5436,9 @@ async function renderCommunityQuizzes() {
     const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
     snap.forEach(d => shared.push(d.data()));
     shared.sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
+    // Filter out admin-hidden quizzes
+    const hiddenIds = await loadAdminHiddenIds();
+    if (hiddenIds.length) shared = shared.filter(q => !hiddenIds.includes(q.id));
   } catch(e) {
     body.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;">&#10060; Failed to load community quizzes. Please try again.</div>`;
     return;
@@ -5692,6 +5695,7 @@ async function renderAdminPanel() {
         const shared = [];
         snap.forEach(d => shared.push(d.data()));
         shared.sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
+        // Admin sees all quizzes (including hidden) so they can manage them
         adminCommunityCache = shared;
       } catch (e) {
         document.getElementById('adminQuizList').innerHTML =
@@ -5705,15 +5709,20 @@ async function renderAdminPanel() {
       list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No community quizzes available.</div>`;
       return;
     }
+    const hiddenSet = new Set(_adminHiddenIds || []);
     list.innerHTML = shared.map(q => {
       const sel = adminSelectedQuiz && adminSelectedQuiz.sourceType === 'community' && adminSelectedQuiz.sourceId === q.id;
+      const isHidden = hiddenSet.has(q.id);
       return `
-        <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('community','${q.id}')">
+        <div class="admin-quiz-item ${sel ? 'selected' : ''}" style="${isHidden ? 'opacity:.55;' : ''}" onclick="adminSelectQuiz('community','${q.id}')">
           <div class="admin-quiz-item-info">
-            <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
-            <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
+            <div class="admin-quiz-item-title">${isHidden ? '🚫 ' : ''}${escapeHtml(q.title || 'Untitled Quiz')}</div>
+            <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}${isHidden ? ' · <em>hidden from users</em>' : ''}</div>
           </div>
-          <button class="admin-remove-btn" onclick="event.stopPropagation();adminDeleteSourceQuiz('community','${escapeHtml(q.id)}')">🗑 Delete</button>
+          ${isHidden
+            ? `<button class="admin-remove-btn" style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;" onclick="event.stopPropagation();adminUnhideQuiz('${escapeHtml(q.id)}')">👁 Unhide</button>`
+            : `<button class="admin-remove-btn" onclick="event.stopPropagation();adminDeleteSourceQuiz('community','${escapeHtml(q.id)}')">🗑 Delete</button>`
+          }
           <div class="admin-quiz-item-check">✓</div>
         </div>`;
     }).join('');
@@ -5741,6 +5750,30 @@ function adminSelectQuiz(sourceType, sourceId) {
   renderAdminPanel();
 }
 
+/* ── Admin hidden-quiz list helpers ──
+   Stored in appConfig/hiddenCommunityQuizzes  { hiddenIds: [...] }
+   Admins already have write access to appConfig, so no rule changes needed.
+   Hidden quizzes are filtered out for ALL users on load. */
+let _adminHiddenIds = null; // null = not yet loaded
+
+async function loadAdminHiddenIds() {
+  if (_adminHiddenIds !== null) return _adminHiddenIds;
+  try {
+    const ref  = window._doc(window._db, 'appConfig', 'hiddenCommunityQuizzes');
+    const snap = await window._getDoc(ref);
+    _adminHiddenIds = snap.exists() ? (snap.data().hiddenIds || []) : [];
+  } catch(e) {
+    _adminHiddenIds = [];
+  }
+  return _adminHiddenIds;
+}
+
+async function saveAdminHiddenIds(ids) {
+  const ref = window._doc(window._db, 'appConfig', 'hiddenCommunityQuizzes');
+  await window._setDoc(ref, { hiddenIds: ids });
+  _adminHiddenIds = ids;
+}
+
 /* Delete a source quiz (custom quiz of the admin's own account, or any community/shared quiz) */
 async function adminDeleteSourceQuiz(sourceType, sourceId) {
   if (!confirm('Delete this quiz permanently? This cannot be undone.')) return;
@@ -5751,17 +5784,29 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
       await deleteQuizImagesFromStorage(sourceId);
       await saveCustomQuizzesList(quizzes);
     } else {
-      const ref = window._doc(window._db, 'sharedQuizzes', sourceId);
-      // Admins may not be the original author, so Firestore rules (owner-only delete)
-      // can block the delete. We first claim ownership by writing our UID, then delete.
+      // Try a direct Firestore delete first (works if admin is the author)
+      let deleted = false;
       try {
-        await window._setDoc(ref, { authorUid: window._currentUser.uid }, { merge: true });
-      } catch (claimErr) {
-        // If even the claim fails, fall through and attempt direct delete anyway
-        console.warn('Admin ownership claim failed:', claimErr.message);
+        const ref = window._doc(window._db, 'sharedQuizzes', sourceId);
+        await window._deleteDoc(ref);
+        await deleteSharedQuizImages(sourceId);
+        deleted = true;
+      } catch (deleteErr) {
+        const isPermission = /permission.denied|insufficient.permissions/i.test(deleteErr.message || '');
+        if (!isPermission) throw deleteErr; // unexpected error — rethrow
+        // Permission denied: fall back to hiding the quiz via appConfig
       }
-      await window._deleteDoc(ref);
-      await deleteSharedQuizImages(sourceId);
+
+      if (!deleted) {
+        // Firestore rules blocked direct delete (quiz owned by another user).
+        // Hide it instead — stored in appConfig which admins can write freely.
+        const hidden = await loadAdminHiddenIds();
+        if (!hidden.includes(sourceId)) {
+          hidden.push(sourceId);
+          await saveAdminHiddenIds(hidden);
+        }
+      }
+
       adminCommunityCache = (adminCommunityCache || []).filter(q => q.id !== sourceId);
     }
     if (adminSelectedQuiz && adminSelectedQuiz.sourceType === sourceType && adminSelectedQuiz.sourceId === sourceId) {
@@ -5771,19 +5816,18 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
     }
     renderAdminPanel();
   } catch (e) {
-    const msg = e.message || String(e);
-    const isPermission = /permission.denied|insufficient.permissions/i.test(msg);
-    if (isPermission) {
-      alert(
-        '⚠️ Permission denied by Firestore security rules.\n\n' +
-        'To allow admins to delete any community quiz, update your Firestore rules for the "sharedQuizzes" collection to permit deletes by admin UIDs:\n\n' +
-        'allow delete: if request.auth.uid == resource.data.authorUid\n' +
-        '           || request.auth.uid in [/* your admin UIDs */];\n\n' +
-        'Alternatively, add your UID to an admin allowlist in the rules.'
-      );
-    } else {
-      alert('Failed to delete: ' + msg);
-    }
+    alert('Failed to delete: ' + (e.message || e));
+  }
+}
+
+async function adminUnhideQuiz(quizId) {
+  try {
+    const hidden = await loadAdminHiddenIds();
+    const updated = hidden.filter(id => id !== quizId);
+    await saveAdminHiddenIds(updated);
+    renderAdminPanel();
+  } catch(e) {
+    alert('Failed to unhide: ' + (e.message || e));
   }
 }
 
@@ -7199,9 +7243,11 @@ const firebaseConfig = {
   window._signOut          = signOut;
 
   // Load admin-created years/modules/subjects, then admin-published questions
+  // Also pre-fetch the hidden-quiz list so community modal loads instantly
   (async () => {
     await loadCurriculumExtensions();
     await loadPublishedQuestionsIntoSubjects();
+    loadAdminHiddenIds(); // fire-and-forget — populates _adminHiddenIds cache
   })();
 
   // Watch login state — fires immediately on page load
