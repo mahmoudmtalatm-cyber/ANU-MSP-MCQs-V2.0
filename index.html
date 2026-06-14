@@ -368,18 +368,8 @@
     }
     .r-opt-pfx { font-weight: 800; min-width: 18px; }
 
-    .results-footer { padding: 12px 24px; flex-shrink: 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+    .results-footer { padding: 12px 24px; flex-shrink: 0; display: flex; justify-content: center; }
     .btn-home { background: var(--accent); color: white; padding: 12px 32px; font-size: 1rem; border-radius: 8px; }
-    .ai-apikey-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: #F3E5F5; color: #6A1B9A;
-      border: 1.5px solid #CE93D8; border-radius: 8px;
-      padding: 10px 18px; font-family: var(--font); font-size: .88rem; font-weight: 700;
-      cursor: pointer; transition: all .15s; white-space: nowrap;
-    }
-    .ai-apikey-btn:hover { background: #E1BEE7; border-color: #AB47BC; }
-    .ai-apikey-btn.has-key { background: #E8F5E9; color: #2E7D32; border-color: #A5D6A7; }
-    .ai-apikey-btn.has-key:hover { background: #C8E6C9; border-color: #66BB6A; }
 
     /* ── UTILS ── */
     .hidden { display: none !important; }
@@ -1394,6 +1384,80 @@
   cursor: pointer; white-space: nowrap;
 }
 .ai-key-prompt-row button:hover { background: #6A1B9A; }
+
+/* ── API KEY MANAGEMENT MODAL ── */
+.apikey-overlay {
+  position: fixed; inset: 0; z-index: 13000;
+  background: rgba(0,0,0,.5); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.apikey-modal {
+  background: white; border-radius: 16px;
+  max-width: 460px; width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,.3);
+  overflow: hidden;
+}
+.apikey-modal-header {
+  background: #4527A0; color: white;
+  padding: 16px 22px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.apikey-modal-header h2 { font-size: 1.05rem; font-weight: 800; }
+.apikey-modal-close {
+  background: rgba(255,255,255,.2); border: none; color: white;
+  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  font-size: 1.1rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; font-family: var(--font);
+}
+.apikey-modal-close:hover { background: rgba(255,255,255,.35); }
+.apikey-modal-body { padding: 20px 22px; }
+.apikey-help-box {
+  background: #F0F8FF; border: 1px solid #B0D4F0; border-radius: 8px;
+  padding: 12px 14px; font-size: .85rem; line-height: 1.65; color: var(--text-main);
+  margin-bottom: 16px;
+}
+.apikey-help-box ol { margin: 6px 0 0 18px; }
+.apikey-help-box a { color: #4527A0; font-weight: 700; text-decoration: none; }
+.apikey-help-box a:hover { text-decoration: underline; }
+.apikey-input-row {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 12px;
+}
+.apikey-input-row input {
+  flex: 1; padding: 11px 13px; border: 1.5px solid #B39DDB; border-radius: 8px;
+  font-family: var(--font); font-size: .92rem; background: white; outline: none; color: var(--text-main);
+}
+.apikey-input-row input:focus { border-color: #7E57C2; box-shadow: 0 0 0 3px rgba(126,87,194,.15); }
+.apikey-toggle-btn {
+  background: #EDE7F6; border: 1.5px solid #B39DDB; border-radius: 8px;
+  padding: 10px 12px; cursor: pointer; font-size: 1rem;
+}
+.apikey-save-btn {
+  width: 100%; background: #7E57C2; color: white; border: none; border-radius: 8px;
+  padding: 12px; font-family: var(--font); font-size: .95rem; font-weight: 700;
+  cursor: pointer; transition: background .15s;
+}
+.apikey-save-btn:hover { background: #6A1B9A; }
+.apikey-clear-btn {
+  width: 100%; background: #FFEBEE; color: #C62828; border: 1px solid #EF9A9A;
+  border-radius: 8px; padding: 10px; font-family: var(--font); font-size: .85rem;
+  font-weight: 700; cursor: pointer; margin-top: 8px; transition: background .15s;
+}
+.apikey-clear-btn:hover { background: #FFCDD2; }
+.apikey-status-saved {
+  background: #E8F5E9; color: #2E7D32; border: 1px solid #A5D6A7;
+  border-radius: 8px; padding: 9px 14px; font-size: .84rem; font-weight: 700;
+  margin-bottom: 12px; display: flex; align-items: center; gap: 7px;
+}
+
+/* API key button in results footer */
+.btn-apikey {
+  background: #EDE7F6; color: #4527A0; border: 2px solid #9575CD;
+  border-radius: 8px; padding: 10px 18px; font-family: var(--font);
+  font-size: .88rem; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .15s;
+}
+.btn-apikey:hover { background: #D1C4E9; }
   </style>
 </head>
 <body>
@@ -1601,22 +1665,23 @@
       <div class="results-score-badge" id="scoreBadge"></div>
     </div>
     <div class="results-body" id="resultsBody"></div>
-    <div class="results-footer">
+    <div class="results-footer" style="gap:10px;flex-wrap:wrap;">
       <button class="btn btn-home" onclick="goHome()">⟵&nbsp; Back to Home</button>
+      <button class="btn-apikey" onclick="openApiKeyModal()" title="Add or update your Gemini API key">🔑&nbsp; API Key</button>
       <button class="ai-explain-all-btn" id="explainAllBtn" onclick="explainAllQuestions()">🤖&nbsp; Explain All Questions</button>
-      <button class="ai-apikey-btn" id="explainApiKeyBtn" onclick="openExplainKeyModal()">🔑&nbsp; Add API Key</button>
-    </div>
-    <!-- API Key Modal -->
-    <div id="explainKeyModalOverlay" class="hidden" style="position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)closeExplainKeyModal()">
-      <div style="background:#fff;border-radius:14px;padding:24px 26px;max-width:480px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-          <span style="font-size:1.05rem;font-weight:800;color:var(--text-main);">🔑 Gemini API Key</span>
-          <button onclick="closeExplainKeyModal()" style="background:#f5f5f5;border:none;border-radius:6px;padding:5px 10px;font-size:1rem;cursor:pointer;color:#555;">✕</button>
-        </div>
-        <div id="explainKeyModalBody"></div>
-      </div>
     </div>
   </div>
+
+<!-- API KEY MANAGEMENT MODAL -->
+<div id="apikeyOverlay" class="apikey-overlay hidden" onclick="if(event.target===this)closeApiKeyModal()">
+  <div class="apikey-modal">
+    <div class="apikey-modal-header">
+      <h2>🔑&nbsp; Gemini API Key</h2>
+      <button class="apikey-modal-close" onclick="closeApiKeyModal()">✕</button>
+    </div>
+    <div class="apikey-modal-body" id="apikeyModalBody"></div>
+  </div>
+</div>
 
 </div>
 <script src="data/git_module.js"></script>
@@ -1795,17 +1860,14 @@ let wrongToCorrect   = 0;
    INIT — build subject grid
 ══════════════════════════════════════════════════════════ */
 function buildYearGrid() {
-  const hardcodedYearIcons = { "First Year":"1️⃣", "Second Year":"2️⃣", "Third Year":"3️⃣" };
+  const yearIcons = { "First Year":"1️⃣", "Second Year":"2️⃣", "Third Year":"3️⃣" };
   const grid = document.getElementById('yearGrid');
   grid.innerHTML = '';
   Object.keys(curriculum).forEach(year => {
-    const icon = (window._yearIcons && window._yearIcons[year])
-      || hardcodedYearIcons[year]
-      || '🎓';
     const btn = document.createElement('button');
     btn.className = 'year-btn';
     btn.dataset.year = year;
-    btn.innerHTML = `<span class="y-icon">${icon}</span>${year}`;
+    btn.innerHTML = `<span class="y-icon">${yearIcons[year]||'📅'}</span>${year}`;
     btn.onclick = () => selectYear(year);
     if (year === selectedYear) btn.classList.add('active');
     grid.appendChild(btn);
@@ -1842,18 +1904,15 @@ function selectYear(year) {
     return;
   }
 
-  const hardcodedModuleIcons = {
+  const moduleIcons = {
     "GIT and Nutrition":               "🏥",
     "Endocrine System and Metabolism": "🧬"
   };
   modules.forEach(mod => {
-    const icon = (window._moduleIcons && window._moduleIcons[year] && window._moduleIcons[year][mod])
-      || hardcodedModuleIcons[mod]
-      || '📚';
     const btn = document.createElement('button');
     btn.className = 'module-btn';
     btn.dataset.module = mod;
-    btn.innerHTML = `<span class="m-icon">${icon}</span>${mod}`;
+    btn.innerHTML = `<span class="m-icon">${moduleIcons[mod]||'📚'}</span>${mod}`;
     btn.onclick = () => selectModule(mod);
     document.getElementById('moduleGrid').appendChild(btn);
   });
@@ -2396,9 +2455,6 @@ if (changeLog.length > 0) {
 
     body.appendChild(card);
   });
-
-  // Sync the persistent API key button label/state with whether a key is saved
-  updateExplainApiKeyBtn();
 }
 
 function launchConfetti() {
@@ -2967,7 +3023,6 @@ Keep each section concise. Use plain text only — no markdown, no bullet points
 
 /* ── Render the API-key prompt inside an explain panel ── */
 function renderExplainKeyPrompt(panelEl, onSave) {
-  const savedKey = getExplainKey();
   panelEl.innerHTML = `
     <div class="ai-explain-panel">
       <div class="ai-explain-panel-header">
@@ -2975,65 +3030,26 @@ function renderExplainKeyPrompt(panelEl, onSave) {
       </div>
       <div class="ai-explain-panel-body">
         <div class="ai-key-prompt">
+          <div class="ai-key-prompt-title">Enter your free Gemini API key to enable AI explanations</div>
           <div class="cq-help-box" style="margin-bottom:12px;">
             <strong>How to get a free Gemini API key:</strong>
             <ol>
               <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
               <li>Sign in with your Google account</li>
               <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
-              <li>Copy the generated key and paste it into the box below</li>
+              <li>Copy the generated key and paste it in the box below</li>
             </ol>
-            Your key is saved only in this browser and sent directly to Google's API — it never passes through any other server.
-            The same key is used for AI explanations and custom quiz generation everywhere in the app.
+            Your key is saved only in this browser and is sent directly to Google — never through any other server.
           </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input type="password" id="explainKeyInput" placeholder="Paste your Gemini API key here"
-              value="${escapeHtml(savedKey)}"
-              style="flex:1;min-width:180px;padding:11px 13px;border:1.5px solid #B0D4F0;border-radius:8px;font-family:var(--font);font-size:.92rem;color:var(--text-main);background:#F7FBFF;outline:none;" />
-            <button id="explainToggleKeyBtn" onclick="handleExplainToggleKey()"
-              style="background:#E8F5E9;border:1.5px solid #A5D6A7;border-radius:8px;padding:10px 12px;font-size:1rem;cursor:pointer;flex-shrink:0;" title="Show/hide key">👁</button>
-            <button onclick="handleExplainKeySave()"
-              style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:11px 18px;font-family:var(--font);font-size:.9rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Save &amp; Use</button>
+          <div class="ai-key-prompt-row">
+            <input type="password" id="explainKeyInput" placeholder="Paste your Gemini API key here" />
+            <button onclick="handleExplainKeySave()">Save &amp; Explain</button>
           </div>
         </div>
       </div>
     </div>`;
+  // Store callback so handleExplainKeySave can call it
   window._explainKeySaveCallback = onSave;
-  setTimeout(() => { const inp = document.getElementById('explainKeyInput'); if (inp) inp.focus(); }, 50);
-}
-
-/* ── API Key modal (results footer) ── */
-function openExplainKeyModal() {
-  const overlay = document.getElementById('explainKeyModalOverlay');
-  const body    = document.getElementById('explainKeyModalBody');
-  if (!overlay || !body) return;
-  overlay.classList.remove('hidden');
-  overlay.style.display = 'flex';
-  renderExplainKeyPrompt(body, (key) => {
-    closeExplainKeyModal();
-    updateExplainApiKeyBtn();
-  });
-}
-
-function closeExplainKeyModal() {
-  const overlay = document.getElementById('explainKeyModalOverlay');
-  if (overlay) { overlay.classList.add('hidden'); overlay.style.display = 'none'; }
-}
-
-function updateExplainApiKeyBtn() {
-  const btn = document.getElementById('explainApiKeyBtn');
-  if (!btn) return;
-  const hasKey = !!getExplainKey();
-  btn.classList.toggle('has-key', hasKey);
-  btn.innerHTML = hasKey ? '🔑&nbsp; Change API Key' : '🔑&nbsp; Add API Key';
-}
-
-function handleExplainToggleKey() {
-  const inp = document.getElementById('explainKeyInput');
-  const btn = document.getElementById('explainToggleKeyBtn');
-  if (!inp) return;
-  if (inp.type === 'password') { inp.type = 'text';     if (btn) btn.textContent = '🙈'; }
-  else                          { inp.type = 'password'; if (btn) btn.textContent = '👁'; }
 }
 
 function handleExplainKeySave() {
@@ -3041,7 +3057,7 @@ function handleExplainKeySave() {
   const key = (inp ? inp.value : '').trim();
   if (!key) { if(inp) inp.style.borderColor='#C62828'; return; }
   setExplainKey(key);
-  // Sync with the custom quiz key input if open (same localStorage key, keep DOM in sync)
+  // Also sync with the custom quiz key input if it's open
   const cqInp = document.getElementById('cqApiKeyInput');
   if (cqInp) cqInp.value = key;
   if (window._explainKeySaveCallback) {
@@ -5486,9 +5502,6 @@ async function renderCommunityQuizzes() {
     const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
     snap.forEach(d => shared.push(d.data()));
     shared.sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
-    // Filter out admin-hidden quizzes
-    const hiddenIds = await loadAdminHiddenIds();
-    if (hiddenIds.length) shared = shared.filter(q => !hiddenIds.includes(q.id));
   } catch(e) {
     body.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;">&#10060; Failed to load community quizzes. Please try again.</div>`;
     return;
@@ -5745,7 +5758,6 @@ async function renderAdminPanel() {
         const shared = [];
         snap.forEach(d => shared.push(d.data()));
         shared.sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
-        // Admin sees all quizzes (including hidden) so they can manage them
         adminCommunityCache = shared;
       } catch (e) {
         document.getElementById('adminQuizList').innerHTML =
@@ -5759,20 +5771,15 @@ async function renderAdminPanel() {
       list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No community quizzes available.</div>`;
       return;
     }
-    const hiddenSet = new Set(_adminHiddenIds || []);
     list.innerHTML = shared.map(q => {
       const sel = adminSelectedQuiz && adminSelectedQuiz.sourceType === 'community' && adminSelectedQuiz.sourceId === q.id;
-      const isHidden = hiddenSet.has(q.id);
       return `
-        <div class="admin-quiz-item ${sel ? 'selected' : ''}" style="${isHidden ? 'opacity:.55;' : ''}" onclick="adminSelectQuiz('community','${q.id}')">
+        <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('community','${q.id}')">
           <div class="admin-quiz-item-info">
-            <div class="admin-quiz-item-title">${isHidden ? '🚫 ' : ''}${escapeHtml(q.title || 'Untitled Quiz')}</div>
-            <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}${isHidden ? ' · <em>hidden from users</em>' : ''}</div>
+            <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
+            <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
           </div>
-          ${isHidden
-            ? `<button class="admin-remove-btn" style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;" onclick="event.stopPropagation();adminUnhideQuiz('${escapeHtml(q.id)}')">👁 Unhide</button>`
-            : `<button class="admin-remove-btn" onclick="event.stopPropagation();adminDeleteSourceQuiz('community','${escapeHtml(q.id)}')">🗑 Delete</button>`
-          }
+          <button class="admin-remove-btn" onclick="event.stopPropagation();adminDeleteSourceQuiz('community','${escapeHtml(q.id)}')">🗑 Delete</button>
           <div class="admin-quiz-item-check">✓</div>
         </div>`;
     }).join('');
@@ -5800,30 +5807,6 @@ function adminSelectQuiz(sourceType, sourceId) {
   renderAdminPanel();
 }
 
-/* ── Admin hidden-quiz list helpers ──
-   Stored in appConfig/hiddenCommunityQuizzes  { hiddenIds: [...] }
-   Admins already have write access to appConfig, so no rule changes needed.
-   Hidden quizzes are filtered out for ALL users on load. */
-let _adminHiddenIds = null; // null = not yet loaded
-
-async function loadAdminHiddenIds() {
-  if (_adminHiddenIds !== null) return _adminHiddenIds;
-  try {
-    const ref  = window._doc(window._db, 'appConfig', 'hiddenCommunityQuizzes');
-    const snap = await window._getDoc(ref);
-    _adminHiddenIds = snap.exists() ? (snap.data().hiddenIds || []) : [];
-  } catch(e) {
-    _adminHiddenIds = [];
-  }
-  return _adminHiddenIds;
-}
-
-async function saveAdminHiddenIds(ids) {
-  const ref = window._doc(window._db, 'appConfig', 'hiddenCommunityQuizzes');
-  await window._setDoc(ref, { hiddenIds: ids });
-  _adminHiddenIds = ids;
-}
-
 /* Delete a source quiz (custom quiz of the admin's own account, or any community/shared quiz) */
 async function adminDeleteSourceQuiz(sourceType, sourceId) {
   if (!confirm('Delete this quiz permanently? This cannot be undone.')) return;
@@ -5834,29 +5817,9 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
       await deleteQuizImagesFromStorage(sourceId);
       await saveCustomQuizzesList(quizzes);
     } else {
-      // Try a direct Firestore delete first (works if admin is the author)
-      let deleted = false;
-      try {
-        const ref = window._doc(window._db, 'sharedQuizzes', sourceId);
-        await window._deleteDoc(ref);
-        await deleteSharedQuizImages(sourceId);
-        deleted = true;
-      } catch (deleteErr) {
-        const isPermission = /permission.denied|insufficient.permissions/i.test(deleteErr.message || '');
-        if (!isPermission) throw deleteErr; // unexpected error — rethrow
-        // Permission denied: fall back to hiding the quiz via appConfig
-      }
-
-      if (!deleted) {
-        // Firestore rules blocked direct delete (quiz owned by another user).
-        // Hide it instead — stored in appConfig which admins can write freely.
-        const hidden = await loadAdminHiddenIds();
-        if (!hidden.includes(sourceId)) {
-          hidden.push(sourceId);
-          await saveAdminHiddenIds(hidden);
-        }
-      }
-
+      const ref = window._doc(window._db, 'sharedQuizzes', sourceId);
+      await window._deleteDoc(ref);
+      await deleteSharedQuizImages(sourceId);
       adminCommunityCache = (adminCommunityCache || []).filter(q => q.id !== sourceId);
     }
     if (adminSelectedQuiz && adminSelectedQuiz.sourceType === sourceType && adminSelectedQuiz.sourceId === sourceId) {
@@ -5867,17 +5830,6 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
     renderAdminPanel();
   } catch (e) {
     alert('Failed to delete: ' + (e.message || e));
-  }
-}
-
-async function adminUnhideQuiz(quizId) {
-  try {
-    const hidden = await loadAdminHiddenIds();
-    const updated = hidden.filter(id => id !== quizId);
-    await saveAdminHiddenIds(updated);
-    renderAdminPanel();
-  } catch(e) {
-    alert('Failed to unhide: ' + (e.message || e));
   }
 }
 
@@ -6552,25 +6504,16 @@ function renderAdminCurriculumPanel() {
             <label>Year Name (e.g. "Fourth Year")</label>
             <input type="text" id="currNewYear" placeholder="Fourth Year" maxlength="40" />
           </div>
-          <div class="curr-field" style="max-width:90px;">
-            <label>Icon (emoji)</label>
-            <input type="text" id="currNewYearIcon" placeholder="🎓" maxlength="4" style="text-align:center;font-size:1.2rem;" />
-          </div>
           <button class="curr-add-btn" onclick="adminAddYear()">Add Year</button>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-          ${iconSuggestions.map(ic => `<span style="cursor:pointer;font-size:1.3rem;" title="${ic}" onclick="document.getElementById('currNewYearIcon').value='${ic}'">${ic}</span>`).join('')}
         </div>
         <div class="curr-status" id="currYearStatus"></div>
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Years</div>
-        <div id="currYearList">${years.length ? years.map(y => {
-          const yIcon = (window._yearIcons && window._yearIcons[y]) ? escapeHtml(window._yearIcons[y]) : '🎓';
-          return `<div class="curr-item-row">
-            <span class="curr-item-name">${yIcon} ${escapeHtml(y)}</span>
-            <button class="curr-item-btn edit" onclick="adminRenameYear('${escapeHtml(y)}')">✏️ Edit</button>
+        <div id="currYearList">${years.length ? years.map(y => `
+          <div class="curr-item-row">
+            <span class="curr-item-name">${escapeHtml(y)}</span>
+            <button class="curr-item-btn edit" onclick="adminRenameYear('${escapeHtml(y)}')">✏️ Rename</button>
             <button class="curr-item-btn del"  onclick="adminDeleteYear('${escapeHtml(y)}')">🗑 Delete</button>
-          </div>`;
-        }).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
+          </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
       </div>
 
       <div class="curr-section">
@@ -6584,29 +6527,19 @@ function renderAdminCurriculumPanel() {
             <label>Module Name (e.g. "Module 5")</label>
             <input type="text" id="currNewModule" placeholder="Module 5" maxlength="60" />
           </div>
-          <div class="curr-field" style="max-width:90px;">
-            <label>Icon (emoji)</label>
-            <input type="text" id="currNewModuleIcon" placeholder="📦" maxlength="4" style="text-align:center;font-size:1.2rem;" />
-          </div>
           <button class="curr-add-btn" onclick="adminAddModule()">Add Module</button>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-          ${iconSuggestions.map(ic => `<span style="cursor:pointer;font-size:1.3rem;" title="${ic}" onclick="document.getElementById('currNewModuleIcon').value='${ic}'">${ic}</span>`).join('')}
         </div>
         <div class="curr-status" id="currModuleStatus"></div>
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Modules</div>
-        <div id="currModuleList">${Object.keys(allModules).length ? Object.keys(allModules).map(m => {
-          const yr = allModules[m];
-          const mIcon = (window._moduleIcons && window._moduleIcons[yr] && window._moduleIcons[yr][m]) ? escapeHtml(window._moduleIcons[yr][m]) : '📦';
-          return `<div class="curr-item-row">
+        <div id="currModuleList">${Object.keys(allModules).length ? Object.keys(allModules).map(m => `
+          <div class="curr-item-row">
             <div style="flex:1;">
-              <div class="curr-item-name">${mIcon} ${escapeHtml(m)}</div>
-              <div class="curr-item-sub">in ${escapeHtml(yr)}</div>
+              <div class="curr-item-name">${escapeHtml(m)}</div>
+              <div class="curr-item-sub">in ${escapeHtml(allModules[m])}</div>
             </div>
-            <button class="curr-item-btn edit" onclick="adminRenameModule('${escapeHtml(yr)}','${escapeHtml(m)}')">✏️ Edit</button>
-            <button class="curr-item-btn del"  onclick="adminDeleteModule('${escapeHtml(yr)}','${escapeHtml(m)}')">🗑 Delete</button>
-          </div>`;
-        }).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
+            <button class="curr-item-btn edit" onclick="adminRenameModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">✏️ Rename</button>
+            <button class="curr-item-btn del"  onclick="adminDeleteModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">🗑 Delete</button>
+          </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
       </div>
 
       <div class="curr-section">
@@ -6667,49 +6600,37 @@ function adminRefreshSubjModules() {
 
 async function adminAddYear() {
   const input  = document.getElementById('currNewYear');
-  const iconIn = document.getElementById('currNewYearIcon');
   const status = document.getElementById('currYearStatus');
   const name   = (input?.value || '').trim();
-  const icon   = (iconIn?.value || '').trim() || '🎓';
   if (!name)          { status.textContent = '⚠️ Please enter a year name.'; status.className = 'curr-status err'; return; }
   if (curriculum[name]) { status.textContent = `⚠️ "${name}" already exists.`; status.className = 'curr-status err'; return; }
   curriculum[name] = {};
-  // Store icon in memory
-  if (!window._yearIcons) window._yearIcons = {};
-  window._yearIcons[name] = icon;
   buildYearGrid();
   status.textContent = '⏳ Saving…'; status.className = 'curr-status';
-  // Persist icon alongside structure
   await saveCurriculumStructure();
   status.textContent = `✅ Year "${name}" added! You can now add modules to it.`;
   status.className = 'curr-status ok';
-  input.value = ''; if (iconIn) iconIn.value = '';
+  input.value = '';
   setTimeout(() => renderAdminCurriculumPanel(), 400);
 }
 
 async function adminAddModule() {
   const yearSel = document.getElementById('currModYear');
   const input   = document.getElementById('currNewModule');
-  const iconIn  = document.getElementById('currNewModuleIcon');
   const status  = document.getElementById('currModuleStatus');
   const yr  = yearSel?.value || '';
   const mod = (input?.value || '').trim();
-  const icon = (iconIn?.value || '').trim() || '📦';
   if (!yr)  { status.textContent = '⚠️ Select a year first.'; status.className = 'curr-status err'; return; }
   if (!mod) { status.textContent = '⚠️ Enter a module name.'; status.className = 'curr-status err'; return; }
   if (!curriculum[yr]) { status.textContent = '⚠️ Year not found.'; status.className = 'curr-status err'; return; }
   if (curriculum[yr][mod]) { status.textContent = `⚠️ Module "${mod}" already exists in ${yr}.`; status.className = 'curr-status err'; return; }
   curriculum[yr][mod] = [];
-  // Store icon in memory
-  if (!window._moduleIcons) window._moduleIcons = {};
-  if (!window._moduleIcons[yr]) window._moduleIcons[yr] = {};
-  window._moduleIcons[yr][mod] = icon;
   buildYearGrid();
   status.textContent = '⏳ Saving…'; status.className = 'curr-status';
   await saveCurriculumStructure();
   status.textContent = `✅ Module "${mod}" added to ${yr}!`;
   status.className = 'curr-status ok';
-  input.value = ''; if (iconIn) iconIn.value = '';
+  input.value = '';
   setTimeout(() => renderAdminCurriculumPanel(), 400);
 }
 
@@ -6814,10 +6735,6 @@ async function loadCurriculumExtensions() {
       if (!curriculum[year][mod].includes(key)) curriculum[year][mod].push(key);
     });
 
-    // Restore year and module icons
-    if (data.yearIcons)   window._yearIcons   = data.yearIcons;
-    if (data.moduleIcons) window._moduleIcons = data.moduleIcons;
-
     buildYearGrid();
   } catch (e) {
     console.warn('Failed to load curriculum extensions:', e);
@@ -6843,9 +6760,6 @@ async function saveCurriculumStructure() {
     data.years   = allYears;
     data.modules = modulesMap;
     if (!data.subjects) data.subjects = {};
-    // Persist icons
-    if (window._yearIcons)   data.yearIcons   = window._yearIcons;
-    if (window._moduleIcons) data.moduleIcons = window._moduleIcons;
     await window._setDoc(ref, cleanForFirestore(data));
   } catch (e) {
     console.warn('Failed to save curriculum structure:', e);
@@ -7031,52 +6945,28 @@ function adminCloseMoveQuiz() {
 
 /* ── YEAR ── */
 async function adminRenameYear(oldName) {
-  const newName = prompt(`Edit year name "${oldName}":`, oldName);
-  if (!newName || newName.trim() === oldName) {
-    // Still allow icon edit even if name unchanged
-    if (newName === null) return;
+  const newName = prompt(`Rename year "${oldName}" to:`, oldName);
+  if (!newName || newName.trim() === oldName) return;
+  const n = newName.trim();
+  if (curriculum[n]) { alert(`"${n}" already exists.`); return; }
+  // Migrate in-memory curriculum
+  curriculum[n] = curriculum[oldName];
+  delete curriculum[oldName];
+  // Migrate extensions subjects
+  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+  const extSnap = await window._getDoc(extRef);
+  const ext = extSnap.exists() ? extSnap.data() : {};
+  // Update subjects that referenced old year
+  if (ext.subjects) {
+    Object.values(ext.subjects).forEach(s => { if (s.year === oldName) s.year = n; });
   }
-  const currentIcon = (window._yearIcons && window._yearIcons[oldName]) || '🎓';
-  const newIcon = prompt(`Edit icon for year "${newName?.trim() || oldName}":`, currentIcon);
-  if (newIcon === null) return; // cancelled
-
-  const n = (newName || oldName).trim();
-  if (n !== oldName) {
-    if (curriculum[n]) { alert(`"${n}" already exists.`); return; }
-    // Migrate in-memory curriculum
-    curriculum[n] = curriculum[oldName];
-    delete curriculum[oldName];
-    // Migrate extensions subjects
-    const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
-    const extSnap = await window._getDoc(extRef);
-    const ext = extSnap.exists() ? extSnap.data() : {};
-    if (ext.subjects) {
-      Object.values(ext.subjects).forEach(s => { if (s.year === oldName) s.year = n; });
-    }
-    if (ext.modules && ext.modules[oldName]) {
-      ext.modules[n] = ext.modules[oldName];
-      delete ext.modules[oldName];
-    }
-    // Migrate icons
-    if (!window._yearIcons) window._yearIcons = {};
-    window._yearIcons[n] = newIcon.trim() || currentIcon;
-    delete window._yearIcons[oldName];
-    ext.years = Object.keys(curriculum);
-    if (!ext.yearIcons) ext.yearIcons = {};
-    ext.yearIcons[n] = window._yearIcons[n];
-    delete ext.yearIcons[oldName];
-    await window._setDoc(extRef, cleanForFirestore(ext));
-  } else {
-    // Only icon changed
-    if (!window._yearIcons) window._yearIcons = {};
-    window._yearIcons[oldName] = newIcon.trim() || currentIcon;
-    const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
-    const extSnap = await window._getDoc(extRef);
-    const ext = extSnap.exists() ? extSnap.data() : {};
-    if (!ext.yearIcons) ext.yearIcons = {};
-    ext.yearIcons[oldName] = window._yearIcons[oldName];
-    await window._setDoc(extRef, cleanForFirestore(ext));
+  // Update modules map
+  if (ext.modules && ext.modules[oldName]) {
+    ext.modules[n] = ext.modules[oldName];
+    delete ext.modules[oldName];
   }
+  ext.years = Object.keys(curriculum);
+  await window._setDoc(extRef, cleanForFirestore(ext));
   buildYearGrid();
   renderAdminCurriculumPanel();
 }
@@ -7105,51 +6995,24 @@ This also removes ${modCount} module(s) and ${subjCount} subject placement(s) fr
 
 /* ── MODULE ── */
 async function adminRenameModule(year, oldMod) {
-  const newMod = prompt(`Edit module name "${oldMod}" (in ${year}):`, oldMod);
-  if (newMod === null) return;
-  const currentIcon = (window._moduleIcons && window._moduleIcons[year] && window._moduleIcons[year][oldMod]) || '📦';
-  const newIcon = prompt(`Edit icon for module "${newMod?.trim() || oldMod}":`, currentIcon);
-  if (newIcon === null) return;
-
-  const n = (newMod || oldMod).trim();
-  if (n !== oldMod) {
-    if (curriculum[year][n]) { alert(`"${n}" already exists in ${year}.`); return; }
-    curriculum[year][n] = curriculum[year][oldMod];
-    delete curriculum[year][oldMod];
-    // Update subjects in extensions
-    const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
-    const extSnap = await window._getDoc(extRef);
-    const ext = extSnap.exists() ? extSnap.data() : {};
-    if (ext.subjects) {
-      Object.values(ext.subjects).forEach(s => { if (s.year === year && s.module === oldMod) s.module = n; });
-    }
-    if (ext.modules && ext.modules[year]) {
-      ext.modules[year] = Object.keys(curriculum[year]);
-    }
-    ext.years = Object.keys(curriculum);
-    // Migrate module icon
-    if (!window._moduleIcons) window._moduleIcons = {};
-    if (!window._moduleIcons[year]) window._moduleIcons[year] = {};
-    window._moduleIcons[year][n] = newIcon.trim() || currentIcon;
-    delete window._moduleIcons[year][oldMod];
-    if (!ext.moduleIcons) ext.moduleIcons = {};
-    if (!ext.moduleIcons[year]) ext.moduleIcons[year] = {};
-    ext.moduleIcons[year][n] = window._moduleIcons[year][n];
-    delete ext.moduleIcons[year][oldMod];
-    await window._setDoc(extRef, cleanForFirestore(ext));
-  } else {
-    // Only icon changed
-    if (!window._moduleIcons) window._moduleIcons = {};
-    if (!window._moduleIcons[year]) window._moduleIcons[year] = {};
-    window._moduleIcons[year][oldMod] = newIcon.trim() || currentIcon;
-    const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
-    const extSnap = await window._getDoc(extRef);
-    const ext = extSnap.exists() ? extSnap.data() : {};
-    if (!ext.moduleIcons) ext.moduleIcons = {};
-    if (!ext.moduleIcons[year]) ext.moduleIcons[year] = {};
-    ext.moduleIcons[year][oldMod] = window._moduleIcons[year][oldMod];
-    await window._setDoc(extRef, cleanForFirestore(ext));
+  const newMod = prompt(`Rename module "${oldMod}" (in ${year}) to:`, oldMod);
+  if (!newMod || newMod.trim() === oldMod) return;
+  const n = newMod.trim();
+  if (curriculum[year][n]) { alert(`"${n}" already exists in ${year}.`); return; }
+  curriculum[year][n] = curriculum[year][oldMod];
+  delete curriculum[year][oldMod];
+  // Update subjects in extensions
+  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+  const extSnap = await window._getDoc(extRef);
+  const ext = extSnap.exists() ? extSnap.data() : {};
+  if (ext.subjects) {
+    Object.values(ext.subjects).forEach(s => { if (s.year === year && s.module === oldMod) s.module = n; });
   }
+  if (ext.modules && ext.modules[year]) {
+    ext.modules[year] = Object.keys(curriculum[year]);
+  }
+  ext.years = Object.keys(curriculum);
+  await window._setDoc(extRef, cleanForFirestore(ext));
   buildYearGrid();
   renderAdminCurriculumPanel();
 }
@@ -7253,6 +7116,87 @@ async function saveCurriculumExtensionSubject(key, info) {
     console.warn('Failed to save curriculum extension:', e);
   }
 }
+
+/* ══════════════════════════════════════════════════════════
+   API KEY MANAGEMENT MODAL
+══════════════════════════════════════════════════════════ */
+function openApiKeyModal() {
+  const overlay = document.getElementById('apikeyOverlay');
+  const body    = document.getElementById('apikeyModalBody');
+  if (!overlay || !body) return;
+
+  const currentKey = getExplainKey();
+  body.innerHTML = `
+    <div class="cq-help-box" style="margin-bottom:16px;">
+      <strong>How to get a free Gemini API key:</strong>
+      <ol>
+        <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
+        <li>Sign in with your Google account</li>
+        <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
+        <li>Copy the generated key and paste it into the box below</li>
+      </ol>
+      Your key is saved only in this browser and sent directly to Google — never through any other server.
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
+      <input type="password" id="apikeyModalInput"
+             placeholder="Paste your Gemini API key here"
+             value="${escapeHtml(currentKey)}"
+             style="flex:1;padding:10px 12px;border:1.5px solid #ccc;border-radius:8px;font-size:.9rem;font-family:inherit;"
+             oninput="document.getElementById('apikeyModalStatus').textContent=''" />
+      <button onclick="(function(){
+        const inp=document.getElementById('apikeyModalInput');
+        inp.type=inp.type==='password'?'text':'password';
+        this.textContent=inp.type==='password'?'👁':'🙈';
+      }).call(this)"
+        style="padding:9px 12px;border:1.5px solid #ccc;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:1rem;">👁</button>
+    </div>
+    <div id="apikeyModalStatus" style="font-size:.82rem;color:#2E7D32;min-height:18px;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button onclick="saveApiKeyFromModal()"
+        style="flex:1;padding:10px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;">
+        💾&nbsp; Save Key
+      </button>
+      ${currentKey ? `<button onclick="clearApiKeyFromModal()"
+        style="padding:10px 18px;background:#FFEBEE;color:#C62828;border:1.5px solid #FFCDD2;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;">
+        🗑&nbsp; Remove Key
+      </button>` : ''}
+    </div>`;
+
+  overlay.classList.remove('hidden');
+}
+
+function saveApiKeyFromModal() {
+  const inp = document.getElementById('apikeyModalInput');
+  const key = (inp ? inp.value : '').trim();
+  if (!key) { if (inp) inp.style.borderColor = '#C62828'; return; }
+  if (inp) inp.style.borderColor = '#ccc';
+
+  // Save to shared storage (works for both AI explain + custom quizzes)
+  setExplainKey(key);
+
+  // Also sync custom quiz key input if open
+  const cqInp = document.getElementById('cqApiKeyInput');
+  if (cqInp) cqInp.value = key;
+
+  const status = document.getElementById('apikeyModalStatus');
+  if (status) { status.textContent = '✅ Key saved successfully!'; status.style.color = '#2E7D32'; }
+
+  // Refresh modal to show Remove button
+  setTimeout(() => { closeApiKeyModal(); openApiKeyModal(); }, 900);
+}
+
+function clearApiKeyFromModal() {
+  setExplainKey('');
+  const cqInp = document.getElementById('cqApiKeyInput');
+  if (cqInp) cqInp.value = '';
+  closeApiKeyModal();
+  openApiKeyModal();
+}
+
+function closeApiKeyModal() {
+  const overlay = document.getElementById('apikeyOverlay');
+  if (overlay) overlay.classList.add('hidden');
+}
 </script>
 <script type="module">
   import { initializeApp }
@@ -7293,11 +7237,9 @@ const firebaseConfig = {
   window._signOut          = signOut;
 
   // Load admin-created years/modules/subjects, then admin-published questions
-  // Also pre-fetch the hidden-quiz list so community modal loads instantly
   (async () => {
     await loadCurriculumExtensions();
     await loadPublishedQuestionsIntoSubjects();
-    loadAdminHiddenIds(); // fire-and-forget — populates _adminHiddenIds cache
   })();
 
   // Watch login state — fires immediately on page load
