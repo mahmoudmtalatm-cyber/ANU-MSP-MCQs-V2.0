@@ -6446,7 +6446,7 @@ function adminRefreshSubjModules() {
     : `<option value="">No modules in this year</option>`;
 }
 
-function adminAddYear() {
+async function adminAddYear() {
   const input  = document.getElementById('currNewYear');
   const status = document.getElementById('currYearStatus');
   const name   = (input?.value || '').trim();
@@ -6454,13 +6454,15 @@ function adminAddYear() {
   if (curriculum[name]) { status.textContent = `⚠️ "${name}" already exists.`; status.className = 'curr-status err'; return; }
   curriculum[name] = {};
   buildYearGrid();
+  status.textContent = '⏳ Saving…'; status.className = 'curr-status';
+  await saveCurriculumStructure();
   status.textContent = `✅ Year "${name}" added! You can now add modules to it.`;
   status.className = 'curr-status ok';
   input.value = '';
   setTimeout(() => renderAdminCurriculumPanel(), 400);
 }
 
-function adminAddModule() {
+async function adminAddModule() {
   const yearSel = document.getElementById('currModYear');
   const input   = document.getElementById('currNewModule');
   const status  = document.getElementById('currModuleStatus');
@@ -6472,6 +6474,8 @@ function adminAddModule() {
   if (curriculum[yr][mod]) { status.textContent = `⚠️ Module "${mod}" already exists in ${yr}.`; status.className = 'curr-status err'; return; }
   curriculum[yr][mod] = [];
   buildYearGrid();
+  status.textContent = '⏳ Saving…'; status.className = 'curr-status';
+  await saveCurriculumStructure();
   status.textContent = `✅ Module "${mod}" added to ${yr}!`;
   status.className = 'curr-status ok';
   input.value = '';
@@ -6530,7 +6534,11 @@ async function adminLoadCurrSubjList() {
 /* ══════════════════════════════════════════════════════════
    CURRICULUM EXTENSIONS — admin-created Years / Modules / Subjects
    Stored in a single doc: appConfig/curriculumExtensions
-   Shape: { subjects: { [subjectKey]: {icon, label, year, module} } }
+   Shape: {
+     years: ["Year Name", ...],
+     modules: { "Year Name": ["Module Name", ...] },
+     subjects: { [subjectKey]: {icon, label, year, module} }
+   }
 ══════════════════════════════════════════════════════════ */
 async function loadCurriculumExtensions() {
   if (!window._db) return;
@@ -6539,14 +6547,28 @@ async function loadCurriculumExtensions() {
     const snap = await window._getDoc(ref);
     if (!snap.exists()) return;
     const data = snap.data() || {};
-    const extSubjects = data.subjects || {};
 
+    // Restore admin-created years
+    const extYears = data.years || [];
+    extYears.forEach(yr => {
+      if (!curriculum[yr]) curriculum[yr] = {};
+    });
+
+    // Restore admin-created modules
+    const extModules = data.modules || {};
+    Object.entries(extModules).forEach(([yr, mods]) => {
+      if (!curriculum[yr]) curriculum[yr] = {};
+      (mods || []).forEach(mod => {
+        if (!curriculum[yr][mod]) curriculum[yr][mod] = [];
+      });
+    });
+
+    // Restore admin-created subjects
+    const extSubjects = data.subjects || {};
     Object.entries(extSubjects).forEach(([key, info]) => {
-      // Create the subject if it doesn't exist yet
       if (!subjects[key]) {
         subjects[key] = { icon: info.icon || '📘', label: info.label || key, lectures: {} };
       }
-      // Make sure year/module exist in curriculum
       const year = info.year, mod = info.module;
       if (!year || !mod) return;
       if (!curriculum[year]) curriculum[year] = {};
@@ -6560,6 +6582,31 @@ async function loadCurriculumExtensions() {
   }
 }
 
+/* Persist admin-created Years and Modules structure */
+async function saveCurriculumStructure() {
+  if (!window._db) return;
+  try {
+    const ref  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const snap = await window._getDoc(ref);
+    const data = snap.exists() ? (snap.data() || {}) : {};
+
+    // Collect all admin-added years (those not hardcoded, or just save all)
+    const allYears = Object.keys(curriculum);
+    const modulesMap = {};
+    allYears.forEach(yr => {
+      const mods = Object.keys(curriculum[yr] || {});
+      if (mods.length > 0) modulesMap[yr] = mods;
+    });
+
+    data.years   = allYears;
+    data.modules = modulesMap;
+    if (!data.subjects) data.subjects = {};
+    await window._setDoc(ref, cleanForFirestore(data));
+  } catch (e) {
+    console.warn('Failed to save curriculum structure:', e);
+  }
+}
+
 /* Persist a newly-created Subject (and its Year/Module placement) */
 async function saveCurriculumExtensionSubject(key, info) {
   if (!window._db) return;
@@ -6569,6 +6616,15 @@ async function saveCurriculumExtensionSubject(key, info) {
     const data = snap.exists() ? (snap.data() || {}) : {};
     if (!data.subjects) data.subjects = {};
     data.subjects[key] = info;
+    // Also keep years/modules in sync
+    const allYears = Object.keys(curriculum);
+    const modulesMap = {};
+    allYears.forEach(yr => {
+      const mods = Object.keys(curriculum[yr] || {});
+      if (mods.length > 0) modulesMap[yr] = mods;
+    });
+    data.years   = allYears;
+    data.modules = modulesMap;
     await window._setDoc(ref, cleanForFirestore(data));
   } catch (e) {
     console.warn('Failed to save curriculum extension:', e);
