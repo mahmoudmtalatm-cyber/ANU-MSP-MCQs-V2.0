@@ -1160,6 +1160,112 @@
 .ai-chat-send-btn:hover:not(:disabled) { background: var(--accent-dark); }
 .ai-chat-send-btn:disabled { opacity: .5; cursor: not-allowed; }
 
+/* ── ADMIN PANEL ── */
+.admin-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,200,0,.2); border: 2px solid rgba(255,200,0,.6);
+  color: #FFE082; padding: 7px 14px; border-radius: 8px;
+  font-family: var(--font); font-size: .85rem; font-weight: 800;
+  cursor: pointer; margin-top: 10px;
+  transition: background .15s;
+}
+.admin-btn:hover { background: rgba(255,200,0,.35); }
+
+.admin-overlay {
+  position: fixed; inset: 0; z-index: 13000;
+  background: rgba(0,0,0,.5); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.admin-modal {
+  background: white; border-radius: 16px;
+  width: 100%; max-width: 640px; max-height: 88vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 12px 50px rgba(0,0,0,.3);
+  overflow: hidden;
+}
+.admin-modal-header {
+  background: #1B4F72; color: #fff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 22px; flex-shrink: 0;
+}
+.admin-modal-header h2 { font-size: 1.1rem; font-weight: 800; }
+.admin-modal-header button {
+  background: rgba(255,255,255,.2); border: none; color: #fff;
+  width: 32px; height: 32px; border-radius: 50%; font-size: 1.1rem;
+  cursor: pointer; font-weight: 800;
+}
+.admin-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+.admin-quiz-source-tabs {
+  display: flex; gap: 6px; margin-bottom: 4px;
+}
+.admin-source-tab {
+  flex: 1; padding: 9px; border-radius: 8px; border: 2px solid #B0D4F0;
+  background: #F7FBFF; font-family: var(--font); font-size: .82rem; font-weight: 700;
+  color: var(--text-muted); cursor: pointer; text-align: center; transition: all .15s;
+}
+.admin-source-tab.active { border-color: #1B4F72; background: #1B4F72; color: #fff; }
+
+.admin-quiz-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+.admin-quiz-item {
+  display: flex; align-items: center; gap: 10px;
+  background: #F7FBFF; border: 1.5px solid #D8EAF7; border-radius: 8px;
+  padding: 10px 14px; cursor: pointer; transition: all .15s;
+}
+.admin-quiz-item:hover { border-color: var(--accent); background: #EEF7FF; }
+.admin-quiz-item.selected { border-color: #1B4F72; background: #EBF4FA; }
+.admin-quiz-item-info { flex: 1; }
+.admin-quiz-item-title { font-weight: 700; font-size: .9rem; color: var(--text-main); }
+.admin-quiz-item-meta { font-size: .74rem; color: var(--text-muted); margin-top: 2px; }
+.admin-quiz-item-check {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid #B0D4F0; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; flex-shrink: 0; transition: all .15s;
+}
+.admin-quiz-item.selected .admin-quiz-item-check {
+  border-color: #1B4F72; background: #1B4F72; color: #fff;
+}
+
+.admin-assign-form { background: #F0F8FF; border: 1px solid #B0D4F0; border-radius: 10px; padding: 16px; }
+.admin-assign-title { font-size: .82rem; font-weight: 800; color: #1B4F72; text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px; }
+.admin-field { margin-bottom: 12px; }
+.admin-field label { display: block; font-size: .8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .6px; }
+.admin-field select, .admin-field input[type="text"] {
+  width: 100%; padding: 10px 12px; border: 1.5px solid #B0D4F0; border-radius: 7px;
+  font-family: var(--font); font-size: .9rem; background: #fff;
+  color: var(--text-main); outline: none; appearance: none; -webkit-appearance: none;
+}
+.admin-field select:focus, .admin-field input[type="text"]:focus {
+  border-color: #1B4F72; box-shadow: 0 0 0 3px rgba(27,79,114,.12);
+}
+.admin-assign-btn {
+  background: #1B4F72; color: #fff; border: none; border-radius: 8px;
+  padding: 12px 22px; font-family: var(--font); font-size: .95rem; font-weight: 800;
+  cursor: pointer; width: 100%; transition: filter .15s;
+}
+.admin-assign-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.admin-assign-btn:disabled { opacity: .5; cursor: not-allowed; }
+.admin-status { margin-top: 10px; }
+
+.admin-assigned-section { margin-top: 4px; }
+.admin-assigned-title { font-size: .8rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
+.admin-assigned-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: #F7FBFF; border: 1px solid #D8EAF7; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 7px;
+}
+.admin-assigned-info { flex: 1; }
+.admin-assigned-name { font-weight: 700; font-size: .88rem; color: var(--text-main); }
+.admin-assigned-path { font-size: .74rem; color: var(--text-muted); margin-top: 2px; }
+.admin-remove-btn {
+  background: #FFEBEE; color: #C62828; border: 1px solid #EF9A9A;
+  border-radius: 6px; padding: 5px 10px; font-family: var(--font);
+  font-size: .78rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: background .15s;
+}
+.admin-remove-btn:hover { background: #FFCDD2; }
+
 /* API key prompt for explanations */
 .ai-key-prompt {
   background: #F8F5FF; border: 1.5px solid #B39DDB; border-radius: 10px;
@@ -1236,6 +1342,17 @@
     </div>
   </div>
 
+<!-- ADMIN PANEL MODAL -->
+  <div id="adminOverlay" class="admin-overlay hidden" onclick="if(event.target===this)closeAdminPanel()">
+    <div class="admin-modal">
+      <div class="admin-modal-header">
+        <h2>🛠️&nbsp; Admin Panel — Publish Quiz to Question Bank</h2>
+        <button onclick="closeAdminPanel()">✕</button>
+      </div>
+      <div class="admin-body" id="adminBody"></div>
+    </div>
+  </div>
+
 <!-- DISPLAY NAME MODAL -->
   <div id="displayNameOverlay" class="dn-overlay hidden">
     <div class="dn-modal">
@@ -1263,6 +1380,7 @@
         <button class="stats-open-btn" onclick="openRetake()">🔄&nbsp; Retake Wrong Qs</button>
         <button class="stats-open-btn" onclick="openCustomQuizzes()">🤖&nbsp; Custom Quizzes</button>
         <button class="stats-open-btn" onclick="openCommunityQuizzes()">🌐&nbsp; Community Quizzes</button>
+        <button class="stats-open-btn admin-btn hidden" id="adminOpenBtn" onclick="openAdminPanel()">🛠️&nbsp; Admin Panel</button>
     </div>
     <div class="home-body">
       <div class="card">
@@ -1388,11 +1506,24 @@
 <script src="data/research2_module.js"></script>
 <script>
   /* ══════════════════════════════════════════════════════════
+   ADMIN CONFIG
+══════════════════════════════════════════════════════════ */
+const ADMIN_EMAILS = [
+  "mahmoudmtalatm@gmail.com"
+];
+
+function isAdminUser(user) {
+  return !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
+}
+
+  /* ══════════════════════════════════════════════════════════
    AUTH UI
 ══════════════════════════════════════════════════════════ */
 function updateAuthUI(user) {
   const homeArea = document.getElementById('authAreaHome');
   const quizArea = document.getElementById('authAreaQuiz');
+  const adminBtn = document.getElementById('adminOpenBtn');
+  if (adminBtn) adminBtn.classList.toggle('hidden', !isAdminUser(user));
 
   if (user) {
     // Logged-in state
@@ -5257,13 +5388,365 @@ async function deleteCommunityQuiz(sharedId) {
     const localQuiz = quizzes.find(q => 'sq_' + window._currentUser.uid + '_' + q.id === sharedId);
     if (localQuiz) { delete localQuiz.sharedAt; await saveCustomQuizzesList(quizzes); }
 
-    renderCommunityQuizzes();
-    renderCustomQuizModal();
-  } catch(e) {
-    alert('Failed to remove quiz: ' + (e.message || e));
+/* ══════════════════════════════════════════════════════════
+   ADMIN PANEL — Publish quizzes (custom or community) into
+   the official question bank under a chosen Module/Subject.
+══════════════════════════════════════════════════════════ */
+let adminSourceTab   = 'custom';   // 'custom' | 'community'
+let adminSelectedQuiz = null;      // { title, questions, sourceType, sourceId }
+let adminTargetYear   = '';
+let adminTargetModule = '';
+let adminTargetSubject= '';
+let adminCommunityCache = null;
+let adminBusy = false;
+
+function openAdminPanel() {
+  if (!isAdminUser(window._currentUser)) {
+    alert('You do not have admin access.');
+    return;
+  }
+  adminSourceTab    = 'custom';
+  adminSelectedQuiz = null;
+  adminTargetYear   = '';
+  adminTargetModule = '';
+  adminTargetSubject= '';
+  adminCommunityCache = null;
+  document.getElementById('adminOverlay').classList.remove('hidden');
+  renderAdminPanel();
+}
+
+function closeAdminPanel() {
+  document.getElementById('adminOverlay').classList.add('hidden');
+}
+
+function adminSetSourceTab(tab) {
+  adminSourceTab = tab;
+  adminSelectedQuiz = null;
+  renderAdminPanel();
+}
+
+async function renderAdminPanel() {
+  const body = document.getElementById('adminBody');
+
+  let listHtml = '';
+  if (adminSourceTab === 'custom') {
+    const quizzes = loadCustomQuizzes();
+    if (!quizzes.length) {
+      listHtml = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No custom quizzes found for your account.</div>`;
+    } else {
+      listHtml = quizzes.map(q => {
+        const sel = adminSelectedQuiz && adminSelectedQuiz.sourceType === 'custom' && adminSelectedQuiz.sourceId === q.id;
+        return `
+          <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('custom','${q.id}')">
+            <div class="admin-quiz-item-info">
+              <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
+              <div class="admin-quiz-item-meta">${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
+            </div>
+            <div class="admin-quiz-item-check">✓</div>
+          </div>`;
+      }).join('');
+    }
+  } else {
+    listHtml = `<div style="text-align:center;padding:20px;color:var(--text-muted);">⏳ Loading community quizzes…</div>`;
+  }
+
+  body.innerHTML = `
+    <div class="admin-quiz-source-tabs">
+      <button class="admin-source-tab ${adminSourceTab === 'custom' ? 'active' : ''}" onclick="adminSetSourceTab('custom')">🤖 My Custom Quizzes</button>
+      <button class="admin-source-tab ${adminSourceTab === 'community' ? 'active' : ''}" onclick="adminSetSourceTab('community')">🌐 Community Quizzes</button>
+    </div>
+    <div class="admin-quiz-list" id="adminQuizList">${listHtml}</div>
+    <div id="adminAssignArea"></div>
+  `;
+
+  renderAdminAssignForm();
+
+  if (adminSourceTab === 'community') {
+    if (!adminCommunityCache) {
+      try {
+        const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
+        const shared = [];
+        snap.forEach(d => shared.push(d.data()));
+        shared.sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
+        adminCommunityCache = shared;
+      } catch (e) {
+        document.getElementById('adminQuizList').innerHTML =
+          `<div style="text-align:center;padding:16px;color:#C62828;">❌ Failed to load community quizzes.</div>`;
+        return;
+      }
+    }
+    const shared = adminCommunityCache;
+    const list = document.getElementById('adminQuizList');
+    if (!shared.length) {
+      list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No community quizzes available.</div>`;
+      return;
+    }
+    list.innerHTML = shared.map(q => {
+      const sel = adminSelectedQuiz && adminSelectedQuiz.sourceType === 'community' && adminSelectedQuiz.sourceId === q.id;
+      return `
+        <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('community','${q.id}')">
+          <div class="admin-quiz-item-info">
+            <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
+            <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
+          </div>
+          <div class="admin-quiz-item-check">✓</div>
+        </div>`;
+    }).join('');
   }
 }
-</script>
+
+function adminSelectQuiz(sourceType, sourceId) {
+  let quiz = null;
+  if (sourceType === 'custom') {
+    quiz = loadCustomQuizzes().find(q => q.id === sourceId);
+  } else {
+    quiz = (adminCommunityCache || []).find(q => q.id === sourceId);
+  }
+  if (!quiz) return;
+
+  adminSelectedQuiz = {
+    sourceType,
+    sourceId,
+    title: quiz.title || 'Untitled Quiz',
+    questions: quiz.questions || []
+  };
+
+  renderAdminPanel();
+}
+
+function adminYearOptionsHtml() {
+  return Object.keys(curriculum).map(y =>
+    `<option value="${escapeHtml(y)}" ${adminTargetYear === y ? 'selected' : ''}>${escapeHtml(y)}</option>`
+  ).join('');
+}
+
+function adminModuleOptionsHtml() {
+  const mods = adminTargetYear ? Object.keys(curriculum[adminTargetYear] || {}) : [];
+  if (!mods.length) return `<option value="">— No modules —</option>`;
+  return mods.map(m =>
+    `<option value="${escapeHtml(m)}" ${adminTargetModule === m ? 'selected' : ''}>${escapeHtml(m)}</option>`
+  ).join('');
+}
+
+function adminSubjectOptionsHtml() {
+  const subs = (adminTargetYear && adminTargetModule)
+    ? (curriculum[adminTargetYear][adminTargetModule] || []).filter(n => subjects[n])
+    : [];
+  if (!subs.length) return `<option value="">— No subjects —</option>`;
+  return subs.map(s =>
+    `<option value="${escapeHtml(s)}" ${adminTargetSubject === s ? 'selected' : ''}>${escapeHtml(subjects[s].label || s)}</option>`
+  ).join('');
+}
+
+function adminOnYearChange(val) {
+  adminTargetYear   = val;
+  adminTargetModule = '';
+  adminTargetSubject = '';
+  renderAdminAssignForm();
+}
+function adminOnModuleChange(val) {
+  adminTargetModule = val;
+  adminTargetSubject = '';
+  renderAdminAssignForm();
+}
+function adminOnSubjectChange(val) {
+  adminTargetSubject = val;
+  renderAdminAssignForm();
+}
+
+function renderAdminAssignForm() {
+  const area = document.getElementById('adminAssignArea');
+  if (!area) return;
+
+  if (!adminSelectedQuiz) {
+    area.innerHTML = '';
+    return;
+  }
+
+  area.innerHTML = `
+    <div class="admin-assign-form">
+      <div class="admin-assign-title">Publish "${escapeHtml(adminSelectedQuiz.title)}" (${adminSelectedQuiz.questions.length} q) to:</div>
+
+      <div class="admin-field">
+        <label>Year</label>
+        <select onchange="adminOnYearChange(this.value)">
+          <option value="">— Select year —</option>
+          ${adminYearOptionsHtml()}
+        </select>
+      </div>
+
+      <div class="admin-field">
+        <label>Module</label>
+        <select onchange="adminOnModuleChange(this.value)" ${!adminTargetYear ? 'disabled' : ''}>
+          <option value="">— Select module —</option>
+          ${adminModuleOptionsHtml()}
+        </select>
+      </div>
+
+      <div class="admin-field">
+        <label>Subject</label>
+        <select onchange="adminOnSubjectChange(this.value)" ${!adminTargetModule ? 'disabled' : ''}>
+          <option value="">— Select subject —</option>
+          ${adminSubjectOptionsHtml()}
+        </select>
+      </div>
+
+      <div class="admin-field">
+        <label>Lecture / Topic Name</label>
+        <input type="text" id="adminLectureName" placeholder="e.g. Quiz: Liver Pathology (uploaded)" />
+      </div>
+
+      <button class="admin-assign-btn" id="adminPublishBtn" onclick="adminPublishQuiz()"
+        ${(!adminTargetYear || !adminTargetModule || !adminTargetSubject) ? 'disabled' : ''}>
+        📤 Publish to Question Bank
+      </button>
+      <div class="admin-status" id="adminStatus"></div>
+    </div>
+    <div class="admin-assigned-section" id="adminAssignedSection"></div>
+  `;
+
+  if (adminTargetSubject) renderAdminAssignedList();
+}
+
+async function renderAdminAssignedList() {
+  const sec = document.getElementById('adminAssignedSection');
+  if (!sec) return;
+  sec.innerHTML = `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}"</div>`;
+
+  let entries = [];
+  try {
+    const col = window._collection(window._db, 'publishedQuestions', adminTargetSubject, 'lectures');
+    const snap = await window._getDocs(col);
+    snap.forEach(d => entries.push({ id: d.id, ...d.data() }));
+  } catch (e) {
+    sec.innerHTML += `<div style="color:var(--text-muted);font-size:.82rem;">Could not load published lectures.</div>`;
+    return;
+  }
+
+  if (!entries.length) {
+    sec.innerHTML += `<div style="color:var(--text-muted);font-size:.82rem;">No quizzes have been published to this subject yet.</div>`;
+    return;
+  }
+
+  entries.forEach(e => {
+    sec.innerHTML += `
+      <div class="admin-assigned-item">
+        <div class="admin-assigned-info">
+          <div class="admin-assigned-name">${escapeHtml(e.lectureName || e.id)}</div>
+          <div class="admin-assigned-path">${(e.questions || []).length} question${(e.questions||[]).length !== 1 ? 's' : ''} · ${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)} → ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}</div>
+        </div>
+        <button class="admin-remove-btn" onclick="adminRemovePublished('${e.id}')">Remove</button>
+      </div>`;
+  });
+}
+
+async function adminRemovePublished(lectureId) {
+  if (!confirm('Remove this lecture from the question bank? This affects all users.')) return;
+  try {
+    await window._deleteDoc(window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId));
+    // Remove from in-memory subject too
+    const lectures = subjects[adminTargetSubject].lectures;
+    for (const key of Object.keys(lectures)) {
+      if (lectures[key].__publishedId === lectureId || key === lectureId) {
+        delete lectures[key];
+      }
+    }
+    renderAdminAssignedList();
+    if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
+  } catch (e) {
+    alert('Failed to remove: ' + (e.message || e));
+  }
+}
+
+async function adminPublishQuiz() {
+  if (adminBusy) return;
+  if (!adminSelectedQuiz || !adminTargetSubject) return;
+
+  const nameInput = document.getElementById('adminLectureName');
+  let lectureName = (nameInput?.value || '').trim();
+  if (!lectureName) lectureName = adminSelectedQuiz.title;
+
+  const statusEl = document.getElementById('adminStatus');
+  adminBusy = true;
+  const btn = document.getElementById('adminPublishBtn');
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status">⏳ Publishing…</div>`;
+
+  try {
+    // Restore options order if this quiz came from a shared/community doc
+    let questions = adminSelectedQuiz.questions;
+    if (adminSelectedQuiz.sourceType === 'community') {
+      questions = restoreOptionsOrder(questions);
+      // Hydrate any shared images so q.image is present before saving
+      await hydrateSharedQuizImages(adminSelectedQuiz.sourceId, questions);
+    } else {
+      // Make sure custom-quiz images are hydrated too
+      await hydrateQuizImages(questions);
+    }
+
+    // Deep-clone + strip storage-only sentinels — published questions should be self-contained
+    const cleanQuestions = JSON.parse(JSON.stringify(questions)).map(q => {
+      delete q.imageUrl;
+      delete q.sharedImageIdx;
+      return q;
+    });
+
+    const lectureId = 'pub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
+    await window._setDoc(ref, cleanForFirestore({
+      id: lectureId,
+      lectureName,
+      questions: cleanQuestions,
+      sourceTitle: adminSelectedQuiz.title,
+      sourceType: adminSelectedQuiz.sourceType,
+      publishedBy: window._currentUser ? window._currentUser.uid : null,
+      publishedAt: Date.now()
+    }));
+
+    // Merge into the in-memory subject so it's usable immediately
+    if (!subjects[adminTargetSubject].lectures) subjects[adminTargetSubject].lectures = {};
+    subjects[adminTargetSubject].lectures[lectureName] = cleanQuestions;
+
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Published "${escapeHtml(lectureName)}" to ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}!</div>`;
+    if (nameInput) nameInput.value = '';
+
+    // Refresh subject view if currently open
+    if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
+
+    renderAdminAssignedList();
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ Failed: ${escapeHtml(e.message || String(e))}</div>`;
+  } finally {
+    adminBusy = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Load all previously-published questions into `subjects`
+   so they appear as extra lectures for every user.
+══════════════════════════════════════════════════════════ */
+async function loadPublishedQuestionsIntoSubjects() {
+  if (!window._db) return;
+  for (const subjName of Object.keys(subjects)) {
+    try {
+      const col = window._collection(window._db, 'publishedQuestions', subjName, 'lectures');
+      const snap = await window._getDocs(col);
+      if (snap.empty) continue;
+      if (!subjects[subjName].lectures) subjects[subjName].lectures = {};
+      snap.forEach(d => {
+        const data = d.data();
+        const name = data.lectureName || d.id;
+        subjects[subjName].lectures[name] = data.questions || [];
+      });
+    } catch (e) {
+      // Subject may not have a 'publishedQuestions' doc yet — ignore
+    }
+  }
+  // If a subject is already open, refresh its lecture list
+  if (selectedSubject) selectSubject(selectedSubject);
+}
+
 <script type="module">
   import { initializeApp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -5301,6 +5784,9 @@ const firebaseConfig = {
   window._deleteDoc        = deleteDoc;
   window._signInWithPopup  = signInWithPopup;
   window._signOut          = signOut;
+
+  // Load admin-published quiz questions into the question bank for everyone
+  loadPublishedQuestionsIntoSubjects();
 
   // Watch login state — fires immediately on page load
   onAuthStateChanged(auth, async user => {
