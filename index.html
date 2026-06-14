@@ -368,8 +368,18 @@
     }
     .r-opt-pfx { font-weight: 800; min-width: 18px; }
 
-    .results-footer { padding: 12px 24px; flex-shrink: 0; display: flex; justify-content: center; }
+    .results-footer { padding: 12px 24px; flex-shrink: 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
     .btn-home { background: var(--accent); color: white; padding: 12px 32px; font-size: 1rem; border-radius: 8px; }
+    .ai-apikey-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #F3E5F5; color: #6A1B9A;
+      border: 1.5px solid #CE93D8; border-radius: 8px;
+      padding: 10px 18px; font-family: var(--font); font-size: .88rem; font-weight: 700;
+      cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .ai-apikey-btn:hover { background: #E1BEE7; border-color: #AB47BC; }
+    .ai-apikey-btn.has-key { background: #E8F5E9; color: #2E7D32; border-color: #A5D6A7; }
+    .ai-apikey-btn.has-key:hover { background: #C8E6C9; border-color: #66BB6A; }
 
     /* ── UTILS ── */
     .hidden { display: none !important; }
@@ -1594,6 +1604,17 @@
     <div class="results-footer">
       <button class="btn btn-home" onclick="goHome()">⟵&nbsp; Back to Home</button>
       <button class="ai-explain-all-btn" id="explainAllBtn" onclick="explainAllQuestions()">🤖&nbsp; Explain All Questions</button>
+      <button class="ai-apikey-btn" id="explainApiKeyBtn" onclick="openExplainKeyModal()">🔑&nbsp; Add API Key</button>
+    </div>
+    <!-- API Key Modal -->
+    <div id="explainKeyModalOverlay" class="hidden" style="position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)closeExplainKeyModal()">
+      <div style="background:#fff;border-radius:14px;padding:24px 26px;max-width:480px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <span style="font-size:1.05rem;font-weight:800;color:var(--text-main);">🔑 Gemini API Key</span>
+          <button onclick="closeExplainKeyModal()" style="background:#f5f5f5;border:none;border-radius:6px;padding:5px 10px;font-size:1rem;cursor:pointer;color:#555;">✕</button>
+        </div>
+        <div id="explainKeyModalBody"></div>
+      </div>
     </div>
   </div>
 
@@ -2375,6 +2396,9 @@ if (changeLog.length > 0) {
 
     body.appendChild(card);
   });
+
+  // Sync the persistent API key button label/state with whether a key is saved
+  updateExplainApiKeyBtn();
 }
 
 function launchConfetti() {
@@ -2976,6 +3000,32 @@ function renderExplainKeyPrompt(panelEl, onSave) {
     </div>`;
   window._explainKeySaveCallback = onSave;
   setTimeout(() => { const inp = document.getElementById('explainKeyInput'); if (inp) inp.focus(); }, 50);
+}
+
+/* ── API Key modal (results footer) ── */
+function openExplainKeyModal() {
+  const overlay = document.getElementById('explainKeyModalOverlay');
+  const body    = document.getElementById('explainKeyModalBody');
+  if (!overlay || !body) return;
+  overlay.classList.remove('hidden');
+  overlay.style.display = 'flex';
+  renderExplainKeyPrompt(body, (key) => {
+    closeExplainKeyModal();
+    updateExplainApiKeyBtn();
+  });
+}
+
+function closeExplainKeyModal() {
+  const overlay = document.getElementById('explainKeyModalOverlay');
+  if (overlay) { overlay.classList.add('hidden'); overlay.style.display = 'none'; }
+}
+
+function updateExplainApiKeyBtn() {
+  const btn = document.getElementById('explainApiKeyBtn');
+  if (!btn) return;
+  const hasKey = !!getExplainKey();
+  btn.classList.toggle('has-key', hasKey);
+  btn.innerHTML = hasKey ? '🔑&nbsp; Change API Key' : '🔑&nbsp; Add API Key';
 }
 
 function handleExplainToggleKey() {
