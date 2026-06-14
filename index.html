@@ -735,7 +735,7 @@
   font-family: var(--font); font-size: .82rem; background: #fff;
 }
 .cq-preview-list {
-  max-height: 260px; overflow-y: auto; border: 1px solid #D8EAF7; border-radius: 8px;
+  max-height: 480px; overflow-y: auto; border: 1px solid #D8EAF7; border-radius: 8px;
   padding: 10px 12px; background: #F7FBFF; margin: 10px 0;
 }
 .cq-preview-q { font-size: .85rem; padding: 8px 0; border-bottom: 1px solid #E3F2FD; }
@@ -743,6 +743,81 @@
 .cq-preview-q .cq-pq-num { font-weight: 800; color: var(--accent); }
 .cq-preview-q .cq-pq-opt { padding-left: 16px; color: var(--text-muted); }
 .cq-preview-q .cq-pq-opt.cq-correct { color: var(--correct-fg); font-weight: 700; }
+
+/* ── Editable preview ── */
+.cq-editable-q {
+  padding: 12px 14px 14px;
+  border-bottom: 1.5px solid #D8EAF7;
+}
+.cq-editable-q:last-child { border-bottom: none; }
+.cq-editable-q:hover { background: #FAFCFF; }
+.cq-edit-textarea {
+  width: 100%; padding: 7px 10px; border: 1.5px solid #B0D4F0; border-radius: 6px;
+  font-family: var(--font); font-size: .88rem; color: var(--text-main);
+  background: #fff; outline: none; resize: vertical; line-height: 1.5;
+  transition: border-color .2s, box-shadow .2s;
+}
+.cq-edit-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.13); }
+.cq-edit-reask-btn {
+  background: #EDE7F6; color: #4527A0; border: 1.5px solid #B39DDB;
+  border-radius: 7px; padding: 5px 10px; font-family: var(--font);
+  font-size: .75rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: background .15s; flex-shrink: 0;
+}
+.cq-edit-reask-btn:hover { background: #D1C4E9; }
+.cq-opt-edit-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; border-radius: 7px; border: 1.5px solid #D8EAF7;
+  background: #fff; transition: border-color .15s, background .15s;
+}
+.cq-opt-edit-row.cq-opt-correct {
+  border-color: var(--correct-fg); background: #F0FBF0;
+}
+.cq-opt-correct-radio { display: flex; align-items: center; cursor: pointer; flex-shrink: 0; }
+.cq-opt-correct-radio input[type="radio"] { display: none; }
+.cq-radio-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #B0D4F0; background: #fff; display: block;
+  transition: border-color .15s, background .15s;
+  position: relative;
+}
+.cq-opt-correct-radio input[type="radio"]:checked + .cq-radio-dot {
+  border-color: var(--correct-fg); background: var(--correct-fg);
+}
+.cq-opt-correct-radio input[type="radio"]:checked + .cq-radio-dot::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 6px; height: 6px; background: white; border-radius: 50%;
+}
+.cq-opt-key {
+  font-weight: 800; color: var(--accent); font-size: .83rem; flex-shrink: 0; min-width: 16px;
+}
+.cq-opt-text-input {
+  flex: 1; padding: 5px 8px; border: 1px solid transparent; border-radius: 5px;
+  font-family: var(--font); font-size: .85rem; color: var(--text-main);
+  background: transparent; outline: none; transition: border-color .15s, background .15s;
+}
+.cq-opt-text-input:focus { border-color: #B0D4F0; background: #fff; }
+.cq-correct-badge {
+  font-size: .72rem; font-weight: 800; color: var(--correct-fg);
+  background: #E8F5E9; border: 1px solid #A5D6A7; border-radius: 10px;
+  padding: 2px 7px; white-space: nowrap; flex-shrink: 0;
+}
+.cq-img-action-btn {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  background: #EEF7FF; color: var(--accent); border: 1.5px solid #B0D4F0;
+  border-radius: 6px; padding: 5px 10px; font-family: var(--font);
+  font-size: .78rem; font-weight: 700; transition: background .15s;
+}
+.cq-img-action-btn:hover { background: #DCF0FF; }
+.cq-img-remove-btn { background: #FFF0F0; color: #C62828; border-color: #EF9A9A; }
+.cq-img-remove-btn:hover { background: #FFDDDD; }
+.cq-img-upload-label {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  background: #F7FBFF; color: var(--text-muted); border: 1.5px dashed #B0D4F0;
+  border-radius: 6px; padding: 5px 12px; font-family: var(--font);
+  font-size: .78rem; font-weight: 700; transition: all .15s;
+}
+.cq-img-upload-label:hover { border-color: var(--accent); color: var(--accent); background: #EEF7FF; }
 
 .cq-reextract-banner {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -4319,28 +4394,403 @@ function renderCQPreview() {
   if (!area) return;
   if (!cqGeneratedQuestions) { area.innerHTML = ''; return; }
 
-  let html = `<div class="cq-preview-list">`;
+  // All next-available option keys
+  const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 0 10px;">
+    <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;">
+      ✏️ Review &amp; Edit — ${cqGeneratedQuestions.length} question${cqGeneratedQuestions.length !== 1 ? 's' : ''}
+    </div>
+    <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
+      Click any field to edit &nbsp;·&nbsp; 🔘 = correct answer &nbsp;·&nbsp; 🤖 = re-ask AI
+    </div>
+  </div>`;
+  html += `<div class="cq-preview-list" id="cqPreviewList">`;
+
   cqGeneratedQuestions.forEach((q, i) => {
-    html += `<div class="cq-preview-q"><div><span class="cq-pq-num">Q${i + 1}.</span> ${escapeHtml(q.question)}</div>`;
+    const optEntries = getOptionEntries(q);
+    const usedKeys   = optEntries.map(([k]) => k);
+    const nextKey    = ALL_KEYS.find(k => !usedKeys.includes(k));
+
+    html += `<div class="cq-preview-q cq-editable-q" id="cqQ_${i}">`;
+
+    /* ── Question header ── */
+    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+      <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
+        border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
+      <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
+      <button class="cq-edit-reask-btn" title="Re-ask AI to re-extract this specific question"
+        onclick="cqReaskQuestion(${i})">🤖 Re-ask AI</button>
+      <button class="cq-edit-reask-btn" title="Delete this question"
+        onclick="cqDeleteQuestion(${i})"
+        style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
+    </div>`;
+
+    /* ── Question textarea ── */
+    html += `<textarea class="cq-edit-textarea" rows="2"
+      oninput="cqEditQuestion(${i}, this.value)"
+      style="width:100%;resize:vertical;margin-bottom:8px;">${escapeHtml(q.question)}</textarea>`;
+
+    /* ── Image area ── */
+    html += `<div class="cq-img-edit-row" style="margin-bottom:8px;">`;
     if (q.image) {
-      html += `<div style="margin:8px 0 4px;border-radius:6px;overflow:hidden;border:1.5px solid #B0D4F0;background:#F0F8FF;display:inline-flex;max-width:100%;">
-        <img src="${q.image}" alt="Question image" style="max-width:100%;max-height:180px;object-fit:contain;display:block;" />
+      html += `<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;
+        background:#F0F8FF;border:1.5px solid #B0D4F0;border-radius:8px;padding:8px 10px;">
+        <div style="flex-shrink:0;border-radius:5px;overflow:hidden;border:1px solid #D8EAF7;background:#fff;">
+          <img src="${q.image}" alt="Question image"
+            style="max-width:200px;max-height:130px;object-fit:contain;display:block;" />
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;justify-content:center;">
+          <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">📷 Question Image</div>
+          <label class="cq-img-action-btn" title="Upload a different image">
+            🔄 Change Image
+            <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
+          </label>
+          <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqRemoveImage(${i})" type="button">🗑️ Remove Image</button>
+          ${(cqSelectedFile || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
+            style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
+        </div>
       </div>`;
     } else if (q.has_image) {
-      html += `<div style="margin:6px 0 4px;padding:6px 10px;background:#FFF3E0;border:1px dashed #E65100;border-radius:6px;font-size:.78rem;color:#E65100;font-weight:700;">⚠️ Image could not be extracted from source</div>`;
+      html += `<div style="padding:8px 12px;background:#FFF3E0;border:1.5px dashed #E65100;
+        border-radius:7px;font-size:.78rem;color:#795500;font-weight:700;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          ⚠️ AI detected an image for this question but couldn't extract it
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <label class="cq-img-action-btn" style="color:var(--accent);border-color:var(--accent);" title="Upload image manually">
+            📎 Upload Image Manually
+            <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
+          </label>
+          ${(cqSelectedFile || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
+            style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
+        </div>
+      </div>`;
+    } else {
+      html += `<label class="cq-img-upload-label" title="Attach an image to this question">
+        🖼️ Add Image (optional)
+        <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
+      </label>`;
     }
-    getOptionEntries(q).forEach(([k, v]) => {
+    html += `</div>`; // end img-edit-row
+
+    /* ── Options label ── */
+    html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-muted);
+      text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">
+      Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with 🔘</span>
+    </div>`;
+
+    /* ── Options rows ── */
+    html += `<div style="display:flex;flex-direction:column;gap:5px;" id="cqOpts_${i}">`;
+    optEntries.forEach(([k, v]) => {
       const isCorrect = k === q.answer;
-      html += `<div class="cq-pq-opt${isCorrect ? ' cq-correct' : ''}">${escapeHtml(k)}. ${escapeHtml(v)}${isCorrect ? ' ✔' : ''}</div>`;
+      html += `<div class="cq-opt-edit-row${isCorrect ? ' cq-opt-correct' : ''}" id="cqOptRow_${i}_${k}">
+        <label class="cq-opt-correct-radio" title="Set as correct answer">
+          <input type="radio" name="cqAnswer_${i}" value="${k}" ${isCorrect ? 'checked' : ''}
+            onchange="cqSetAnswer(${i}, '${k}')" />
+          <span class="cq-radio-dot"></span>
+        </label>
+        <span class="cq-opt-key">${k}.</span>
+        <input type="text" class="cq-opt-text-input" value="${escapeHtml(v)}"
+          oninput="cqEditOption(${i}, '${k}', this.value)"
+          placeholder="Option ${k} text…" />
+        ${isCorrect ? '<span class="cq-correct-badge">✔ Correct</span>' : ''}
+        <button onclick="cqDeleteOption(${i}, '${k}')" type="button" title="Remove this option"
+          style="background:none;border:none;cursor:pointer;color:#EF9A9A;font-size:.9rem;
+          padding:2px 4px;border-radius:4px;flex-shrink:0;line-height:1;transition:color .15s;"
+          onmouseover="this.style.color='#C62828'" onmouseout="this.style.color='#EF9A9A'">✕</button>
+      </div>`;
     });
-    html += `</div>`;
+    html += `</div>`; // end opts
+
+    /* ── Add option button (if there are remaining keys) ── */
+    if (nextKey) {
+      html += `<button onclick="cqAddOption(${i})" type="button"
+        style="margin-top:5px;background:#F0F8FF;color:var(--accent);border:1.5px dashed #B0D4F0;
+        border-radius:7px;padding:5px 12px;font-family:var(--font);font-size:.78rem;font-weight:700;
+        cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.background='#EEF7FF';"
+        onmouseout="this.style.borderColor='#B0D4F0';this.style.background='#F0F8FF';">
+        ＋ Add Option ${nextKey}
+      </button>`;
+    }
+
+    /* ── Re-ask / re-extract status area ── */
+    html += `<div id="cqReaskStatus_${i}" style="margin-top:6px;"></div>`;
+
+    html += `</div>`; // end .cq-editable-q
   });
-  html += `</div>
-  <div class="cq-input-row">
+
+  html += `</div>`;
+
+  /* ── Add question + save/discard ── */
+  html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="cq-btn" onclick="saveGeneratedCustomQuiz()">💾 Save Quiz</button>
+    <button class="cq-btn cq-btn-secondary" onclick="cqAddBlankQuestion()"
+      style="background:#4CAF50;">＋ Add Question</button>
     <button class="cq-btn cq-btn-secondary" onclick="discardGeneratedQuiz()">✖ Discard</button>
   </div>`;
+
   area.innerHTML = html;
+}
+
+/* ── Edit helpers for the preview ── */
+function cqEditQuestion(idx, val) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  cqGeneratedQuestions[idx].question = val;
+}
+
+function cqEditOption(idx, key, val) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  cqGeneratedQuestions[idx].options[key] = val;
+  // keep optionsOrder in sync
+  const order = cqGeneratedQuestions[idx].optionsOrder;
+  if (order) {
+    const entry = order.find(o => o.key === key);
+    if (entry) entry.value = val;
+  }
+}
+
+function cqSetAnswer(idx, key) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  cqGeneratedQuestions[idx].answer = key;
+  // Re-render just the option rows for this question to update correct highlights
+  const q = cqGeneratedQuestions[idx];
+  getOptionEntries(q).forEach(([k]) => {
+    const row = document.getElementById(`cqOptRow_${idx}_${k}`);
+    if (!row) return;
+    const isNowCorrect = k === key;
+    row.classList.toggle('cq-opt-correct', isNowCorrect);
+    // Update or remove correct badge
+    let badge = row.querySelector('.cq-correct-badge');
+    if (isNowCorrect && !badge) {
+      badge = document.createElement('span');
+      badge.className = 'cq-correct-badge';
+      badge.textContent = '✔ Correct';
+      row.appendChild(badge);
+    } else if (!isNowCorrect && badge) {
+      badge.remove();
+    }
+  });
+}
+
+function cqRemoveImage(idx) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  cqGeneratedQuestions[idx].image    = undefined;
+  cqGeneratedQuestions[idx].has_image = false;
+  renderCQPreview();
+}
+
+function cqReplaceImage(idx, event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file || !cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const dataUrl = reader.result;
+    // Compress before storing
+    try {
+      cqGeneratedQuestions[idx].image    = await compressImageDataUrl(dataUrl);
+      cqGeneratedQuestions[idx].has_image = true;
+    } catch(e) {
+      cqGeneratedQuestions[idx].image    = dataUrl;
+      cqGeneratedQuestions[idx].has_image = true;
+    }
+    renderCQPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ── Delete a question from the preview ── */
+function cqDeleteQuestion(idx) {
+  if (!cqGeneratedQuestions) return;
+  if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
+  cqGeneratedQuestions.splice(idx, 1);
+  renderCQPreview();
+}
+
+/* ── Add a blank question at the end ── */
+function cqAddBlankQuestion() {
+  if (!cqGeneratedQuestions) cqGeneratedQuestions = [];
+  cqGeneratedQuestions.push({
+    question: '',
+    options: { A: '', B: '', C: '', D: '' },
+    optionsOrder: [
+      { key: 'A', value: '' }, { key: 'B', value: '' },
+      { key: 'C', value: '' }, { key: 'D', value: '' }
+    ],
+    answer: 'A',
+    has_image: false
+  });
+  renderCQPreview();
+  // Scroll to new question
+  setTimeout(() => {
+    const last = document.getElementById(`cqQ_${cqGeneratedQuestions.length - 1}`);
+    if (last) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
+}
+
+/* ── Delete a single option from a question ── */
+function cqDeleteOption(qIdx, key) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[qIdx]) return;
+  const q = cqGeneratedQuestions[qIdx];
+  if (Object.keys(q.options).length <= 2) {
+    alert('A question must have at least 2 options.');
+    return;
+  }
+  delete q.options[key];
+  if (q.optionsOrder) q.optionsOrder = q.optionsOrder.filter(o => o.key !== key);
+  // If we deleted the correct answer, pick first remaining
+  if (q.answer === key) q.answer = Object.keys(q.options)[0] || '';
+  renderCQPreview();
+}
+
+/* ── Add a new blank option to a question ── */
+function cqAddOption(qIdx) {
+  const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[qIdx]) return;
+  const q = cqGeneratedQuestions[qIdx];
+  const usedKeys = Object.keys(q.options);
+  const nextKey = ALL_KEYS.find(k => !usedKeys.includes(k));
+  if (!nextKey) return;
+  q.options[nextKey] = '';
+  if (!q.optionsOrder) q.optionsOrder = usedKeys.map(k => ({ key: k, value: q.options[k] }));
+  q.optionsOrder.push({ key: nextKey, value: '' });
+  renderCQPreview();
+  // Focus the new input
+  setTimeout(() => {
+    const input = document.querySelector(`#cqOptRow_${qIdx}_${nextKey} .cq-opt-text-input`);
+    if (input) input.focus();
+  }, 60);
+}
+
+/* ── Re-extract just the image for a single question from the source file ── */
+async function cqReExtractImage(idx) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  const apiKey = getGeminiKey();
+  if (!apiKey) { alert('Please enter your Gemini API key first.'); return; }
+  const sourceFile = cqSelectedFile || cqLectureFile;
+  if (!sourceFile) { alert('The original source file is no longer available. Please re-upload the file first.'); return; }
+
+  const statusEl = document.getElementById(`cqReaskStatus_${idx}`);
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="padding:7px 11px;font-size:.8rem;"><div class="cq-spinner"></div> Re-extracting image for Q${idx + 1}…</div>`;
+
+  try {
+    const base64Data = await fileToBase64(sourceFile);
+    const mimeType = sourceFile.type || (sourceFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    const questionCopy = JSON.parse(JSON.stringify(cqGeneratedQuestions[idx]));
+    questionCopy.has_image = true;
+    questionCopy.image = undefined;
+    await extractImagesForQuestions([questionCopy], base64Data, mimeType, apiKey);
+    if (questionCopy.image) {
+      cqGeneratedQuestions[idx].image = questionCopy.image;
+      cqGeneratedQuestions[idx].has_image = true;
+      renderCQPreview();
+      setTimeout(() => {
+        const st = document.getElementById(`cqReaskStatus_${idx}`);
+        if (st) { st.innerHTML = `<div class="cq-status success" style="padding:7px 11px;font-size:.8rem;">✅ Image extracted for Q${idx + 1}</div>`; setTimeout(() => { if(st) st.innerHTML=''; }, 3000); }
+      }, 80);
+    } else {
+      if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="padding:7px 11px;font-size:.8rem;">⚠️ Could not extract image — try uploading it manually.</div>`;
+    }
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="padding:7px 11px;font-size:.8rem;">❌ ${escapeHtml(e.message || String(e))}</div>`;
+  }
+}
+
+async function cqReaskQuestion(idx) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  const apiKey = getGeminiKey();
+  if (!apiKey) {
+    alert('Please enter your Gemini API key first.');
+    return;
+  }
+  if (!cqSelectedFile && !cqLectureFile) {
+    alert('The original source file is no longer available. Please re-upload the file first.');
+    return;
+  }
+  const statusEl = document.getElementById(`cqReaskStatus_${idx}`);
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="padding:7px 11px;font-size:.8rem;"><div class="cq-spinner"></div> Re-asking AI for Q${idx + 1}…</div>`;
+
+  const q = cqGeneratedQuestions[idx];
+  const reaskPrompt = `The following is a single MCQ question that was already extracted. Please re-examine the source document and re-extract this specific question (question number ${idx + 1}) with perfect accuracy.
+
+Current extraction:
+Question: ${q.question}
+Options: ${Object.entries(q.options).map(([k,v]) => `${k}: ${v}`).join(' | ')}
+Answer: ${q.answer}
+
+STRICT RULES: Same rules as before — reproduce text exactly, preserve correct answer if marked, set has_image appropriately.
+
+Return ONLY a JSON array with ONE object in the same format:
+[{"question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A","has_image":false}]`;
+
+  try {
+    const sourceFile = cqSelectedFile || cqLectureFile;
+    const base64Data = await fileToBase64(sourceFile);
+    const mimeType   = sourceFile.type ||
+      (sourceFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    const isTxt = sourceFile.type === 'text/plain' || sourceFile.name.toLowerCase().endsWith('.txt');
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    let requestBody;
+    if (isTxt) {
+      const lectureText = await fileToText(sourceFile);
+      requestBody = {
+        contents: [{ parts: [{ text: `SOURCE:\n\n${lectureText}\n\n---\n\n${reaskPrompt}` }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: CQ_RESPONSE_SCHEMA, temperature: 0, maxOutputTokens: 4096 }
+      };
+    } else {
+      requestBody = {
+        contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Data } }, { text: reaskPrompt }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: CQ_RESPONSE_SCHEMA, temperature: 0, maxOutputTokens: 4096 }
+      };
+    }
+
+    const data = await callGeminiWithRetry(url, requestBody, {});
+    const textOut = ((data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || []).map(p => p.text || '').join('');
+    if (!textOut.trim()) throw new Error('AI returned empty response.');
+    const parsed = JSON.parse(textOut);
+    if (!Array.isArray(parsed) || !parsed.length) throw new Error('No question returned.');
+
+    const newQ = parsed[0];
+    const opts = {};
+    Object.entries(newQ.options || {})
+      .filter(([k, v]) => typeof v === 'string' && v.trim())
+      .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
+      .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
+    let answer = (typeof newQ.answer === 'string') ? newQ.answer.trim().toUpperCase() : '';
+    if (!opts[answer]) answer = Object.keys(opts)[0];
+
+    // Preserve existing image
+    const oldImage    = cqGeneratedQuestions[idx].image;
+    const oldHasImage = cqGeneratedQuestions[idx].has_image;
+    cqGeneratedQuestions[idx] = {
+      question: newQ.question,
+      options: opts,
+      optionsOrder: Object.entries(opts).map(([key, value]) => ({ key, value })),
+      answer,
+      has_image: !!newQ.has_image || oldHasImage,
+      image: oldImage
+    };
+
+    // If new extraction says has_image and no image yet, try to extract it
+    if (newQ.has_image && !oldImage) {
+      if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="padding:7px 11px;font-size:.8rem;"><div class="cq-spinner"></div> Extracting image…</div>`;
+      await extractImagesForQuestions([cqGeneratedQuestions[idx]], base64Data, mimeType, apiKey);
+    }
+
+    renderCQPreview();
+    // Scroll to updated question
+    setTimeout(() => {
+      const el = document.getElementById(`cqQ_${idx}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const st = document.getElementById(`cqReaskStatus_${idx}`);
+      if (st) { st.innerHTML = `<div class="cq-status success" style="padding:7px 11px;font-size:.8rem;">✅ Q${idx+1} updated by AI</div>`; setTimeout(() => { if(st) st.innerHTML=''; }, 3000); }
+    }, 80);
+
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="padding:7px 11px;font-size:.8rem;">❌ ${escapeHtml(e.message || String(e))}</div>`;
+  }
 }
 
 function discardGeneratedQuiz() {
