@@ -3033,40 +3033,64 @@ function stopExplainQuestion(i) {
   if (_singleCancelToken[i]) _singleCancelToken[i].cancelled = true;
 }
 
+/* ── Render an explanation (own or shared) into its panel, with a Regenerate control ── */
+function displayExplainPanel(i, html) {
+  const panel = document.getElementById(`explainPanel_${i}`);
+  if (!panel) return;
+  panel.innerHTML = html + `
+    <div class="ai-explain-regen-row" style="padding:6px 16px 14px;text-align:right;">
+      <button class="ai-explain-regen-btn" onclick="regenerateExplanation(${i})" style="background:none;border:1.5px solid var(--accent);color:var(--accent);border-radius:6px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:var(--font);">🔄 Regenerate</button>
+    </div>`;
+}
+
+/* ── Force a fresh AI explanation, bypassing the shared pool and any cached copy ── */
+function regenerateExplanation(i) {
+  if (_explainCache[i] === 'loading') return;
+  _explainCache[i]   = undefined;
+  _explainRawText[i] = undefined;
+  const panel = document.getElementById(`explainPanel_${i}`);
+  if (panel) panel.innerHTML = '';
+  explainQuestion(i, true);
+}
+
 /* ── Core: fetch explanation for one question index ── */
-async function explainQuestion(i) {
+async function explainQuestion(i, forceRegenerate = false) {
   const btn    = document.getElementById(`explainBtn_${i}`);
   const panel  = document.getElementById(`explainPanel_${i}`);
   if (!btn || !panel) return;
 
-  // Already shown — toggle off
-  if (_explainCache[i] && _explainCache[i] !== 'loading') {
-    if (panel.innerHTML.trim()) { panel.innerHTML = ''; btn.innerHTML = '🤖 Explain'; return; }
-    panel.innerHTML = _explainCache[i];
-    btn.innerHTML = '🤖 Hide';
-    return;
+  if (!forceRegenerate) {
+    // Already shown — toggle off
+    if (_explainCache[i] && _explainCache[i] !== 'loading') {
+      if (panel.innerHTML.trim()) { panel.innerHTML = ''; btn.innerHTML = '🤖 Explain'; return; }
+      displayExplainPanel(i, _explainCache[i]);
+      btn.innerHTML = '🤖 Hide';
+      return;
+    }
+    if (_explainCache[i] === 'loading') return;
   }
-  if (_explainCache[i] === 'loading') return;
 
   const q = currentQuestions[i];
 
-  // Shared explanation pool — if another user already generated this explanation,
-  // reuse it instantly (no API key required).
-  if (_explainPoolLoadPromise) { try { await _explainPoolLoadPromise; } catch(e) {} }
-  const pooled = await _getExplainFromPool(q.question);
-  if (pooled && pooled.html) {
-    _explainCache[i] = pooled.html;
-    _explainRawText[i] = pooled.text;
-    panel.innerHTML = pooled.html;
-    btn.innerHTML = '🤖 Hide';
-    return;
+  if (!forceRegenerate) {
+    // Shared explanation pool — if another user already generated this explanation,
+    // reuse it instantly (no API key required).
+    if (_explainPoolLoadPromise) { try { await _explainPoolLoadPromise; } catch(e) {} }
+    const pooled = await _getExplainFromPool(q.question);
+    if (pooled && pooled.html) {
+      _explainCache[i] = pooled.html;
+      _explainRawText[i] = pooled.text;
+      displayExplainPanel(i, pooled.html);
+      btn.innerHTML = '🤖 Hide';
+      return;
+    }
   }
 
   const apiKey = getExplainKey();
 
   // No key — show inline prompt
   if (!apiKey) {
-    renderExplainKeyPrompt(panel, (key) => explainQuestion(i));
+    renderExplainKeyPrompt(panel, (key) => explainQuestion(i, forceRegenerate));
     return;
   }
 
@@ -3130,8 +3154,7 @@ async function explainQuestion(i) {
     _explainCache[i] = html;
     _explainRawText[i] = text;
 
-    const p = document.getElementById(`explainPanel_${i}`);
-    if (p) p.innerHTML = html;
+    displayExplainPanel(i, html);
     const b = document.getElementById(`explainBtn_${i}`);
     if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '🤖 Hide'; }
 
@@ -3295,7 +3318,7 @@ async function explainAllQuestions() {
     // Skip already-explained
     if (_explainCache[i] && _explainCache[i] !== 'loading') {
       const p = document.getElementById(`explainPanel_${i}`);
-      if (p && !p.innerHTML.trim()) p.innerHTML = _explainCache[i];
+      if (p && !p.innerHTML.trim()) displayExplainPanel(i, _explainCache[i]);
       const b = document.getElementById(`explainBtn_${i}`);
       if (b) b.innerHTML = '🤖 Hide';
       continue;
