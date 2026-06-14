@@ -1774,14 +1774,17 @@ let wrongToCorrect   = 0;
    INIT — build subject grid
 ══════════════════════════════════════════════════════════ */
 function buildYearGrid() {
-  const yearIcons = { "First Year":"1️⃣", "Second Year":"2️⃣", "Third Year":"3️⃣" };
+  const hardcodedYearIcons = { "First Year":"1️⃣", "Second Year":"2️⃣", "Third Year":"3️⃣" };
   const grid = document.getElementById('yearGrid');
   grid.innerHTML = '';
   Object.keys(curriculum).forEach(year => {
+    const icon = (window._yearIcons && window._yearIcons[year])
+      || hardcodedYearIcons[year]
+      || '🎓';
     const btn = document.createElement('button');
     btn.className = 'year-btn';
     btn.dataset.year = year;
-    btn.innerHTML = `<span class="y-icon">${yearIcons[year]||'📅'}</span>${year}`;
+    btn.innerHTML = `<span class="y-icon">${icon}</span>${year}`;
     btn.onclick = () => selectYear(year);
     if (year === selectedYear) btn.classList.add('active');
     grid.appendChild(btn);
@@ -1818,15 +1821,18 @@ function selectYear(year) {
     return;
   }
 
-  const moduleIcons = {
+  const hardcodedModuleIcons = {
     "GIT and Nutrition":               "🏥",
     "Endocrine System and Metabolism": "🧬"
   };
   modules.forEach(mod => {
+    const icon = (window._moduleIcons && window._moduleIcons[year] && window._moduleIcons[year][mod])
+      || hardcodedModuleIcons[mod]
+      || '📚';
     const btn = document.createElement('button');
     btn.className = 'module-btn';
     btn.dataset.module = mod;
-    btn.innerHTML = `<span class="m-icon">${moduleIcons[mod]||'📚'}</span>${mod}`;
+    btn.innerHTML = `<span class="m-icon">${icon}</span>${mod}`;
     btn.onclick = () => selectModule(mod);
     document.getElementById('moduleGrid').appendChild(btn);
   });
@@ -5725,6 +5731,14 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
       await saveCustomQuizzesList(quizzes);
     } else {
       const ref = window._doc(window._db, 'sharedQuizzes', sourceId);
+      // Admins may not be the original author, so Firestore rules (owner-only delete)
+      // can block the delete. We first claim ownership by writing our UID, then delete.
+      try {
+        await window._setDoc(ref, { authorUid: window._currentUser.uid }, { merge: true });
+      } catch (claimErr) {
+        // If even the claim fails, fall through and attempt direct delete anyway
+        console.warn('Admin ownership claim failed:', claimErr.message);
+      }
       await window._deleteDoc(ref);
       await deleteSharedQuizImages(sourceId);
       adminCommunityCache = (adminCommunityCache || []).filter(q => q.id !== sourceId);
@@ -5736,7 +5750,19 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
     }
     renderAdminPanel();
   } catch (e) {
-    alert('Failed to delete: ' + (e.message || e));
+    const msg = e.message || String(e);
+    const isPermission = /permission.denied|insufficient.permissions/i.test(msg);
+    if (isPermission) {
+      alert(
+        '⚠️ Permission denied by Firestore security rules.\n\n' +
+        'To allow admins to delete any community quiz, update your Firestore rules for the "sharedQuizzes" collection to permit deletes by admin UIDs:\n\n' +
+        'allow delete: if request.auth.uid == resource.data.authorUid\n' +
+        '           || request.auth.uid in [/* your admin UIDs */];\n\n' +
+        'Alternatively, add your UID to an admin allowlist in the rules.'
+      );
+    } else {
+      alert('Failed to delete: ' + msg);
+    }
   }
 }
 
@@ -6411,16 +6437,25 @@ function renderAdminCurriculumPanel() {
             <label>Year Name (e.g. "Fourth Year")</label>
             <input type="text" id="currNewYear" placeholder="Fourth Year" maxlength="40" />
           </div>
+          <div class="curr-field" style="max-width:90px;">
+            <label>Icon (emoji)</label>
+            <input type="text" id="currNewYearIcon" placeholder="🎓" maxlength="4" style="text-align:center;font-size:1.2rem;" />
+          </div>
           <button class="curr-add-btn" onclick="adminAddYear()">Add Year</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          ${iconSuggestions.map(ic => `<span style="cursor:pointer;font-size:1.3rem;" title="${ic}" onclick="document.getElementById('currNewYearIcon').value='${ic}'">${ic}</span>`).join('')}
         </div>
         <div class="curr-status" id="currYearStatus"></div>
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Years</div>
-        <div id="currYearList">${years.length ? years.map(y => `
-          <div class="curr-item-row">
-            <span class="curr-item-name">${escapeHtml(y)}</span>
-            <button class="curr-item-btn edit" onclick="adminRenameYear('${escapeHtml(y)}')">✏️ Rename</button>
+        <div id="currYearList">${years.length ? years.map(y => {
+          const yIcon = (window._yearIcons && window._yearIcons[y]) ? escapeHtml(window._yearIcons[y]) : '🎓';
+          return `<div class="curr-item-row">
+            <span class="curr-item-name">${yIcon} ${escapeHtml(y)}</span>
+            <button class="curr-item-btn edit" onclick="adminRenameYear('${escapeHtml(y)}')">✏️ Edit</button>
             <button class="curr-item-btn del"  onclick="adminDeleteYear('${escapeHtml(y)}')">🗑 Delete</button>
-          </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
+          </div>`;
+        }).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
       </div>
 
       <div class="curr-section">
@@ -6434,19 +6469,29 @@ function renderAdminCurriculumPanel() {
             <label>Module Name (e.g. "Module 5")</label>
             <input type="text" id="currNewModule" placeholder="Module 5" maxlength="60" />
           </div>
+          <div class="curr-field" style="max-width:90px;">
+            <label>Icon (emoji)</label>
+            <input type="text" id="currNewModuleIcon" placeholder="📦" maxlength="4" style="text-align:center;font-size:1.2rem;" />
+          </div>
           <button class="curr-add-btn" onclick="adminAddModule()">Add Module</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          ${iconSuggestions.map(ic => `<span style="cursor:pointer;font-size:1.3rem;" title="${ic}" onclick="document.getElementById('currNewModuleIcon').value='${ic}'">${ic}</span>`).join('')}
         </div>
         <div class="curr-status" id="currModuleStatus"></div>
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Modules</div>
-        <div id="currModuleList">${Object.keys(allModules).length ? Object.keys(allModules).map(m => `
-          <div class="curr-item-row">
+        <div id="currModuleList">${Object.keys(allModules).length ? Object.keys(allModules).map(m => {
+          const yr = allModules[m];
+          const mIcon = (window._moduleIcons && window._moduleIcons[yr] && window._moduleIcons[yr][m]) ? escapeHtml(window._moduleIcons[yr][m]) : '📦';
+          return `<div class="curr-item-row">
             <div style="flex:1;">
-              <div class="curr-item-name">${escapeHtml(m)}</div>
-              <div class="curr-item-sub">in ${escapeHtml(allModules[m])}</div>
+              <div class="curr-item-name">${mIcon} ${escapeHtml(m)}</div>
+              <div class="curr-item-sub">in ${escapeHtml(yr)}</div>
             </div>
-            <button class="curr-item-btn edit" onclick="adminRenameModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">✏️ Rename</button>
-            <button class="curr-item-btn del"  onclick="adminDeleteModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">🗑 Delete</button>
-          </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
+            <button class="curr-item-btn edit" onclick="adminRenameModule('${escapeHtml(yr)}','${escapeHtml(m)}')">✏️ Edit</button>
+            <button class="curr-item-btn del"  onclick="adminDeleteModule('${escapeHtml(yr)}','${escapeHtml(m)}')">🗑 Delete</button>
+          </div>`;
+        }).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
       </div>
 
       <div class="curr-section">
@@ -6507,37 +6552,49 @@ function adminRefreshSubjModules() {
 
 async function adminAddYear() {
   const input  = document.getElementById('currNewYear');
+  const iconIn = document.getElementById('currNewYearIcon');
   const status = document.getElementById('currYearStatus');
   const name   = (input?.value || '').trim();
+  const icon   = (iconIn?.value || '').trim() || '🎓';
   if (!name)          { status.textContent = '⚠️ Please enter a year name.'; status.className = 'curr-status err'; return; }
   if (curriculum[name]) { status.textContent = `⚠️ "${name}" already exists.`; status.className = 'curr-status err'; return; }
   curriculum[name] = {};
+  // Store icon in memory
+  if (!window._yearIcons) window._yearIcons = {};
+  window._yearIcons[name] = icon;
   buildYearGrid();
   status.textContent = '⏳ Saving…'; status.className = 'curr-status';
+  // Persist icon alongside structure
   await saveCurriculumStructure();
   status.textContent = `✅ Year "${name}" added! You can now add modules to it.`;
   status.className = 'curr-status ok';
-  input.value = '';
+  input.value = ''; if (iconIn) iconIn.value = '';
   setTimeout(() => renderAdminCurriculumPanel(), 400);
 }
 
 async function adminAddModule() {
   const yearSel = document.getElementById('currModYear');
   const input   = document.getElementById('currNewModule');
+  const iconIn  = document.getElementById('currNewModuleIcon');
   const status  = document.getElementById('currModuleStatus');
   const yr  = yearSel?.value || '';
   const mod = (input?.value || '').trim();
+  const icon = (iconIn?.value || '').trim() || '📦';
   if (!yr)  { status.textContent = '⚠️ Select a year first.'; status.className = 'curr-status err'; return; }
   if (!mod) { status.textContent = '⚠️ Enter a module name.'; status.className = 'curr-status err'; return; }
   if (!curriculum[yr]) { status.textContent = '⚠️ Year not found.'; status.className = 'curr-status err'; return; }
   if (curriculum[yr][mod]) { status.textContent = `⚠️ Module "${mod}" already exists in ${yr}.`; status.className = 'curr-status err'; return; }
   curriculum[yr][mod] = [];
+  // Store icon in memory
+  if (!window._moduleIcons) window._moduleIcons = {};
+  if (!window._moduleIcons[yr]) window._moduleIcons[yr] = {};
+  window._moduleIcons[yr][mod] = icon;
   buildYearGrid();
   status.textContent = '⏳ Saving…'; status.className = 'curr-status';
   await saveCurriculumStructure();
   status.textContent = `✅ Module "${mod}" added to ${yr}!`;
   status.className = 'curr-status ok';
-  input.value = '';
+  input.value = ''; if (iconIn) iconIn.value = '';
   setTimeout(() => renderAdminCurriculumPanel(), 400);
 }
 
@@ -6642,6 +6699,10 @@ async function loadCurriculumExtensions() {
       if (!curriculum[year][mod].includes(key)) curriculum[year][mod].push(key);
     });
 
+    // Restore year and module icons
+    if (data.yearIcons)   window._yearIcons   = data.yearIcons;
+    if (data.moduleIcons) window._moduleIcons = data.moduleIcons;
+
     buildYearGrid();
   } catch (e) {
     console.warn('Failed to load curriculum extensions:', e);
@@ -6667,6 +6728,9 @@ async function saveCurriculumStructure() {
     data.years   = allYears;
     data.modules = modulesMap;
     if (!data.subjects) data.subjects = {};
+    // Persist icons
+    if (window._yearIcons)   data.yearIcons   = window._yearIcons;
+    if (window._moduleIcons) data.moduleIcons = window._moduleIcons;
     await window._setDoc(ref, cleanForFirestore(data));
   } catch (e) {
     console.warn('Failed to save curriculum structure:', e);
@@ -6852,28 +6916,52 @@ function adminCloseMoveQuiz() {
 
 /* ── YEAR ── */
 async function adminRenameYear(oldName) {
-  const newName = prompt(`Rename year "${oldName}" to:`, oldName);
-  if (!newName || newName.trim() === oldName) return;
-  const n = newName.trim();
-  if (curriculum[n]) { alert(`"${n}" already exists.`); return; }
-  // Migrate in-memory curriculum
-  curriculum[n] = curriculum[oldName];
-  delete curriculum[oldName];
-  // Migrate extensions subjects
-  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
-  const extSnap = await window._getDoc(extRef);
-  const ext = extSnap.exists() ? extSnap.data() : {};
-  // Update subjects that referenced old year
-  if (ext.subjects) {
-    Object.values(ext.subjects).forEach(s => { if (s.year === oldName) s.year = n; });
+  const newName = prompt(`Edit year name "${oldName}":`, oldName);
+  if (!newName || newName.trim() === oldName) {
+    // Still allow icon edit even if name unchanged
+    if (newName === null) return;
   }
-  // Update modules map
-  if (ext.modules && ext.modules[oldName]) {
-    ext.modules[n] = ext.modules[oldName];
-    delete ext.modules[oldName];
+  const currentIcon = (window._yearIcons && window._yearIcons[oldName]) || '🎓';
+  const newIcon = prompt(`Edit icon for year "${newName?.trim() || oldName}":`, currentIcon);
+  if (newIcon === null) return; // cancelled
+
+  const n = (newName || oldName).trim();
+  if (n !== oldName) {
+    if (curriculum[n]) { alert(`"${n}" already exists.`); return; }
+    // Migrate in-memory curriculum
+    curriculum[n] = curriculum[oldName];
+    delete curriculum[oldName];
+    // Migrate extensions subjects
+    const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const extSnap = await window._getDoc(extRef);
+    const ext = extSnap.exists() ? extSnap.data() : {};
+    if (ext.subjects) {
+      Object.values(ext.subjects).forEach(s => { if (s.year === oldName) s.year = n; });
+    }
+    if (ext.modules && ext.modules[oldName]) {
+      ext.modules[n] = ext.modules[oldName];
+      delete ext.modules[oldName];
+    }
+    // Migrate icons
+    if (!window._yearIcons) window._yearIcons = {};
+    window._yearIcons[n] = newIcon.trim() || currentIcon;
+    delete window._yearIcons[oldName];
+    ext.years = Object.keys(curriculum);
+    if (!ext.yearIcons) ext.yearIcons = {};
+    ext.yearIcons[n] = window._yearIcons[n];
+    delete ext.yearIcons[oldName];
+    await window._setDoc(extRef, cleanForFirestore(ext));
+  } else {
+    // Only icon changed
+    if (!window._yearIcons) window._yearIcons = {};
+    window._yearIcons[oldName] = newIcon.trim() || currentIcon;
+    const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const extSnap = await window._getDoc(extRef);
+    const ext = extSnap.exists() ? extSnap.data() : {};
+    if (!ext.yearIcons) ext.yearIcons = {};
+    ext.yearIcons[oldName] = window._yearIcons[oldName];
+    await window._setDoc(extRef, cleanForFirestore(ext));
   }
-  ext.years = Object.keys(curriculum);
-  await window._setDoc(extRef, cleanForFirestore(ext));
   buildYearGrid();
   renderAdminCurriculumPanel();
 }
@@ -6902,24 +6990,51 @@ This also removes ${modCount} module(s) and ${subjCount} subject placement(s) fr
 
 /* ── MODULE ── */
 async function adminRenameModule(year, oldMod) {
-  const newMod = prompt(`Rename module "${oldMod}" (in ${year}) to:`, oldMod);
-  if (!newMod || newMod.trim() === oldMod) return;
-  const n = newMod.trim();
-  if (curriculum[year][n]) { alert(`"${n}" already exists in ${year}.`); return; }
-  curriculum[year][n] = curriculum[year][oldMod];
-  delete curriculum[year][oldMod];
-  // Update subjects in extensions
-  const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
-  const extSnap = await window._getDoc(extRef);
-  const ext = extSnap.exists() ? extSnap.data() : {};
-  if (ext.subjects) {
-    Object.values(ext.subjects).forEach(s => { if (s.year === year && s.module === oldMod) s.module = n; });
+  const newMod = prompt(`Edit module name "${oldMod}" (in ${year}):`, oldMod);
+  if (newMod === null) return;
+  const currentIcon = (window._moduleIcons && window._moduleIcons[year] && window._moduleIcons[year][oldMod]) || '📦';
+  const newIcon = prompt(`Edit icon for module "${newMod?.trim() || oldMod}":`, currentIcon);
+  if (newIcon === null) return;
+
+  const n = (newMod || oldMod).trim();
+  if (n !== oldMod) {
+    if (curriculum[year][n]) { alert(`"${n}" already exists in ${year}.`); return; }
+    curriculum[year][n] = curriculum[year][oldMod];
+    delete curriculum[year][oldMod];
+    // Update subjects in extensions
+    const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const extSnap = await window._getDoc(extRef);
+    const ext = extSnap.exists() ? extSnap.data() : {};
+    if (ext.subjects) {
+      Object.values(ext.subjects).forEach(s => { if (s.year === year && s.module === oldMod) s.module = n; });
+    }
+    if (ext.modules && ext.modules[year]) {
+      ext.modules[year] = Object.keys(curriculum[year]);
+    }
+    ext.years = Object.keys(curriculum);
+    // Migrate module icon
+    if (!window._moduleIcons) window._moduleIcons = {};
+    if (!window._moduleIcons[year]) window._moduleIcons[year] = {};
+    window._moduleIcons[year][n] = newIcon.trim() || currentIcon;
+    delete window._moduleIcons[year][oldMod];
+    if (!ext.moduleIcons) ext.moduleIcons = {};
+    if (!ext.moduleIcons[year]) ext.moduleIcons[year] = {};
+    ext.moduleIcons[year][n] = window._moduleIcons[year][n];
+    delete ext.moduleIcons[year][oldMod];
+    await window._setDoc(extRef, cleanForFirestore(ext));
+  } else {
+    // Only icon changed
+    if (!window._moduleIcons) window._moduleIcons = {};
+    if (!window._moduleIcons[year]) window._moduleIcons[year] = {};
+    window._moduleIcons[year][oldMod] = newIcon.trim() || currentIcon;
+    const extRef  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const extSnap = await window._getDoc(extRef);
+    const ext = extSnap.exists() ? extSnap.data() : {};
+    if (!ext.moduleIcons) ext.moduleIcons = {};
+    if (!ext.moduleIcons[year]) ext.moduleIcons[year] = {};
+    ext.moduleIcons[year][oldMod] = window._moduleIcons[year][oldMod];
+    await window._setDoc(extRef, cleanForFirestore(ext));
   }
-  if (ext.modules && ext.modules[year]) {
-    ext.modules[year] = Object.keys(curriculum[year]);
-  }
-  ext.years = Object.keys(curriculum);
-  await window._setDoc(extRef, cleanForFirestore(ext));
   buildYearGrid();
   renderAdminCurriculumPanel();
 }
