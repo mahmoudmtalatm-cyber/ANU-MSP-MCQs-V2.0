@@ -1266,6 +1266,55 @@
 }
 .admin-remove-btn:hover { background: #FFCDD2; }
 
+/* Admin panel top-level tabs (Publish / Curriculum) */
+.admin-panel-tabs {
+  display: flex; gap: 0; border-bottom: 2px solid #D8EAF7; flex-shrink: 0;
+  background: #F0F8FF;
+}
+.admin-panel-tab {
+  flex: 1; padding: 11px 10px; border: none; background: none;
+  font-family: var(--font); font-size: .85rem; font-weight: 700;
+  color: var(--text-muted); cursor: pointer; border-bottom: 3px solid transparent;
+  margin-bottom: -2px; transition: all .15s;
+}
+.admin-panel-tab.active { color: #1B4F72; border-bottom-color: #1B4F72; background: white; }
+.admin-panel-tab:hover:not(.active) { background: #E8F4FB; color: var(--text-main); }
+
+/* Curriculum manager */
+.curr-section {
+  background: #F7FBFF; border: 1.5px solid #B0D4F0; border-radius: 10px; padding: 16px; margin-bottom: 4px;
+}
+.curr-section-title {
+  font-size: .8rem; font-weight: 800; color: #1B4F72; text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px;
+}
+.curr-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
+.curr-row label { display: block; font-size: .77rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+.curr-row .curr-field { flex: 1; min-width: 100px; }
+.curr-row input, .curr-row select {
+  width: 100%; padding: 9px 11px; border: 1.5px solid #B0D4F0; border-radius: 7px;
+  font-family: var(--font); font-size: .88rem; background: white; color: var(--text-main); outline: none;
+}
+.curr-row input:focus, .curr-row select:focus { border-color: #1B4F72; box-shadow: 0 0 0 3px rgba(27,79,114,.12); }
+.curr-add-btn {
+  background: #1B4F72; color: #fff; border: none; border-radius: 7px;
+  padding: 9px 16px; font-family: var(--font); font-size: .84rem; font-weight: 800;
+  cursor: pointer; white-space: nowrap; transition: filter .15s; flex-shrink: 0;
+}
+.curr-add-btn:hover { filter: brightness(1.12); }
+.curr-add-btn.secondary { background: #2E7D32; }
+.curr-status { font-size: .82rem; color: var(--text-muted); padding: 4px 0; min-height: 22px; }
+.curr-status.ok { color: #2E7D32; font-weight: 700; }
+.curr-status.err { color: #C62828; font-weight: 700; }
+.curr-list {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.curr-tag {
+  background: #E3F2FD; border: 1px solid #90CAF9; color: #0D47A1;
+  border-radius: 20px; padding: 3px 12px; font-size: .77rem; font-weight: 700;
+}
+.curr-tag.mod { background: #F3E5F5; border-color: #CE93D8; color: #4A148C; }
+.curr-tag.subj { background: #E8F5E9; border-color: #A5D6A7; color: #1B5E20; }
+
 /* API key prompt for explanations */
 .ai-key-prompt {
   background: #F8F5FF; border: 1.5px solid #B39DDB; border-radius: 10px;
@@ -1346,8 +1395,12 @@
   <div id="adminOverlay" class="admin-overlay hidden" onclick="if(event.target===this)closeAdminPanel()">
     <div class="admin-modal">
       <div class="admin-modal-header">
-        <h2>🛠️&nbsp; Admin Panel — Publish Quiz to Question Bank</h2>
+        <h2>🛠️&nbsp; Admin Panel</h2>
         <button onclick="closeAdminPanel()">✕</button>
+      </div>
+      <div class="admin-panel-tabs" id="adminPanelTabs">
+        <button class="admin-panel-tab active" id="adminTabPublish" onclick="adminSwitchTab('publish')">📤 Publish Quizzes</button>
+        <button class="admin-panel-tab" id="adminTabCurriculum" onclick="adminSwitchTab('curriculum')">📚 Manage Curriculum</button>
       </div>
       <div class="admin-body" id="adminBody"></div>
     </div>
@@ -1676,18 +1729,21 @@ let wrongToCorrect   = 0;
 /* ══════════════════════════════════════════════════════════
    INIT — build subject grid
 ══════════════════════════════════════════════════════════ */
-(function init() {
+function buildYearGrid() {
   const yearIcons = { "First Year":"1️⃣", "Second Year":"2️⃣", "Third Year":"3️⃣" };
   const grid = document.getElementById('yearGrid');
+  grid.innerHTML = '';
   Object.keys(curriculum).forEach(year => {
     const btn = document.createElement('button');
     btn.className = 'year-btn';
     btn.dataset.year = year;
     btn.innerHTML = `<span class="y-icon">${yearIcons[year]||'📅'}</span>${year}`;
     btn.onclick = () => selectYear(year);
+    if (year === selectedYear) btn.classList.add('active');
     grid.appendChild(btn);
   });
-})();
+}
+buildYearGrid();
 
 /* ══════════════════════════════════════════════════════════
    SUBJECT SELECTION
@@ -5139,6 +5195,77 @@ async function deleteSharedQuizImages(sharedId) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   PUBLISHED LECTURE IMAGE HELPERS
+   Images are stored in a subcollection to avoid Firestore's
+   1 MB per-document limit.  The published lecture doc stores
+   a `pubImageIdx` sentinel (the question index) instead of
+   the raw base64 string, just like sharedImageIdx works for
+   community quizzes.  This makes published lectures fully
+   self-contained and independent of the source quiz.
+   Path: publishedQuestions/{subject}/lectures/{lectureId}/images/{questionIdx}
+══════════════════════════════════════════════════════════ */
+
+/** Upload images for a published lecture into its images subcollection.
+ *  Modifies questions in-place: replaces q.image with a pubImageIdx sentinel. */
+async function uploadPublishedLectureImages(subject, lectureId, questions) {
+  for (let idx = 0; idx < questions.length; idx++) {
+    const q = questions[idx];
+    if (!q.image) continue;
+    try {
+      const compressed = await compressImageDataUrl(q.image);
+      const imgRef = window._doc(
+        window._db,
+        'publishedQuestions', subject,
+        'lectures', lectureId,
+        'images', String(idx)
+      );
+      await window._setDoc(imgRef, { imageData: compressed });
+      q.pubImageIdx = idx; // sentinel: tells hydrate where to fetch
+      delete q.image;
+    } catch (e) {
+      console.warn('Published image upload failed for question', idx, e);
+      // Keep inline as fallback — better to store than lose the image
+    }
+  }
+}
+
+/** Fetch images for a published lecture from its images subcollection. */
+async function hydratePublishedLectureImages(subject, lectureId, questions) {
+  await Promise.all(questions.map(async (q) => {
+    if (q.image) return; // already in memory
+    if (typeof q.pubImageIdx !== 'number') return; // no image
+    try {
+      const imgRef = window._doc(
+        window._db,
+        'publishedQuestions', subject,
+        'lectures', lectureId,
+        'images', String(q.pubImageIdx)
+      );
+      const snap = await window._getDoc(imgRef);
+      if (snap.exists()) q.image = snap.data().imageData;
+    } catch (e) {
+      console.warn('Published image fetch failed for question', q.pubImageIdx, e);
+    }
+  }));
+}
+
+/** Delete all image subcollection docs for a published lecture. */
+async function deletePublishedLectureImages(subject, lectureId) {
+  try {
+    const col = window._collection(
+      window._db,
+      'publishedQuestions', subject,
+      'lectures', lectureId,
+      'images'
+    );
+    const snap = await window._getDocs(col);
+    await Promise.all(snap.docs.map(d => window._deleteDoc(d.ref)));
+  } catch (e) {
+    console.warn('Published image cleanup failed for lecture', lectureId, e);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
    SHARE CUSTOM QUIZ
 ══════════════════════════════════════════════════════════ */
 async function shareCustomQuiz(id) {
@@ -5407,6 +5534,14 @@ let adminTargetSubject= '';
 let adminCommunityCache = null;
 let adminBusy = false;
 
+// Inline quiz editor state (used both for "edit before publish" and "edit published lecture")
+let adminEditQuestions = null;   // working copy of questions array being edited, or null
+let adminEditMode      = null;   // 'publish' | 'published' | null
+let adminEditingPublishedId   = null; // lectureId when editing an already-published lecture
+let adminEditingPublishedName = '';   // its lecture name
+
+let adminActiveTab = 'publish'; // 'publish' | 'curriculum'
+
 function openAdminPanel() {
   if (!isAdminUser(window._currentUser)) {
     alert('You do not have admin access.');
@@ -5418,12 +5553,22 @@ function openAdminPanel() {
   adminTargetModule = '';
   adminTargetSubject= '';
   adminCommunityCache = null;
+  adminActiveTab    = 'publish';
   document.getElementById('adminOverlay').classList.remove('hidden');
-  renderAdminPanel();
+  adminSwitchTab('publish');
 }
 
 function closeAdminPanel() {
   document.getElementById('adminOverlay').classList.add('hidden');
+}
+
+function adminSwitchTab(tab) {
+  adminActiveTab = tab;
+  document.querySelectorAll('.admin-panel-tab').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(tab === 'publish' ? 'adminTabPublish' : 'adminTabCurriculum');
+  if (btn) btn.classList.add('active');
+  if (tab === 'publish') renderAdminPanel();
+  else renderAdminCurriculumPanel();
 }
 
 function adminSetSourceTab(tab) {
@@ -5449,6 +5594,7 @@ async function renderAdminPanel() {
               <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
               <div class="admin-quiz-item-meta">${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
             </div>
+            <button class="admin-remove-btn" onclick="event.stopPropagation();adminDeleteSourceQuiz('custom','${q.id}')">🗑 Delete</button>
             <div class="admin-quiz-item-check">✓</div>
           </div>`;
       }).join('');
@@ -5496,6 +5642,7 @@ async function renderAdminPanel() {
             <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
             <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
           </div>
+          <button class="admin-remove-btn" onclick="event.stopPropagation();adminDeleteSourceQuiz('community','${escapeHtml(q.id)}')">🗑 Delete</button>
           <div class="admin-quiz-item-check">✓</div>
         </div>`;
     }).join('');
@@ -5517,8 +5664,36 @@ function adminSelectQuiz(sourceType, sourceId) {
     title: quiz.title || 'Untitled Quiz',
     questions: quiz.questions || []
   };
+  adminEditQuestions = null;
+  adminEditMode      = null;
 
   renderAdminPanel();
+}
+
+/* Delete a source quiz (custom quiz of the admin's own account, or any community/shared quiz) */
+async function adminDeleteSourceQuiz(sourceType, sourceId) {
+  if (!confirm('Delete this quiz permanently? This cannot be undone.')) return;
+  try {
+    if (sourceType === 'custom') {
+      let quizzes = loadCustomQuizzes();
+      quizzes = quizzes.filter(q => q.id !== sourceId);
+      await deleteQuizImagesFromStorage(sourceId);
+      await saveCustomQuizzesList(quizzes);
+    } else {
+      const ref = window._doc(window._db, 'sharedQuizzes', sourceId);
+      await window._deleteDoc(ref);
+      await deleteSharedQuizImages(sourceId);
+      adminCommunityCache = (adminCommunityCache || []).filter(q => q.id !== sourceId);
+    }
+    if (adminSelectedQuiz && adminSelectedQuiz.sourceType === sourceType && adminSelectedQuiz.sourceId === sourceId) {
+      adminSelectedQuiz = null;
+      adminEditQuestions = null;
+      adminEditMode = null;
+    }
+    renderAdminPanel();
+  } catch (e) {
+    alert('Failed to delete: ' + (e.message || e));
+  }
 }
 
 function adminYearOptionsHtml() {
@@ -5570,9 +5745,19 @@ function renderAdminAssignForm() {
     return;
   }
 
+  const qCount = (adminEditMode === 'publish' && adminEditQuestions) ? adminEditQuestions.length : adminSelectedQuiz.questions.length;
+
   area.innerHTML = `
     <div class="admin-assign-form">
-      <div class="admin-assign-title">Publish "${escapeHtml(adminSelectedQuiz.title)}" (${adminSelectedQuiz.questions.length} q) to:</div>
+      <div class="admin-assign-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <span>Publish "${escapeHtml(adminSelectedQuiz.title)}" (${qCount} q) to:</span>
+        <button class="admin-remove-btn" style="background:#EDE7F6;color:#4527A0;border:1.5px solid #B39DDB;"
+          onclick="adminToggleEditBeforePublish()">
+          ${adminEditMode === 'publish' ? '✖ Close Editor' : '✏️ Edit Before Publishing'}
+        </button>
+      </div>
+
+      <div id="adminEditorArea"></div>
 
       <div class="admin-field">
         <label>Year</label>
@@ -5612,7 +5797,264 @@ function renderAdminAssignForm() {
     <div class="admin-assigned-section" id="adminAssignedSection"></div>
   `;
 
+  if (adminEditMode === 'publish') renderAdminQuestionEditor('adminEditorArea');
+
   if (adminTargetSubject) renderAdminAssignedList();
+}
+
+function adminToggleEditBeforePublish() {
+  if (adminEditMode === 'publish') {
+    adminEditMode = null;
+    adminEditQuestions = null;
+  } else {
+    adminEditMode = 'publish';
+    adminEditQuestions = JSON.parse(JSON.stringify(adminSelectedQuiz.questions));
+  }
+  renderAdminAssignForm();
+}
+
+/* ══════════════════════════════════════════════════════════
+   GENERIC INLINE QUIZ EDITOR
+   Operates on `adminEditQuestions`. Used both for
+   "edit before publishing" and "edit an already-published lecture".
+══════════════════════════════════════════════════════════ */
+function renderAdminQuestionEditor(containerId) {
+  const area = document.getElementById(containerId);
+  if (!area || !adminEditQuestions) { if (area) area.innerHTML = ''; return; }
+
+  const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 0 10px;">
+    <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;">
+      ✏️ Editing — ${adminEditQuestions.length} question${adminEditQuestions.length !== 1 ? 's' : ''}
+    </div>
+    <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
+      🔘 = correct answer
+    </div>
+  </div>`;
+  html += `<div class="cq-preview-list" id="adminEditList">`;
+
+  adminEditQuestions.forEach((q, i) => {
+    const optEntries = getOptionEntries(q);
+    const usedKeys   = optEntries.map(([k]) => k);
+    const nextKey    = ALL_KEYS.find(k => !usedKeys.includes(k));
+
+    html += `<div class="cq-preview-q cq-editable-q" id="adminEditQ_${i}">`;
+
+    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+      <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
+        border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
+      <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
+      <button class="cq-edit-reask-btn" title="Delete this question"
+        onclick="adminEditDeleteQuestion(${i})"
+        style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
+    </div>`;
+
+    html += `<textarea class="cq-edit-textarea" rows="2"
+      oninput="adminEditQuestionText(${i}, this.value)"
+      style="width:100%;resize:vertical;margin-bottom:8px;">${escapeHtml(q.question)}</textarea>`;
+
+    /* Image area */
+    html += `<div class="cq-img-edit-row" style="margin-bottom:8px;">`;
+    if (q.image) {
+      html += `<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;
+        background:#F0F8FF;border:1.5px solid #B0D4F0;border-radius:8px;padding:8px 10px;">
+        <div style="flex-shrink:0;border-radius:5px;overflow:hidden;border:1px solid #D8EAF7;background:#fff;">
+          <img src="${q.image}" alt="Question image"
+            style="max-width:200px;max-height:130px;object-fit:contain;display:block;" />
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;justify-content:center;">
+          <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">📷 Question Image</div>
+          <label class="cq-img-action-btn" title="Upload a different image">
+            🔄 Change Image
+            <input type="file" accept="image/*" style="display:none;" onchange="adminEditReplaceImage(${i}, event)" />
+          </label>
+          <button class="cq-img-action-btn cq-img-remove-btn" onclick="adminEditRemoveImage(${i})" type="button">🗑️ Remove Image</button>
+        </div>
+      </div>`;
+    } else {
+      html += `<label class="cq-img-upload-label" title="Attach an image to this question">
+        🖼️ Add Image (optional)
+        <input type="file" accept="image/*" style="display:none;" onchange="adminEditReplaceImage(${i}, event)" />
+      </label>`;
+    }
+    html += `</div>`;
+
+    html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-muted);
+      text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">
+      Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with 🔘</span>
+    </div>`;
+
+    html += `<div style="display:flex;flex-direction:column;gap:5px;" id="adminEditOpts_${i}">`;
+    optEntries.forEach(([k, v]) => {
+      const isCorrect = k === q.answer;
+      html += `<div class="cq-opt-edit-row${isCorrect ? ' cq-opt-correct' : ''}" id="adminEditOptRow_${i}_${k}">
+        <label class="cq-opt-correct-radio" title="Set as correct answer">
+          <input type="radio" name="adminEditAnswer_${i}" value="${k}" ${isCorrect ? 'checked' : ''}
+            onchange="adminEditSetAnswer(${i}, '${k}')" />
+          <span class="cq-radio-dot"></span>
+        </label>
+        <span class="cq-opt-key">${k}.</span>
+        <input type="text" class="cq-opt-text-input" value="${escapeHtml(v)}"
+          oninput="adminEditOptionText(${i}, '${k}', this.value)"
+          placeholder="Option ${k} text…" />
+        ${isCorrect ? '<span class="cq-correct-badge">✔ Correct</span>' : ''}
+        <button onclick="adminEditDeleteOption(${i}, '${k}')" type="button" title="Remove this option"
+          style="background:none;border:none;cursor:pointer;color:#EF9A9A;font-size:.9rem;
+          padding:2px 4px;border-radius:4px;flex-shrink:0;line-height:1;transition:color .15s;"
+          onmouseover="this.style.color='#C62828'" onmouseout="this.style.color='#EF9A9A'">✕</button>
+      </div>`;
+    });
+    html += `</div>`;
+
+    if (nextKey) {
+      html += `<button onclick="adminEditAddOption(${i})" type="button"
+        style="margin-top:5px;background:#F0F8FF;color:var(--accent);border:1.5px dashed #B0D4F0;
+        border-radius:7px;padding:5px 12px;font-family:var(--font);font-size:.78rem;font-weight:700;
+        cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.background='#EEF7FF';"
+        onmouseout="this.style.borderColor='#B0D4F0';this.style.background='#F0F8FF';">
+        ＋ Add Option ${nextKey}
+      </button>`;
+    }
+
+    html += `</div>`; // end .cq-editable-q
+  });
+
+  html += `</div>`;
+
+  html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <button class="cq-btn cq-btn-secondary" onclick="adminEditAddBlankQuestion()" style="background:#4CAF50;">＋ Add Question</button>
+    ${adminEditMode === 'published' ? `
+      <button class="cq-btn" onclick="adminSavePublishedEdits()">💾 Save Changes</button>
+      <button class="cq-btn cq-btn-secondary" onclick="adminCancelEditPublished()">✖ Cancel</button>
+    ` : `
+      <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;">Edits will be used when you publish below.</div>
+    `}
+  </div>
+  <div class="admin-status" id="adminEditStatus"></div>`;
+
+  area.innerHTML = html;
+}
+
+/* ── Edit helpers (mutate adminEditQuestions in place) ── */
+function adminEditQuestionText(idx, val) {
+  if (!adminEditQuestions || !adminEditQuestions[idx]) return;
+  adminEditQuestions[idx].question = val;
+}
+
+function adminEditOptionText(idx, key, val) {
+  if (!adminEditQuestions || !adminEditQuestions[idx]) return;
+  adminEditQuestions[idx].options[key] = val;
+  const order = adminEditQuestions[idx].optionsOrder;
+  if (order) {
+    const entry = order.find(o => o.key === key);
+    if (entry) entry.value = val;
+  }
+}
+
+function adminEditSetAnswer(idx, key) {
+  if (!adminEditQuestions || !adminEditQuestions[idx]) return;
+  const q = adminEditQuestions[idx];
+  q.answer = key;
+  getOptionEntries(q).forEach(([k]) => {
+    const row = document.getElementById(`adminEditOptRow_${idx}_${k}`);
+    if (!row) return;
+    const isNowCorrect = k === key;
+    row.classList.toggle('cq-opt-correct', isNowCorrect);
+    let badge = row.querySelector('.cq-correct-badge');
+    if (isNowCorrect && !badge) {
+      badge = document.createElement('span');
+      badge.className = 'cq-correct-badge';
+      badge.textContent = '✔ Correct';
+      row.insertBefore(badge, row.querySelector('button'));
+    } else if (!isNowCorrect && badge) {
+      badge.remove();
+    }
+  });
+}
+
+function adminEditDeleteQuestion(idx) {
+  if (!adminEditQuestions) return;
+  if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
+  adminEditQuestions.splice(idx, 1);
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+}
+
+function adminEditAddBlankQuestion() {
+  if (!adminEditQuestions) adminEditQuestions = [];
+  adminEditQuestions.push({
+    question: '',
+    options: { A: '', B: '', C: '', D: '' },
+    optionsOrder: [
+      { key: 'A', value: '' }, { key: 'B', value: '' },
+      { key: 'C', value: '' }, { key: 'D', value: '' }
+    ],
+    answer: 'A'
+  });
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+  setTimeout(() => {
+    const last = document.getElementById(`adminEditQ_${adminEditQuestions.length - 1}`);
+    if (last) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
+}
+
+function adminEditDeleteOption(qIdx, key) {
+  if (!adminEditQuestions || !adminEditQuestions[qIdx]) return;
+  const q = adminEditQuestions[qIdx];
+  if (Object.keys(q.options).length <= 2) {
+    alert('A question must have at least 2 options.');
+    return;
+  }
+  delete q.options[key];
+  if (q.optionsOrder) q.optionsOrder = q.optionsOrder.filter(o => o.key !== key);
+  if (q.answer === key) q.answer = Object.keys(q.options)[0] || '';
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+}
+
+function adminEditAddOption(qIdx) {
+  const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
+  if (!adminEditQuestions || !adminEditQuestions[qIdx]) return;
+  const q = adminEditQuestions[qIdx];
+  const usedKeys = Object.keys(q.options);
+  const nextKey = ALL_KEYS.find(k => !usedKeys.includes(k));
+  if (!nextKey) return;
+  q.options[nextKey] = '';
+  if (!q.optionsOrder) q.optionsOrder = usedKeys.map(k => ({ key: k, value: q.options[k] }));
+  q.optionsOrder.push({ key: nextKey, value: '' });
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+  setTimeout(() => {
+    const input = document.querySelector(`#adminEditOptRow_${qIdx}_${nextKey} .cq-opt-text-input`);
+    if (input) input.focus();
+  }, 60);
+}
+
+function adminEditRemoveImage(idx) {
+  if (!adminEditQuestions || !adminEditQuestions[idx]) return;
+  delete adminEditQuestions[idx].image;
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+}
+
+function adminEditReplaceImage(idx, event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file || !adminEditQuestions || !adminEditQuestions[idx]) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const dataUrl = reader.result;
+    try {
+      adminEditQuestions[idx].image = await compressImageDataUrl(dataUrl);
+    } catch (e) {
+      adminEditQuestions[idx].image = dataUrl;
+    }
+    const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
+    renderAdminQuestionEditor(containerId);
+  };
+  reader.readAsDataURL(file);
 }
 
 async function renderAdminAssignedList() {
@@ -5642,22 +6084,138 @@ async function renderAdminAssignedList() {
           <div class="admin-assigned-name">${escapeHtml(e.lectureName || e.id)}</div>
           <div class="admin-assigned-path">${(e.questions || []).length} question${(e.questions||[]).length !== 1 ? 's' : ''} · ${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)} → ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}</div>
         </div>
+        <button class="admin-remove-btn" style="background:#EDE7F6;color:#4527A0;border:1.5px solid #B39DDB;"
+          onclick="adminEditPublished('${e.id}')">✏️ Edit</button>
         <button class="admin-remove-btn" onclick="adminRemovePublished('${e.id}')">Remove</button>
-      </div>`;
+      </div>
+      <div id="adminPublishedEditorArea_${e.id}"></div>`;
   });
+
+  // If currently editing one of these, render its editor
+  if (adminEditMode === 'published' && adminEditingPublishedId) {
+    renderAdminQuestionEditor('adminPublishedEditorArea_' + adminEditingPublishedId);
+  }
+}
+
+/* Load a published lecture's questions into the inline editor */
+async function adminEditPublished(lectureId) {
+  try {
+    const ref  = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
+    const snap = await window._getDoc(ref);
+    if (!snap.exists()) { alert('Could not find this lecture.'); return; }
+    const data = snap.data();
+
+    adminEditMode = 'published';
+    adminEditingPublishedId   = lectureId;
+    adminEditingPublishedName = data.lectureName || lectureId;
+    adminEditQuestions = JSON.parse(JSON.stringify(data.questions || []));
+    // Hydrate images from the subcollection so they appear in the editor
+    await hydratePublishedLectureImages(adminTargetSubject, lectureId, adminEditQuestions);
+
+    renderAdminAssignedList();
+    setTimeout(() => {
+      const el = document.getElementById('adminPublishedEditorArea_' + lectureId);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+  } catch (e) {
+    alert('Failed to load lecture: ' + (e.message || e));
+  }
+}
+
+function adminCancelEditPublished() {
+  const id = adminEditingPublishedId;
+  adminEditMode = null;
+  adminEditQuestions = null;
+  adminEditingPublishedId = null;
+  adminEditingPublishedName = '';
+  if (id) {
+    const el = document.getElementById('adminPublishedEditorArea_' + id);
+    if (el) el.innerHTML = '';
+  }
+}
+
+/* Save edits made to an already-published lecture */
+async function adminSavePublishedEdits() {
+  if (!adminEditQuestions || !adminEditingPublishedId) return;
+  const lectureId = adminEditingPublishedId;
+  const statusEl = document.getElementById('adminEditStatus');
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status">⏳ Saving…</div>`;
+
+  try {
+    const cleanQuestions = JSON.parse(JSON.stringify(adminEditQuestions)).map(q => {
+      delete q.imageUrl;
+      delete q.sharedImageIdx;
+      delete q.pubImageIdx; // will be re-assigned after upload
+      return q;
+    });
+
+    // Re-upload images into the subcollection (handles new images added during edit,
+    // and also re-saves existing ones so no image is ever lost)
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status">⏳ Uploading images…</div>`;
+    await uploadPublishedLectureImages(adminTargetSubject, lectureId, cleanQuestions);
+
+    const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
+    const snap = await window._getDoc(ref);
+    const existing = snap.exists() ? snap.data() : {};
+
+    await window._setDoc(ref, cleanForFirestore({
+      ...existing,
+      id: lectureId,
+      lectureName: adminEditingPublishedName,
+      questions: cleanQuestions,
+      publishedBy: window._currentUser ? window._currentUser.uid : null,
+      publishedAt: existing.publishedAt || Date.now(),
+      updatedAt: Date.now()
+    }));
+
+    // Update in-memory subject (hydrate images from subcollection for immediate use)
+    const hydratedForMemory = JSON.parse(JSON.stringify(cleanQuestions));
+    await hydratePublishedLectureImages(adminTargetSubject, lectureId, hydratedForMemory);
+    if (!subjects[adminTargetSubject].lectures) subjects[adminTargetSubject].lectures = {};
+    subjects[adminTargetSubject].lectures[adminEditingPublishedName] = hydratedForMemory;
+
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Changes saved!</div>`;
+
+    if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
+
+    // Close editor after a short delay so the user sees the success message
+    setTimeout(() => {
+      adminEditMode = null;
+      adminEditQuestions = null;
+      adminEditingPublishedId = null;
+      adminEditingPublishedName = '';
+      renderAdminAssignedList();
+    }, 900);
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ Failed: ${escapeHtml(e.message || String(e))}</div>`;
+  }
 }
 
 async function adminRemovePublished(lectureId) {
   if (!confirm('Remove this lecture from the question bank? This affects all users.')) return;
   try {
-    await window._deleteDoc(window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId));
+    // Look up the lecture name before deleting so we can remove it from memory
+    const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
+    const snap = await window._getDoc(ref);
+    const lectureName = snap.exists() ? (snap.data().lectureName || lectureId) : null;
+
+    // Delete images subcollection first, then the lecture doc itself
+    await deletePublishedLectureImages(adminTargetSubject, lectureId);
+    await window._deleteDoc(ref);
+
     // Remove from in-memory subject too
-    const lectures = subjects[adminTargetSubject].lectures;
-    for (const key of Object.keys(lectures)) {
-      if (lectures[key].__publishedId === lectureId || key === lectureId) {
-        delete lectures[key];
-      }
+    if (lectureName && subjects[adminTargetSubject].lectures) {
+      delete subjects[adminTargetSubject].lectures[lectureName];
     }
+
+    // If this lecture was being edited, close the editor
+    if (adminEditMode === 'published' && adminEditingPublishedId === lectureId) {
+      adminEditMode = null;
+      adminEditQuestions = null;
+      adminEditingPublishedId = null;
+      adminEditingPublishedName = '';
+    }
+
     renderAdminAssignedList();
     if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
   } catch (e) {
@@ -5680,25 +6238,39 @@ async function adminPublishQuiz() {
   if (statusEl) statusEl.innerHTML = `<div class="cq-status">⏳ Publishing…</div>`;
 
   try {
-    // Restore options order if this quiz came from a shared/community doc
-    let questions = adminSelectedQuiz.questions;
-    if (adminSelectedQuiz.sourceType === 'community') {
-      questions = restoreOptionsOrder(questions);
-      // Hydrate any shared images so q.image is present before saving
-      await hydrateSharedQuizImages(adminSelectedQuiz.sourceId, questions);
+    let questions;
+    if (adminEditMode === 'publish' && adminEditQuestions) {
+      // Use the admin-edited working copy as-is (images already inline as data URLs)
+      questions = adminEditQuestions;
     } else {
-      // Make sure custom-quiz images are hydrated too
-      await hydrateQuizImages(questions);
+      // Restore options order if this quiz came from a shared/community doc
+      questions = adminSelectedQuiz.questions;
+      if (adminSelectedQuiz.sourceType === 'community') {
+        questions = restoreOptionsOrder(questions);
+        // Hydrate any shared images so q.image is present before saving
+        await hydrateSharedQuizImages(adminSelectedQuiz.sourceId, questions);
+      } else {
+        // Make sure custom-quiz images are hydrated too
+        await hydrateQuizImages(questions);
+      }
     }
 
-    // Deep-clone + strip storage-only sentinels — published questions should be self-contained
+    // Deep-clone + strip source-specific sentinels so each question is clean
     const cleanQuestions = JSON.parse(JSON.stringify(questions)).map(q => {
       delete q.imageUrl;
       delete q.sharedImageIdx;
+      delete q.pubImageIdx; // will be re-assigned below after image upload
       return q;
     });
 
     const lectureId = 'pub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+    // Upload images into a separate subcollection so the lecture doc stays under Firestore's
+    // 1 MB limit — and so the published lecture is fully self-contained, independent of the
+    // source quiz.  Even if the source quiz is later deleted, images remain here.
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status">⏳ Uploading images…</div>`;
+    await uploadPublishedLectureImages(adminTargetSubject, lectureId, cleanQuestions);
+
     const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
     await window._setDoc(ref, cleanForFirestore({
       id: lectureId,
@@ -5710,12 +6282,22 @@ async function adminPublishQuiz() {
       publishedAt: Date.now()
     }));
 
-    // Merge into the in-memory subject so it's usable immediately
+    // Merge into the in-memory subject so it's usable immediately.
+    // Build a hydrated copy (with q.image restored) for in-memory use,
+    // while cleanQuestions (with pubImageIdx sentinels) was what we saved to Firestore.
+    const hydratedForMemory = JSON.parse(JSON.stringify(cleanQuestions));
+    await hydratePublishedLectureImages(adminTargetSubject, lectureId, hydratedForMemory);
     if (!subjects[adminTargetSubject].lectures) subjects[adminTargetSubject].lectures = {};
-    subjects[adminTargetSubject].lectures[lectureName] = cleanQuestions;
+    subjects[adminTargetSubject].lectures[lectureName] = hydratedForMemory;
 
     if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Published "${escapeHtml(lectureName)}" to ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}!</div>`;
     if (nameInput) nameInput.value = '';
+
+    // Close the editor after a successful publish
+    adminEditMode = null;
+    adminEditQuestions = null;
+    const editorArea = document.getElementById('adminEditorArea');
+    if (editorArea) editorArea.innerHTML = '';
 
     // Refresh subject view if currently open
     if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
@@ -5741,17 +6323,256 @@ async function loadPublishedQuestionsIntoSubjects() {
       const snap = await window._getDocs(col);
       if (snap.empty) continue;
       if (!subjects[subjName].lectures) subjects[subjName].lectures = {};
-      snap.forEach(d => {
+      await Promise.all(snap.docs.map(async (d) => {
         const data = d.data();
         const name = data.lectureName || d.id;
-        subjects[subjName].lectures[name] = data.questions || [];
-      });
+        const questions = data.questions || [];
+        // Hydrate images from the separate images subcollection (published lectures
+        // store images there to stay under Firestore's 1 MB doc limit, and to keep
+        // the snapshot independent of the original source quiz).
+        await hydratePublishedLectureImages(subjName, d.id, questions);
+        subjects[subjName].lectures[name] = questions;
+      }));
     } catch (e) {
       // Subject may not have a 'publishedQuestions' doc yet — ignore
     }
   }
   // If a subject is already open, refresh its lecture list
   if (selectedSubject) selectSubject(selectedSubject);
+}
+
+/* ══════════════════════════════════════════════════════════
+   ADMIN — MANAGE CURRICULUM
+   UI for admin to create new Years, Modules, and Subjects.
+══════════════════════════════════════════════════════════ */
+
+function renderAdminCurriculumPanel() {
+  const body = document.getElementById('adminBody');
+
+  const years = Object.keys(curriculum);
+  const allModules = {};
+  years.forEach(y => Object.keys(curriculum[y] || {}).forEach(m => { allModules[m] = y; }));
+  const yearOpts = years.map(y => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`).join('');
+  const iconSuggestions = ['📘','📗','📙','📕','🧬','💊','🫀','🧠','🦷','🩺','🔬','🧪','💉','🩻','🫁','🦴','👁️','🫃','🧫','🩸'];
+
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div class="curr-section">
+        <div class="curr-section-title">➕ Add New Academic Year</div>
+        <div class="curr-row">
+          <div class="curr-field">
+            <label>Year Name (e.g. "Fourth Year")</label>
+            <input type="text" id="currNewYear" placeholder="Fourth Year" maxlength="40" />
+          </div>
+          <button class="curr-add-btn" onclick="adminAddYear()">Add Year</button>
+        </div>
+        <div class="curr-status" id="currYearStatus"></div>
+        <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Years</div>
+        <div class="curr-list">${years.length ? years.map(y => `<span class="curr-tag">${escapeHtml(y)}</span>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
+      </div>
+
+      <div class="curr-section">
+        <div class="curr-section-title">➕ Add New Module</div>
+        <div class="curr-row">
+          <div class="curr-field">
+            <label>Under Year</label>
+            <select id="currModYear">${yearOpts || '<option value="">No years yet</option>'}</select>
+          </div>
+          <div class="curr-field">
+            <label>Module Name (e.g. "Module 5")</label>
+            <input type="text" id="currNewModule" placeholder="Module 5" maxlength="60" />
+          </div>
+          <button class="curr-add-btn" onclick="adminAddModule()">Add Module</button>
+        </div>
+        <div class="curr-status" id="currModuleStatus"></div>
+        <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Modules</div>
+        <div class="curr-list">${Object.keys(allModules).length ? Object.keys(allModules).map(m => `<span class="curr-tag mod" title="In ${allModules[m]}">${escapeHtml(m)}</span>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
+      </div>
+
+      <div class="curr-section">
+        <div class="curr-section-title">➕ Add New Subject</div>
+        <div class="curr-row">
+          <div class="curr-field">
+            <label>Under Year</label>
+            <select id="currSubjYear" onchange="adminRefreshSubjModules()">${yearOpts || '<option value="">No years yet</option>'}</select>
+          </div>
+          <div class="curr-field">
+            <label>Under Module</label>
+            <select id="currSubjModule"></select>
+          </div>
+        </div>
+        <div class="curr-row">
+          <div class="curr-field">
+            <label>Subject Label (shown to users)</label>
+            <input type="text" id="currSubjLabel" placeholder="e.g. Pathology" maxlength="60" />
+          </div>
+          <div class="curr-field" style="max-width:90px;">
+            <label>Icon (emoji)</label>
+            <input type="text" id="currSubjIcon" placeholder="📘" maxlength="4" style="text-align:center;font-size:1.2rem;" />
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          ${iconSuggestions.map(ic => `<span style="cursor:pointer;font-size:1.3rem;" title="${ic}" onclick="document.getElementById('currSubjIcon').value='${ic}'">${ic}</span>`).join('')}
+        </div>
+        <div class="curr-row">
+          <div class="curr-field">
+            <label>Internal Key (unique ID, letters/numbers/_)</label>
+            <input type="text" id="currSubjKey" placeholder="e.g. pathology_4" maxlength="40"
+              oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')" />
+          </div>
+          <button class="curr-add-btn secondary" onclick="adminAddSubject()">Add Subject</button>
+        </div>
+        <div class="curr-status" id="currSubjStatus"></div>
+        <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Admin-Created Subjects</div>
+        <div id="currSubjList" class="curr-list"><span style="color:var(--text-muted);font-size:.8rem;">Loading…</span></div>
+      </div>
+
+    </div>
+  `;
+
+  adminRefreshSubjModules();
+  adminLoadCurrSubjList();
+}
+
+function adminRefreshSubjModules() {
+  const yearSel = document.getElementById('currSubjYear');
+  const modSel  = document.getElementById('currSubjModule');
+  if (!yearSel || !modSel) return;
+  const yr = yearSel.value;
+  const mods = yr ? Object.keys(curriculum[yr] || {}) : [];
+  modSel.innerHTML = mods.length
+    ? mods.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('')
+    : `<option value="">No modules in this year</option>`;
+}
+
+function adminAddYear() {
+  const input  = document.getElementById('currNewYear');
+  const status = document.getElementById('currYearStatus');
+  const name   = (input?.value || '').trim();
+  if (!name)          { status.textContent = '⚠️ Please enter a year name.'; status.className = 'curr-status err'; return; }
+  if (curriculum[name]) { status.textContent = `⚠️ "${name}" already exists.`; status.className = 'curr-status err'; return; }
+  curriculum[name] = {};
+  buildYearGrid();
+  status.textContent = `✅ Year "${name}" added! You can now add modules to it.`;
+  status.className = 'curr-status ok';
+  input.value = '';
+  setTimeout(() => renderAdminCurriculumPanel(), 400);
+}
+
+function adminAddModule() {
+  const yearSel = document.getElementById('currModYear');
+  const input   = document.getElementById('currNewModule');
+  const status  = document.getElementById('currModuleStatus');
+  const yr  = yearSel?.value || '';
+  const mod = (input?.value || '').trim();
+  if (!yr)  { status.textContent = '⚠️ Select a year first.'; status.className = 'curr-status err'; return; }
+  if (!mod) { status.textContent = '⚠️ Enter a module name.'; status.className = 'curr-status err'; return; }
+  if (!curriculum[yr]) { status.textContent = '⚠️ Year not found.'; status.className = 'curr-status err'; return; }
+  if (curriculum[yr][mod]) { status.textContent = `⚠️ Module "${mod}" already exists in ${yr}.`; status.className = 'curr-status err'; return; }
+  curriculum[yr][mod] = [];
+  buildYearGrid();
+  status.textContent = `✅ Module "${mod}" added to ${yr}!`;
+  status.className = 'curr-status ok';
+  input.value = '';
+  setTimeout(() => renderAdminCurriculumPanel(), 400);
+}
+
+async function adminAddSubject() {
+  const yearSel = document.getElementById('currSubjYear');
+  const modSel  = document.getElementById('currSubjModule');
+  const labelIn = document.getElementById('currSubjLabel');
+  const iconIn  = document.getElementById('currSubjIcon');
+  const keyIn   = document.getElementById('currSubjKey');
+  const status  = document.getElementById('currSubjStatus');
+  const yr    = yearSel?.value || '';
+  const mod   = modSel?.value  || '';
+  const label = (labelIn?.value || '').trim();
+  const icon  = (iconIn?.value  || '').trim() || '📘';
+  const key   = (keyIn?.value   || '').trim();
+  if (!yr)    { status.textContent = '⚠️ Select a year.';          status.className = 'curr-status err'; return; }
+  if (!mod)   { status.textContent = '⚠️ Select a module.';        status.className = 'curr-status err'; return; }
+  if (!label) { status.textContent = '⚠️ Enter a subject label.';  status.className = 'curr-status err'; return; }
+  if (!key)   { status.textContent = '⚠️ Enter an internal key.';  status.className = 'curr-status err'; return; }
+  if (subjects[key]) { status.textContent = `⚠️ Key "${key}" already exists. Choose another.`; status.className = 'curr-status err'; return; }
+  status.textContent = '⏳ Saving…'; status.className = 'curr-status';
+  subjects[key] = { icon, label, lectures: {} };
+  if (!curriculum[yr]) curriculum[yr] = {};
+  if (!curriculum[yr][mod]) curriculum[yr][mod] = [];
+  if (!curriculum[yr][mod].includes(key)) curriculum[yr][mod].push(key);
+  buildYearGrid();
+  await saveCurriculumExtensionSubject(key, { icon, label, year: yr, module: mod });
+  status.textContent = `✅ Subject "${label}" added to ${yr} → ${mod}!`;
+  status.className = 'curr-status ok';
+  labelIn.value = ''; iconIn.value = ''; keyIn.value = '';
+  adminLoadCurrSubjList();
+}
+
+async function adminLoadCurrSubjList() {
+  const el = document.getElementById('currSubjList');
+  if (!el || !window._db) return;
+  try {
+    const ref  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const snap = await window._getDoc(ref);
+    const ext  = snap.exists() ? (snap.data().subjects || {}) : {};
+    const keys = Object.keys(ext);
+    el.innerHTML = keys.length
+      ? keys.map(k => {
+          const s = ext[k];
+          return `<span class="curr-tag subj" title="${escapeHtml(s.year||'')} → ${escapeHtml(s.module||'')}">${escapeHtml(s.icon||'📘')} ${escapeHtml(s.label||k)}</span>`;
+        }).join('')
+      : '<span style="color:var(--text-muted);font-size:.8rem;">No admin-created subjects yet.</span>';
+  } catch(e) {
+    el.innerHTML = '<span style="color:var(--text-muted);font-size:.8rem;">Could not load list.</span>';
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   CURRICULUM EXTENSIONS — admin-created Years / Modules / Subjects
+   Stored in a single doc: appConfig/curriculumExtensions
+   Shape: { subjects: { [subjectKey]: {icon, label, year, module} } }
+══════════════════════════════════════════════════════════ */
+async function loadCurriculumExtensions() {
+  if (!window._db) return;
+  try {
+    const ref  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const snap = await window._getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() || {};
+    const extSubjects = data.subjects || {};
+
+    Object.entries(extSubjects).forEach(([key, info]) => {
+      // Create the subject if it doesn't exist yet
+      if (!subjects[key]) {
+        subjects[key] = { icon: info.icon || '📘', label: info.label || key, lectures: {} };
+      }
+      // Make sure year/module exist in curriculum
+      const year = info.year, mod = info.module;
+      if (!year || !mod) return;
+      if (!curriculum[year]) curriculum[year] = {};
+      if (!curriculum[year][mod]) curriculum[year][mod] = [];
+      if (!curriculum[year][mod].includes(key)) curriculum[year][mod].push(key);
+    });
+
+    buildYearGrid();
+  } catch (e) {
+    console.warn('Failed to load curriculum extensions:', e);
+  }
+}
+
+/* Persist a newly-created Subject (and its Year/Module placement) */
+async function saveCurriculumExtensionSubject(key, info) {
+  if (!window._db) return;
+  try {
+    const ref  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const snap = await window._getDoc(ref);
+    const data = snap.exists() ? (snap.data() || {}) : {};
+    if (!data.subjects) data.subjects = {};
+    data.subjects[key] = info;
+    await window._setDoc(ref, cleanForFirestore(data));
+  } catch (e) {
+    console.warn('Failed to save curriculum extension:', e);
+  }
 }
 </script>
 <script type="module">
@@ -5792,8 +6613,11 @@ const firebaseConfig = {
   window._signInWithPopup  = signInWithPopup;
   window._signOut          = signOut;
 
-  // Load admin-published quiz questions into the question bank for everyone
-  loadPublishedQuestionsIntoSubjects();
+  // Load admin-created years/modules/subjects, then admin-published questions
+  (async () => {
+    await loadCurriculumExtensions();
+    await loadPublishedQuestionsIntoSubjects();
+  })();
 
   // Watch login state — fires immediately on page load
   onAuthStateChanged(auth, async user => {
