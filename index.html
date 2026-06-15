@@ -4429,7 +4429,7 @@ function cqRemoveSourceFile(idx) {
 // sourceText: optional reference text
 // sourceFiles: optional array of {base64, mimeType, name}
 // onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
-async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles) {
+async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl) {
   if (!targetIdxs || !targetIdxs.length) return;
 
   const apiKey = getGeminiKey();
@@ -4448,73 +4448,122 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
       'Some questions may include an image — analyse it carefully. ' +
       'Respond ONLY with a JSON array.';
 
-  const parts = [];
-
+  // Build source parts (shared across all chunks)
+  const sourceParts = [];
   if (sourceText && sourceText.trim()) {
-    parts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
+    sourceParts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
   }
   if (sourceFiles && sourceFiles.length > 0) {
-    parts.push({ text: '## Reference Source Material (Images/PDFs):' });
+    sourceParts.push({ text: '## Reference Source Material (Images/PDFs):' });
     sourceFiles.forEach((sf, sfi) => {
-      parts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
-      parts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
+      sourceParts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
+      sourceParts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
     });
-    parts.push({ text: '---' });
+    sourceParts.push({ text: '---' });
   }
 
-  parts.push({
+  const instructionPart = {
     text: 'For each question below, determine the correct answer letter. ' +
           'Respond ONLY with a JSON array (one object per question, same order) with keys:\n' +
           '  "index": the number inside [index:N]\n' +
           '  "answer": the correct option letter (e.g. "A")\n' +
           '  "found_in_source": true if the answer was clearly found in the provided source material, false if you used your own knowledge\n' +
           'No explanation, no preamble, no markdown.'
-  });
+  };
 
-  targetIdxs.forEach((qi, serial) => {
-    const q = questions[qi];
-    const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
-    parts.push({ text: 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts });
-    if (q.image) {
-      const match = q.image.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        parts.push({ text: '(Image for question ' + (serial + 1) + ':)' });
-        parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
-      }
+  // Chunk into batches of 20 to stay well within token limits
+  const CHUNK_SIZE = 20;
+  const chunks = [];
+  for (let i = 0; i < targetIdxs.length; i += CHUNK_SIZE) {
+    chunks.push(targetIdxs.slice(i, i + CHUNK_SIZE));
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  let totalSolved = 0;
+  const errors = [];
+
+  for (let ci = 0; ci < chunks.length; ci++) {
+    const chunk = chunks[ci];
+
+    if (statusEl && chunks.length > 1) {
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is solving questions… (batch ${ci + 1} of ${chunks.length})</div>`;
     }
-  });
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const data = await callGeminiWithRetry(url, {
-      system_instruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ role: 'user', parts }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 4096 }
-    }, {});
+    const parts = [...sourceParts, instructionPart];
 
-    const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
-    const clean = textOut.replace(/```json|```/g, '').trim();
-    const answers = JSON.parse(clean);
-    if (Array.isArray(answers)) {
-      answers.forEach(item => {
-        const qi = item.index;
-        const ans = (item.answer || '').trim().toUpperCase();
-        if (questions[qi] && questions[qi].options[ans]) {
-          questions[qi].answer         = ans;
-          questions[qi].ai_answered    = true;
-          questions[qi].ai_guessed     = !item.found_in_source; // true = used own knowledge, not source
+    chunk.forEach((qi, serial) => {
+      const q = questions[qi];
+      const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
+      parts.push({ text: 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts });
+      if (q.image) {
+        const match = q.image.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          parts.push({ text: '(Image for question ' + (serial + 1) + ':)' });
+          parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
         }
-      });
+      }
+    });
+
+    try {
+      const data = await callGeminiWithRetry(url, {
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ role: 'user', parts }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
+      }, {});
+
+      const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+      const cleanText = textOut.replace(/```json|```/g, '').trim();
+
+      let answers;
+      try {
+        answers = JSON.parse(cleanText);
+      } catch (parseErr) {
+        // Try to salvage partial JSON by finding the last complete object
+        const lastBrace = cleanText.lastIndexOf('},');
+        if (lastBrace !== -1) {
+          try { answers = JSON.parse(cleanText.substring(0, lastBrace + 1) + ']'); } catch (_) {}
+        }
+        if (!answers) {
+          errors.push(`Batch ${ci + 1}: Could not parse AI response (response may have been truncated).`);
+          continue;
+        }
+      }
+
+      if (Array.isArray(answers)) {
+        answers.forEach(item => {
+          const qi = item.index;
+          const ans = (item.answer || '').trim().toUpperCase();
+          if (questions[qi] !== undefined && questions[qi].options && questions[qi].options[ans]) {
+            questions[qi].answer      = ans;
+            questions[qi].ai_answered = true;
+            questions[qi].ai_guessed  = !item.found_in_source;
+            totalSolved++;
+          }
+        });
+      } else {
+        errors.push(`Batch ${ci + 1}: AI returned unexpected format (not an array).`);
+      }
+    } catch (e) {
+      console.warn('cqAiSolveQuestions batch ' + (ci + 1) + ' failed:', e);
+      errors.push(`Batch ${ci + 1}: ${e.message || String(e)}`);
     }
-  } catch (e) {
-    console.warn('cqAiSolveQuestions failed:', e);
+  }
+
+  // Surface any errors to the user
+  if (errors.length > 0 && statusEl) {
+    const errHtml = errors.map(err => `<div>⚠️ ${escapeHtml(err)}</div>`).join('');
+    statusEl.insertAdjacentHTML('beforeend',
+      `<div class="cq-status warning" style="margin-top:6px;">
+        🤖 AI Solve encountered issues — ${totalSolved} question${totalSolved !== 1 ? 's' : ''} solved successfully:<br>${errHtml}
+      </div>`
+    );
   }
 }
 
 // Backward-compat wrapper used in the extraction flow for no-key questions
-async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles) {
+async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles, statusEl) {
   const noKeyIdxs = questions.map((q, i) => q.no_answer_key ? i : -1).filter(i => i >= 0);
-  await cqAiSolveQuestions(questions, noKeyIdxs, sourceText, sourceFiles);
+  await cqAiSolveQuestions(questions, noKeyIdxs, sourceText, sourceFiles, statusEl);
 }
 
 // Solve a single question from the preview panel
@@ -4522,7 +4571,7 @@ async function cqAiSolveOne(i) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[i]) return;
   const statusEl = document.getElementById('cqReaskStatus_' + i);
   if (statusEl) statusEl.innerHTML = '<div class="cq-status info" style="font-size:.75rem;padding:5px 10px;"><div class="cq-spinner" style="width:12px;height:12px;border-width:2px;"></div> 🤖 AI is solving this question…</div>';
-  await cqAiSolveQuestions(cqGeneratedQuestions, [i], cqAiAnswerSource.trim(), cqAiSourceFiles);
+  await cqAiSolveQuestions(cqGeneratedQuestions, [i], cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
   if (statusEl) statusEl.innerHTML = '';
   renderCQPreview();
 }
@@ -4617,11 +4666,11 @@ async function generateQuizFromAI() {
       // Solve ALL questions (including those with existing keys)
       const allIdxs = cleaned.map((_, i) => i);
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is solving all ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}… please wait.</div>`;
-      await cqAiSolveQuestions(cleaned, allIdxs, cqAiAnswerSource.trim(), cqAiSourceFiles);
+      await cqAiSolveQuestions(cleaned, allIdxs, cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
     } else if (noKeyQs.length > 0 && cqAiAnswerToggle) {
       // Solve only no-key questions
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is answering ${noKeyQs.length} question${noKeyQs.length !== 1 ? 's' : ''} without an answer key… please wait.</div>`;
-      await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim(), cqAiSourceFiles);
+      await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
     }
 
     let warn = '';
