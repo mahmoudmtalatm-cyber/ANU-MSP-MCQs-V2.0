@@ -3600,6 +3600,7 @@ let cqQuestionCount     = '';
 let cqAiAnswerToggle    = false;  // whether to let AI answer questions without a key
 let cqAiAnswerSource    = '';     // optional source text the AI should rely on
 let cqAiSourceFiles     = [];     // optional source images/PDFs (array of {base64, mimeType, name})
+let cqAiSolveAllToggle  = false;  // whether to also AI-solve questions that already have a key
 
 function setCQMode(mode) {
   cqMode = mode;
@@ -3927,6 +3928,27 @@ function renderCustomQuizModal() {
           ` : ''}
         </div>
         ` : ''}
+      </div>
+
+      <!-- AI Solve All toggle -->
+      <div style="margin:8px 0 4px;padding:11px 14px;background:${cqAiSolveAllToggle ? '#E8F5E9' : 'var(--card)'};border:1.5px solid ${cqAiSolveAllToggle ? '#388E3C' : 'var(--border)'};border-radius:10px;transition:all .2s;">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+          <div style="position:relative;width:42px;height:24px;flex-shrink:0;">
+            <input type="checkbox" ${cqAiSolveAllToggle ? 'checked' : ''}
+              onchange="cqAiSolveAllToggle = this.checked; renderCustomQuizModal()"
+              style="opacity:0;width:0;height:0;position:absolute;" />
+            <span style="position:absolute;inset:0;border-radius:24px;background:${cqAiSolveAllToggle ? '#388E3C' : '#ccc'};transition:background .2s;"></span>
+            <span style="position:absolute;top:3px;left:${cqAiSolveAllToggle ? '21px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+          </div>
+          <div>
+            <div style="font-size:.82rem;font-weight:800;color:${cqAiSolveAllToggle ? '#1B5E20' : 'var(--text)'};letter-spacing:.2px;">
+              ✅ AI Solve All Questions
+            </div>
+            <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
+              AI will also verify/solve questions that already have an answer key — uses the same source above
+            </div>
+          </div>
+        </label>
       </div>
 
       <div class="cq-input-row">
@@ -4400,30 +4422,37 @@ function cqRemoveSourceFile(idx) {
   renderCustomQuizModal();
 }
 
-async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles) {
-  const noKeyIdxs = questions.map((q, i) => q.no_answer_key ? i : -1).filter(i => i >= 0);
-  if (!noKeyIdxs.length) return;
+// General-purpose AI solver: solves questions at given indices using Gemini.
+// targetIdxs: array of question indices to solve (can be no-key or keyed questions)
+// sourceText: optional reference text
+// sourceFiles: optional array of {base64, mimeType, name}
+// onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
+async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles) {
+  if (!targetIdxs || !targetIdxs.length) return;
 
   const apiKey = getGeminiKey();
-  if (!apiKey) { console.warn('cqAiAnswerMissingKeys: no Gemini API key'); return; }
+  if (!apiKey) { console.warn('cqAiSolveQuestions: no Gemini API key'); return; }
 
-  const hasSource = sourceText || (sourceFiles && sourceFiles.length > 0);
+  const hasSource = (sourceText && sourceText.trim()) || (sourceFiles && sourceFiles.length > 0);
 
   const systemInstruction = hasSource
-    ? 'You are a medical/academic expert. You are provided with reference source material (text and/or images/PDFs). Answer multiple-choice questions based ONLY on that source material. Do not use outside knowledge. Some questions may include an image — analyse it carefully as part of the question.'
-    : 'You are a medical/academic expert. Answer multiple-choice questions using your expert knowledge. Some questions may include an image — analyse it carefully as part of the question.';
+    ? 'You are a medical/academic expert. Reference source material is provided (text and/or images/PDFs). ' +
+      'For each question, answer based on the source. ' +
+      'If the answer is clearly found in the source, set found_in_source to true; otherwise set it to false and use your own knowledge. ' +
+      'Some questions may include an image — analyse it carefully. ' +
+      'Respond ONLY with a JSON array.'
+    : 'You are a medical/academic expert. Answer each question using your expert knowledge. ' +
+      'Since no source is provided, set found_in_source to false for all. ' +
+      'Some questions may include an image — analyse it carefully. ' +
+      'Respond ONLY with a JSON array.';
 
-  // Build the parts array for the single user turn
   const parts = [];
 
-  // 1. Source material text (if any)
-  if (sourceText) {
-    parts.push({ text: '## Reference Source Material (Text)\n' + sourceText + '\n\n---\n' });
+  if (sourceText && sourceText.trim()) {
+    parts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
   }
-
-  // 2. Source material files (images / PDFs)
   if (sourceFiles && sourceFiles.length > 0) {
-    parts.push({ text: '## Reference Source Material (Images/PDFs below):' });
+    parts.push({ text: '## Reference Source Material (Images/PDFs):' });
     sourceFiles.forEach((sf, sfi) => {
       parts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
       parts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
@@ -4431,25 +4460,23 @@ async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles) {
     parts.push({ text: '---' });
   }
 
-  // 3. Instructions + questions (each question may include its own image)
   parts.push({
-    text: 'For each question below, determine the single correct answer letter. ' +
-          'Respond ONLY with a JSON array with one object per question (same order) ' +
-          'having keys "index" (the number inside [index:N]) and "answer" (the correct letter, e.g. "A"). ' +
-          'No explanation, no preamble.'
+    text: 'For each question below, determine the correct answer letter. ' +
+          'Respond ONLY with a JSON array (one object per question, same order) with keys:\n' +
+          '  "index": the number inside [index:N]\n' +
+          '  "answer": the correct option letter (e.g. "A")\n' +
+          '  "found_in_source": true if the answer was clearly found in the provided source material, false if you used your own knowledge\n' +
+          'No explanation, no preamble, no markdown.'
   });
 
-  noKeyIdxs.forEach((qi, serial) => {
+  targetIdxs.forEach((qi, serial) => {
     const q = questions[qi];
     const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
     parts.push({ text: 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts });
-
-    // Include question image if present
     if (q.image) {
-      // q.image is a data URL: "data:<mimeType>;base64,<data>"
       const match = q.image.match(/^data:([^;]+);base64,(.+)$/);
       if (match) {
-        parts.push({ text: '(Image for question ' + (serial + 1) + ' shown below:)' });
+        parts.push({ text: '(Image for question ' + (serial + 1) + ':)' });
         parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
       }
     }
@@ -4460,26 +4487,42 @@ async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles) {
     const data = await callGeminiWithRetry(url, {
       system_instruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: 'user', parts }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 2048 }
+      generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 4096 }
     }, {});
 
-    const textOut = ((data.candidates || [])[0]?.content?.parts || [])
-      .map(p => p.text || '').join('');
+    const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
     const clean = textOut.replace(/```json|```/g, '').trim();
     const answers = JSON.parse(clean);
     if (Array.isArray(answers)) {
       answers.forEach(item => {
         const qi = item.index;
         const ans = (item.answer || '').trim().toUpperCase();
-        if (questions[qi] && questions[qi].no_answer_key && questions[qi].options[ans]) {
-          questions[qi].answer      = ans;
-          questions[qi].ai_answered = true;
+        if (questions[qi] && questions[qi].options[ans]) {
+          questions[qi].answer         = ans;
+          questions[qi].ai_answered    = true;
+          questions[qi].ai_guessed     = !item.found_in_source; // true = used own knowledge, not source
         }
       });
     }
   } catch (e) {
-    console.warn('cqAiAnswerMissingKeys failed:', e);
+    console.warn('cqAiSolveQuestions failed:', e);
   }
+}
+
+// Backward-compat wrapper used in the extraction flow for no-key questions
+async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles) {
+  const noKeyIdxs = questions.map((q, i) => q.no_answer_key ? i : -1).filter(i => i >= 0);
+  await cqAiSolveQuestions(questions, noKeyIdxs, sourceText, sourceFiles);
+}
+
+// Solve a single question from the preview panel
+async function cqAiSolveOne(i) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[i]) return;
+  const statusEl = document.getElementById('cqReaskStatus_' + i);
+  if (statusEl) statusEl.innerHTML = '<div class="cq-status info" style="font-size:.75rem;padding:5px 10px;"><div class="cq-spinner" style="width:12px;height:12px;border-width:2px;"></div> 🤖 AI is solving this question…</div>';
+  await cqAiSolveQuestions(cqGeneratedQuestions, [i], cqAiAnswerSource.trim(), cqAiSourceFiles);
+  if (statusEl) statusEl.innerHTML = '';
+  renderCQPreview();
 }
 
 
@@ -4569,7 +4612,13 @@ async function generateQuizFromAI() {
 
     // Handle questions without answer keys
     const noKeyQs = cleaned.filter(q => q.no_answer_key);
-    if (noKeyQs.length > 0 && cqAiAnswerToggle) {
+    if (cqAiSolveAllToggle) {
+      // Solve ALL questions (including those with existing keys)
+      const allIdxs = cleaned.map((_, i) => i);
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is solving all ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}… please wait.</div>`;
+      await cqAiSolveQuestions(cleaned, allIdxs, cqAiAnswerSource.trim(), cqAiSourceFiles);
+    } else if (noKeyQs.length > 0 && cqAiAnswerToggle) {
+      // Solve only no-key questions
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is answering ${noKeyQs.length} question${noKeyQs.length !== 1 ? 's' : ''} without an answer key… please wait.</div>`;
       await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim(), cqAiSourceFiles);
     }
@@ -4579,15 +4628,25 @@ async function generateQuizFromAI() {
       warn = ` ⚠️ The response may have been cut off because the document is very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
     }
 
-    const imgCount   = cleaned.filter(q => q.image).length;
-    const imgNote    = imgCount  > 0 ? ` · 🖼️ ${imgCount} image${imgCount !== 1 ? 's' : ''} embedded` : '';
-    const noKeyCount = noKeyQs.length;
-    const noKeyBadge = noKeyCount > 0 && cqAiAnswerToggle ? ` · 🤖 ${noKeyCount} AI-answered` :
-                       noKeyCount > 0                     ? ` · ⚠️ ${noKeyCount} without key`   : '';
-    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}${noKeyBadge}. Review below, then save.${warn}</div>`;
-    if (noKeyCount > 0 && !cqAiAnswerToggle) {
+    const imgCount    = cleaned.filter(q => q.image).length;
+    const imgNote     = imgCount > 0 ? ` · 🖼️ ${imgCount} image${imgCount !== 1 ? 's' : ''} embedded` : '';
+    const noKeyCount  = noKeyQs.length;
+    const aiCount     = cleaned.filter(q => q.ai_answered).length;
+    const guessCount  = cleaned.filter(q => q.ai_guessed).length;
+    const solveNote   = cqAiSolveAllToggle && aiCount > 0
+      ? ` · 🤖 ${aiCount} AI-solved${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
+      : noKeyCount > 0 && cqAiAnswerToggle && aiCount > 0
+      ? ` · 🤖 ${aiCount} AI-answered${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
+      : noKeyCount > 0 ? ` · ⚠️ ${noKeyCount} without key` : '';
+    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}${solveNote}. Review below, then save.${warn}</div>`;
+    if (noKeyCount > 0 && !cqAiAnswerToggle && !cqAiSolveAllToggle) {
       statusEl.insertAdjacentHTML('beforeend',
         `<div class="cq-status warning" style="margin-top:6px;">⚠️ ${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong>⚠️ No Key</strong> badge. You can set the correct answer manually, or enable <strong>🤖 AI Answer Mode</strong> before extracting to let AI answer them automatically.</div>`
+      );
+    }
+    if (guessCount > 0) {
+      statusEl.insertAdjacentHTML('beforeend',
+        `<div class="cq-status warning" style="margin-top:6px;">🧠 ${guessCount} question${guessCount !== 1 ? 's were' : ' was'} answered from AI’s own knowledge (answer not found in the provided source). These are marked with a <strong>🧠 AI Guess</strong> badge — please verify them.</div>`
       );
     }
     renderCQPreview();
@@ -4833,18 +4892,23 @@ function renderCQPreview() {
     html += `<div class="cq-preview-q cq-editable-q" id="cqQ_${i}">`;
 
     /* ── Question header ── */
-    const noKeyBadge = q.ai_answered
-      ? `<span title="This question had no answer key in the PDF — answered by AI" style="background:#EDE7F6;color:#6A1B9A;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #CE93D8;">🤖 AI-answered</span>`
+    const qBadge = q.ai_guessed
+      ? `<span title="AI answered this from its own knowledge — answer was not found in the provided source. Please verify." style="background:#FFF8E1;color:#E65100;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #FFB300;">🧠 AI Guess</span>`
+      : q.ai_answered
+      ? `<span title="AI answered this question from the provided source" style="background:#EDE7F6;color:#6A1B9A;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #CE93D8;">🤖 AI-answered</span>`
       : q.no_answer_key
       ? `<span title="No answer key found in the PDF — please set the correct answer manually" style="background:#FFF3E0;color:#E65100;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #FFB74D;">⚠️ No Key</span>`
       : '';
-    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;">
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
-      ${noKeyBadge}
+      ${qBadge}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
+      <button class="cq-edit-reask-btn" title="Ask AI to solve this question using the configured source"
+        onclick="cqAiSolveOne(${i})"
+        style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 AI Solve</button>
       <button class="cq-edit-reask-btn" title="Re-ask AI to re-extract this specific question"
-        onclick="cqReaskQuestion(${i})">🤖 Re-ask AI</button>
+        onclick="cqReaskQuestion(${i})">🔄 Re-extract</button>
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="cqDeleteQuestion(${i})"
         style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
