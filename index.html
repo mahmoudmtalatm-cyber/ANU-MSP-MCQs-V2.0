@@ -3599,6 +3599,7 @@ let cqQuestionCount     = '';
 // ── AI Answer for missing keys ──
 let cqAiAnswerToggle    = false;  // whether to let AI answer questions without a key
 let cqAiAnswerSource    = '';     // optional source text the AI should rely on
+let cqAiSourceFiles     = [];     // optional source images/PDFs (array of {base64, mimeType, name})
 
 function setCQMode(mode) {
   cqMode = mode;
@@ -3894,12 +3895,36 @@ function renderCustomQuizModal() {
         ${cqAiAnswerToggle ? `
         <div style="margin-top:10px;">
           <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
-            📚 Reference Source (optional) — paste notes or text the AI should use to answer
+            📚 Reference Source (optional) — paste text and/or upload images/PDFs the AI should use to answer
           </div>
-          <textarea class="cq-textarea" id="cqAiSourceInput" rows="4"
-            placeholder="Paste your lecture notes, textbook excerpt, or any reference material here. If left empty, the AI will use its general knowledge."
+          <textarea class="cq-textarea" id="cqAiSourceInput" rows="3"
+            placeholder="Paste lecture notes, textbook excerpt, or any reference text here…"
             oninput="cqAiAnswerSource = this.value"
-            style="border-color:#CE93D8;">${escapeHtml(cqAiAnswerSource)}</textarea>
+            style="border-color:#CE93D8;margin-bottom:8px;">${escapeHtml(cqAiAnswerSource)}</textarea>
+          <div style="font-size:.73rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+            🖼️ Source Images / PDFs (optional) — upload diagrams, charts, or reference PDFs the AI can see
+          </div>
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+            background:#F3E5F5;border:1.5px dashed #CE93D8;border-radius:8px;padding:7px 14px;
+            font-size:.78rem;font-weight:700;color:#6A1B9A;transition:all .15s;"
+            onmouseover="this.style.background='#EDE7F6'" onmouseout="this.style.background='#F3E5F5'">
+            ➕ Add Image or PDF
+            <input type="file" accept="image/*,application/pdf" multiple style="display:none;"
+              onchange="handleCqAiSourceFiles(event)" />
+          </label>
+          ${cqAiSourceFiles.length > 0 ? `
+          <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:6px;">
+            ${cqAiSourceFiles.map((f, fi) => `
+              <div style="display:flex;align-items:center;gap:5px;background:#EDE7F6;
+                border:1px solid #CE93D8;border-radius:20px;padding:3px 10px;font-size:.73rem;color:#4A148C;">
+                <span>${f.mimeType.startsWith('image/') ? '🖼️' : '📄'} ${escapeHtml(f.name)}</span>
+                <button onclick="cqRemoveSourceFile(${fi})" type="button"
+                  style="background:none;border:none;cursor:pointer;color:#9C27B0;font-size:.85rem;
+                  padding:0 2px;line-height:1;">✕</button>
+              </div>
+            `).join('')}
+          </div>
+          ` : ''}
         </div>
         ` : ''}
       </div>
@@ -4354,38 +4379,87 @@ async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType
 }
 
 // AI-answer questions that have no key in the PDF
-async function cqAiAnswerMissingKeys(questions, sourceText) {
+// Source file helpers for AI Answer Mode
+async function handleCqAiSourceFiles(event) {
+  const files = Array.from(event.target.files || []);
+  for (const file of files) {
+    const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+    cqAiSourceFiles.push({ base64, mimeType, name: file.name });
+  }
+  renderCustomQuizModal();
+}
+
+function cqRemoveSourceFile(idx) {
+  cqAiSourceFiles.splice(idx, 1);
+  renderCustomQuizModal();
+}
+
+async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles) {
   const noKeyIdxs = questions.map((q, i) => q.no_answer_key ? i : -1).filter(i => i >= 0);
   if (!noKeyIdxs.length) return;
 
   const apiKey = getGeminiKey();
   if (!apiKey) { console.warn('cqAiAnswerMissingKeys: no Gemini API key'); return; }
 
-  const systemInstruction = sourceText
-    ? 'You are a medical/academic expert. Answer multiple-choice questions based ONLY on the provided source material. Do not use outside knowledge.'
-    : 'You are a medical/academic expert. Answer multiple-choice questions based on your expert knowledge.';
+  const hasSource = sourceText || (sourceFiles && sourceFiles.length > 0);
 
-  const sourceSection = sourceText
-    ? '\n\n## Reference Source Material\n' + sourceText + '\n\n---\n'
-    : '';
+  const systemInstruction = hasSource
+    ? 'You are a medical/academic expert. You are provided with reference source material (text and/or images/PDFs). Answer multiple-choice questions based ONLY on that source material. Do not use outside knowledge. Some questions may include an image — analyse it carefully as part of the question.'
+    : 'You are a medical/academic expert. Answer multiple-choice questions using your expert knowledge. Some questions may include an image — analyse it carefully as part of the question.';
 
-  const questionsText = noKeyIdxs.map((qi, serial) => {
+  // Build the parts array for the single user turn
+  const parts = [];
+
+  // 1. Source material text (if any)
+  if (sourceText) {
+    parts.push({ text: '## Reference Source Material (Text)\n' + sourceText + '\n\n---\n' });
+  }
+
+  // 2. Source material files (images / PDFs)
+  if (sourceFiles && sourceFiles.length > 0) {
+    parts.push({ text: '## Reference Source Material (Images/PDFs below):' });
+    sourceFiles.forEach((sf, sfi) => {
+      parts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
+      parts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
+    });
+    parts.push({ text: '---' });
+  }
+
+  // 3. Instructions + questions (each question may include its own image)
+  parts.push({
+    text: 'For each question below, determine the single correct answer letter. ' +
+          'Respond ONLY with a JSON array with one object per question (same order) ' +
+          'having keys "index" (the number inside [index:N]) and "answer" (the correct letter, e.g. "A"). ' +
+          'No explanation, no preamble.'
+  });
+
+  noKeyIdxs.forEach((qi, serial) => {
     const q = questions[qi];
     const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
-    return 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts;
-  }).join('\n\n');
+    parts.push({ text: 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts });
 
-  const userPrompt = sourceSection +
-    'For each question below, determine the single correct answer letter. ' +
-    'Respond ONLY with a JSON array with one object per question (same order) ' +
-    'having keys "index" (the number inside [index:N]) and "answer" (the correct letter, e.g. "A"). ' +
-    'No explanation, no preamble.\n\n' + questionsText;
+    // Include question image if present
+    if (q.image) {
+      // q.image is a data URL: "data:<mimeType>;base64,<data>"
+      const match = q.image.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        parts.push({ text: '(Image for question ' + (serial + 1) + ' shown below:)' });
+        parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
+      }
+    }
+  });
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const data = await callGeminiWithRetry(url, {
       system_instruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      contents: [{ role: 'user', parts }],
       generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 2048 }
     }, {});
 
@@ -4497,7 +4571,7 @@ async function generateQuizFromAI() {
     const noKeyQs = cleaned.filter(q => q.no_answer_key);
     if (noKeyQs.length > 0 && cqAiAnswerToggle) {
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is answering ${noKeyQs.length} question${noKeyQs.length !== 1 ? 's' : ''} without an answer key… please wait.</div>`;
-      await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim());
+      await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim(), cqAiSourceFiles);
     }
 
     let warn = '';
