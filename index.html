@@ -759,6 +759,7 @@
 .cq-status.info { background: #E3F2FD; color: #0D47A1; }
 .cq-status.error { background: #FFEBEE; color: #C62828; }
 .cq-status.success { background: #E8F5E9; color: #2E7D32; }
+.cq-status.warning { background: #FFF8E1; color: #E65100; border-left: 3px solid #FFB300; }
 .cq-spinner {
   width: 18px; height: 18px; border-radius: 50%;
   border: 3px solid rgba(13,71,161,.25); border-top-color: #0D47A1;
@@ -2220,9 +2221,6 @@ function buildResults() {
   // Clear explanation cache for new results
   for (const k in _explainCache) delete _explainCache[k];
   for (const k in _explainRawText) delete _explainRawText[k];
-  // Snapshot any shared (Firestore) explanations for this quiz so they can be reused
-  // instantly instead of re-generated, and so newly-generated ones can be shared too.
-  _explainPoolLoadPromise = _loadExplainPool(currentQuestions);
   // Cancel and clear any in-progress/previous chats
   Object.keys(_chatCancelToken).forEach(k => { if (_chatCancelToken[k]) _chatCancelToken[k].cancelled = true; delete _chatCancelToken[k]; });
   for (const k in _chatHistory) delete _chatHistory[k];
@@ -2882,63 +2880,12 @@ const _explainRawText = {}; // { qIndex: raw AI text } — used to give chat con
 let   _explainAllBusy = false;
 
 // ── Cancellation tokens ──
+// Each is a plain object { cancelled: false }.
+// explainQuestion sets _singleCancelToken[i] before calling the API.
+// explainAllQuestions sets _allCancelToken before the loop.
+// Stopping checks these between retries and after awaits.
 const _singleCancelToken = {};   // { [qIndex]: { cancelled: bool } }
 let   _allCancelToken    = null; // { cancelled: bool } | null
-
-// ── Shared explanation pool (Firestore-backed, session-isolated) ──
-// At the start of each result session we snapshot the pool so concurrent users
-// don't interfere with each other while reviewing.  New generations update
-// Firestore immediately but other in-progress sessions are unaffected.
-let _explainSessionPool = {}; // { questionHash: { text, html } } — frozen at session start
-let _explainPoolLoadPromise = null; // resolves once the pool snapshot for the current results view is ready
-
-async function _qHash(text) {
-  // Fast deterministic hash for question text used as Firestore document ID
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
-}
-
-async function _loadExplainPool(questions) {
-  // Snapshot Firestore explanations for all questions in this quiz into session memory.
-  // Called once when results are built — isolates this reviewer from concurrent updates.
-  _explainSessionPool = {};
-  if (!window._db) return;
-  try {
-    await Promise.all(questions.map(async (q) => {
-      try {
-        const hash = await _qHash(q.question);
-        const ref  = window._doc(window._db, 'explanations', hash);
-        const snap = await window._getDoc(ref);
-        if (snap.exists()) {
-          const d = snap.data();
-          _explainSessionPool[hash] = { text: d.text || '', html: d.html || '' };
-        }
-      } catch(e) { /* non-fatal */ }
-    }));
-  } catch(e) { /* non-fatal */ }
-}
-
-async function _saveExplainToPool(questionText, rawText, html) {
-  // Save to Firestore and update local session pool
-  try {
-    const hash = await _qHash(questionText);
-    _explainSessionPool[hash] = { text: rawText, html };
-    if (!window._db) return;
-    const ref = window._doc(window._db, 'explanations', hash);
-    await window._setDoc(ref, cleanForFirestore({ text: rawText, html, updatedAt: Date.now() }));
-  } catch(e) { /* non-fatal */ }
-}
-
-async function _getExplainFromPool(questionText) {
-  // Returns { text, html } if cached in session pool, else null
-  try {
-    const hash = await _qHash(questionText);
-    return _explainSessionPool[hash] || null;
-  } catch(e) { return null; }
-}
 
 function getExplainKey() {
   try { return localStorage.getItem(AI_EXPLAIN_KEY_STORE) || ''; } catch(e) { return ''; }
@@ -3033,64 +2980,27 @@ function stopExplainQuestion(i) {
   if (_singleCancelToken[i]) _singleCancelToken[i].cancelled = true;
 }
 
-/* ── Render an explanation (own or shared) into its panel, with a Regenerate control ── */
-function displayExplainPanel(i, html) {
-  const panel = document.getElementById(`explainPanel_${i}`);
-  if (!panel) return;
-  panel.innerHTML = html + `
-    <div class="ai-explain-regen-row" style="padding:6px 16px 14px;text-align:right;">
-      <button class="ai-explain-regen-btn" onclick="regenerateExplanation(${i})" style="background:none;border:1.5px solid var(--accent);color:var(--accent);border-radius:6px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:var(--font);">🔄 Regenerate</button>
-    </div>`;
-}
-
-/* ── Force a fresh AI explanation, bypassing the shared pool and any cached copy ── */
-function regenerateExplanation(i) {
-  if (_explainCache[i] === 'loading') return;
-  _explainCache[i]   = undefined;
-  _explainRawText[i] = undefined;
-  const panel = document.getElementById(`explainPanel_${i}`);
-  if (panel) panel.innerHTML = '';
-  explainQuestion(i, true);
-}
-
 /* ── Core: fetch explanation for one question index ── */
-async function explainQuestion(i, forceRegenerate = false) {
+async function explainQuestion(i) {
   const btn    = document.getElementById(`explainBtn_${i}`);
   const panel  = document.getElementById(`explainPanel_${i}`);
   if (!btn || !panel) return;
 
-  if (!forceRegenerate) {
-    // Already shown — toggle off
-    if (_explainCache[i] && _explainCache[i] !== 'loading') {
-      if (panel.innerHTML.trim()) { panel.innerHTML = ''; btn.innerHTML = '🤖 Explain'; return; }
-      displayExplainPanel(i, _explainCache[i]);
-      btn.innerHTML = '🤖 Hide';
-      return;
-    }
-    if (_explainCache[i] === 'loading') return;
+  // Already shown — toggle off
+  if (_explainCache[i] && _explainCache[i] !== 'loading') {
+    if (panel.innerHTML.trim()) { panel.innerHTML = ''; btn.innerHTML = '🤖 Explain'; return; }
+    panel.innerHTML = _explainCache[i];
+    btn.innerHTML = '🤖 Hide';
+    return;
   }
-
-  const q = currentQuestions[i];
-
-  if (!forceRegenerate) {
-    // Shared explanation pool — if another user already generated this explanation,
-    // reuse it instantly (no API key required).
-    if (_explainPoolLoadPromise) { try { await _explainPoolLoadPromise; } catch(e) {} }
-    const pooled = await _getExplainFromPool(q.question);
-    if (pooled && pooled.html) {
-      _explainCache[i] = pooled.html;
-      _explainRawText[i] = pooled.text;
-      displayExplainPanel(i, pooled.html);
-      btn.innerHTML = '🤖 Hide';
-      return;
-    }
-  }
+  if (_explainCache[i] === 'loading') return;
 
   const apiKey = getExplainKey();
+  const q = currentQuestions[i];
 
   // No key — show inline prompt
   if (!apiKey) {
-    renderExplainKeyPrompt(panel, (key) => explainQuestion(i, forceRegenerate));
+    renderExplainKeyPrompt(panel, (key) => explainQuestion(i));
     return;
   }
 
@@ -3154,12 +3064,10 @@ async function explainQuestion(i, forceRegenerate = false) {
     _explainCache[i] = html;
     _explainRawText[i] = text;
 
-    displayExplainPanel(i, html);
+    const p = document.getElementById(`explainPanel_${i}`);
+    if (p) p.innerHTML = html;
     const b = document.getElementById(`explainBtn_${i}`);
     if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '🤖 Hide'; }
-
-    // Share this explanation so other users reviewing the same question get it instantly
-    _saveExplainToPool(q.question, text, html);
 
   } catch(err) {
     if (err._cancelled) {
@@ -3318,7 +3226,7 @@ async function explainAllQuestions() {
     // Skip already-explained
     if (_explainCache[i] && _explainCache[i] !== 'loading') {
       const p = document.getElementById(`explainPanel_${i}`);
-      if (p && !p.innerHTML.trim()) displayExplainPanel(i, _explainCache[i]);
+      if (p && !p.innerHTML.trim()) p.innerHTML = _explainCache[i];
       const b = document.getElementById(`explainBtn_${i}`);
       if (b) b.innerHTML = '🤖 Hide';
       continue;
@@ -3688,6 +3596,10 @@ let cqLectureFile       = null;
 let cqCustomPrompt      = '';
 let cqQuestionCount     = '';
 
+// ── AI Answer for missing keys ──
+let cqAiAnswerToggle    = false;  // whether to let AI answer questions without a key
+let cqAiAnswerSource    = '';     // optional source text the AI should rely on
+
 function setCQMode(mode) {
   cqMode = mode;
   renderCustomQuizModal();
@@ -3957,6 +3869,41 @@ function renderCustomQuizModal() {
         ${cqSelectedFile ? `<div class="cq-dz-file">✅ ${escapeHtml(cqSelectedFile.name)}</div>` : ''}
       </div>
       <input type="file" id="cqFileInput" accept="image/*,application/pdf" style="display:none;" onchange="handleCQFileSelect(event)" />
+
+      <!-- AI Answer Mode toggle -->
+      <div style="margin:10px 0 4px;padding:12px 14px;background:${cqAiAnswerToggle ? '#EDE7F6' : 'var(--card)'};border:1.5px solid ${cqAiAnswerToggle ? '#9C27B0' : 'var(--border)'};border-radius:10px;transition:all .2s;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:200px;">
+            <div style="position:relative;width:42px;height:24px;flex-shrink:0;">
+              <input type="checkbox" id="cqAiAnswerToggleChk" ${cqAiAnswerToggle ? 'checked' : ''}
+                onchange="cqAiAnswerToggle = this.checked; renderCustomQuizModal()"
+                style="opacity:0;width:0;height:0;position:absolute;" />
+              <span style="position:absolute;inset:0;border-radius:24px;background:${cqAiAnswerToggle ? '#9C27B0' : '#ccc'};transition:background .2s;"></span>
+              <span style="position:absolute;top:3px;left:${cqAiAnswerToggle ? '21px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+            </div>
+            <div>
+              <div style="font-size:.82rem;font-weight:800;color:${cqAiAnswerToggle ? '#6A1B9A' : 'var(--text)'};letter-spacing:.2px;">
+                🤖 AI Answer Mode
+              </div>
+              <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
+                When enabled, Claude AI will automatically answer any questions that have no answer key in the PDF
+              </div>
+            </div>
+          </label>
+        </div>
+        ${cqAiAnswerToggle ? `
+        <div style="margin-top:10px;">
+          <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+            📚 Reference Source (optional) — paste notes or text the AI should use to answer
+          </div>
+          <textarea class="cq-textarea" id="cqAiSourceInput" rows="4"
+            placeholder="Paste your lecture notes, textbook excerpt, or any reference material here. If left empty, the AI will use its general knowledge."
+            oninput="cqAiAnswerSource = this.value"
+            style="border-color:#CE93D8;">${escapeHtml(cqAiAnswerSource)}</textarea>
+        </div>
+        ` : ''}
+      </div>
+
       <div class="cq-input-row">
         <input type="text" id="cqTitleInput" placeholder="Quiz title (e.g. 'Cardio Lecture 3')"
                value="${escapeHtml(cqGeneratedTitle)}" oninput="cqGeneratedTitle = this.value" />
@@ -4108,7 +4055,7 @@ STRICT RULES — follow exactly, no exceptions:
 2. Reproduce each question's text EXACTLY as written in the source — same wording, numbers, punctuation, and even typos. Do NOT correct, rephrase, shorten, translate, or "improve" anything.
 3. Reproduce EVERY answer choice EXACTLY as written, in the same order, using the same labels (A, B, C, D, E, ... — convert numeric labels like 1,2,3 to A,B,C). Do not omit, reorder, merge, or reword any choice.
 4. If the document indicates which choice is correct (circled, bolded, underlined, highlighted, starred, checked, or listed in a separate answer key), use EXACTLY that choice as the "answer" for that question. Do not second-guess or change a marked answer.
-5. ONLY if a specific question has NO indicated correct answer anywhere in the document, then — and only then — use your own subject-matter knowledge to determine the single most likely correct answer for that question.
+5. If a specific question has NO indicated correct answer anywhere in the document, set its "answer" to the special value "__NO_KEY__". Do NOT guess or infer an answer — use "__NO_KEY__" exactly.
 6. Do not invent, add, duplicate, or remove any questions or options that are not present in the source document.
 7. For each question, set "has_image" to true if the question is accompanied by an image, diagram, figure, table, chart, graph, X-ray, CT scan, ECG, histology slide, or any other visual element that is part of that question. Set it to false otherwise.
 
@@ -4406,6 +4353,62 @@ async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType
   }
 }
 
+// AI-answer questions that have no key in the PDF
+async function cqAiAnswerMissingKeys(questions, sourceText) {
+  const noKeyIdxs = questions.map((q, i) => q.no_answer_key ? i : -1).filter(i => i >= 0);
+  if (!noKeyIdxs.length) return;
+
+  const apiKey = getGeminiKey();
+  if (!apiKey) { console.warn('cqAiAnswerMissingKeys: no Gemini API key'); return; }
+
+  const systemInstruction = sourceText
+    ? 'You are a medical/academic expert. Answer multiple-choice questions based ONLY on the provided source material. Do not use outside knowledge.'
+    : 'You are a medical/academic expert. Answer multiple-choice questions based on your expert knowledge.';
+
+  const sourceSection = sourceText
+    ? '\n\n## Reference Source Material\n' + sourceText + '\n\n---\n'
+    : '';
+
+  const questionsText = noKeyIdxs.map((qi, serial) => {
+    const q = questions[qi];
+    const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
+    return 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts;
+  }).join('\n\n');
+
+  const userPrompt = sourceSection +
+    'For each question below, determine the single correct answer letter. ' +
+    'Respond ONLY with a JSON array with one object per question (same order) ' +
+    'having keys "index" (the number inside [index:N]) and "answer" (the correct letter, e.g. "A"). ' +
+    'No explanation, no preamble.\n\n' + questionsText;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const data = await callGeminiWithRetry(url, {
+      system_instruction: { parts: [{ text: systemInstruction }] },
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 2048 }
+    }, {});
+
+    const textOut = ((data.candidates || [])[0]?.content?.parts || [])
+      .map(p => p.text || '').join('');
+    const clean = textOut.replace(/```json|```/g, '').trim();
+    const answers = JSON.parse(clean);
+    if (Array.isArray(answers)) {
+      answers.forEach(item => {
+        const qi = item.index;
+        const ans = (item.answer || '').trim().toUpperCase();
+        if (questions[qi] && questions[qi].no_answer_key && questions[qi].options[ans]) {
+          questions[qi].answer      = ans;
+          questions[qi].ai_answered = true;
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('cqAiAnswerMissingKeys failed:', e);
+  }
+}
+
+
 async function generateQuizFromAI() {
   const apiKeyInput = document.getElementById('cqApiKeyInput');
   const titleInput  = document.getElementById('cqTitleInput');
@@ -4471,10 +4474,12 @@ async function generateQuizFromAI() {
         .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
         .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
       if (!Object.keys(opts).length) return null;
-      let answer = (typeof q.answer === 'string') ? q.answer.trim().toUpperCase() : '';
-      if (!opts[answer]) answer = Object.keys(opts)[0];
+      const rawAnswer = (typeof q.answer === 'string') ? q.answer.trim() : '';
+      const noKey = rawAnswer === '__NO_KEY__';
+      let answer = noKey ? '' : rawAnswer.toUpperCase();
+      if (!noKey && !opts[answer]) answer = Object.keys(opts)[0];
       const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
-      return { question: q.question, options: opts, optionsOrder, answer, has_image: !!q.has_image };
+      return { question: q.question, options: opts, optionsOrder, answer, has_image: !!q.has_image, no_answer_key: noKey };
     }).filter(Boolean);
 
     if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
@@ -4488,14 +4493,29 @@ async function generateQuizFromAI() {
 
     cqGeneratedQuestions = cleaned;
 
+    // Handle questions without answer keys
+    const noKeyQs = cleaned.filter(q => q.no_answer_key);
+    if (noKeyQs.length > 0 && cqAiAnswerToggle) {
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is answering ${noKeyQs.length} question${noKeyQs.length !== 1 ? 's' : ''} without an answer key… please wait.</div>`;
+      await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim());
+    }
+
     let warn = '';
     if (finishReason === 'MAX_TOKENS') {
       warn = ` ⚠️ The response may have been cut off because the document is very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
     }
 
-    const imgCount = cleaned.filter(q => q.image).length;
-    const imgNote  = imgCount > 0 ? ` · 🖼️ ${imgCount} image${imgCount !== 1 ? 's' : ''} embedded` : '';
-    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}. Review below, then save.${warn}</div>`;
+    const imgCount   = cleaned.filter(q => q.image).length;
+    const imgNote    = imgCount  > 0 ? ` · 🖼️ ${imgCount} image${imgCount !== 1 ? 's' : ''} embedded` : '';
+    const noKeyCount = noKeyQs.length;
+    const noKeyBadge = noKeyCount > 0 && cqAiAnswerToggle ? ` · 🤖 ${noKeyCount} AI-answered` :
+                       noKeyCount > 0                     ? ` · ⚠️ ${noKeyCount} without key`   : '';
+    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}${noKeyBadge}. Review below, then save.${warn}</div>`;
+    if (noKeyCount > 0 && !cqAiAnswerToggle) {
+      statusEl.insertAdjacentHTML('beforeend',
+        `<div class="cq-status warning" style="margin-top:6px;">⚠️ ${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong>⚠️ No Key</strong> badge. You can set the correct answer manually, or enable <strong>🤖 AI Answer Mode</strong> before extracting to let AI answer them automatically.</div>`
+      );
+    }
     renderCQPreview();
 
   } catch (err) {
@@ -4739,9 +4759,15 @@ function renderCQPreview() {
     html += `<div class="cq-preview-q cq-editable-q" id="cqQ_${i}">`;
 
     /* ── Question header ── */
+    const noKeyBadge = q.ai_answered
+      ? `<span title="This question had no answer key in the PDF — answered by AI" style="background:#EDE7F6;color:#6A1B9A;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #CE93D8;">🤖 AI-answered</span>`
+      : q.no_answer_key
+      ? `<span title="No answer key found in the PDF — please set the correct answer manually" style="background:#FFF3E0;color:#E65100;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #FFB74D;">⚠️ No Key</span>`
+      : '';
     html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
+      ${noKeyBadge}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
       <button class="cq-edit-reask-btn" title="Re-ask AI to re-extract this specific question"
         onclick="cqReaskQuestion(${i})">🤖 Re-ask AI</button>
