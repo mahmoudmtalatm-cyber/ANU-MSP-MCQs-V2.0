@@ -3888,46 +3888,11 @@ function renderCustomQuizModal() {
                 🤖 AI Answer Mode
               </div>
               <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
-                When enabled, Claude AI will automatically answer any questions that have no answer key in the PDF
+                When enabled, Gemini AI will automatically answer any questions that have no answer key in the PDF
               </div>
             </div>
           </label>
         </div>
-        ${cqAiAnswerToggle ? `
-        <div style="margin-top:10px;">
-          <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
-            📚 Reference Source (optional) — paste text and/or upload images/PDFs the AI should use to answer
-          </div>
-          <textarea class="cq-textarea" id="cqAiSourceInput" rows="3"
-            placeholder="Paste lecture notes, textbook excerpt, or any reference text here…"
-            oninput="cqAiAnswerSource = this.value"
-            style="border-color:#CE93D8;margin-bottom:8px;">${escapeHtml(cqAiAnswerSource)}</textarea>
-          <div style="font-size:.73rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
-            🖼️ Source Images / PDFs (optional) — upload diagrams, charts, or reference PDFs the AI can see
-          </div>
-          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
-            background:#F3E5F5;border:1.5px dashed #CE93D8;border-radius:8px;padding:7px 14px;
-            font-size:.78rem;font-weight:700;color:#6A1B9A;transition:all .15s;"
-            onmouseover="this.style.background='#EDE7F6'" onmouseout="this.style.background='#F3E5F5'">
-            ➕ Add Image or PDF
-            <input type="file" accept="image/*,application/pdf" multiple style="display:none;"
-              onchange="handleCqAiSourceFiles(event)" />
-          </label>
-          ${cqAiSourceFiles.length > 0 ? `
-          <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:6px;">
-            ${cqAiSourceFiles.map((f, fi) => `
-              <div style="display:flex;align-items:center;gap:5px;background:#EDE7F6;
-                border:1px solid #CE93D8;border-radius:20px;padding:3px 10px;font-size:.73rem;color:#4A148C;">
-                <span>${f.mimeType.startsWith('image/') ? '🖼️' : '📄'} ${escapeHtml(f.name)}</span>
-                <button onclick="cqRemoveSourceFile(${fi})" type="button"
-                  style="background:none;border:none;cursor:pointer;color:#9C27B0;font-size:.85rem;
-                  padding:0 2px;line-height:1;">✕</button>
-              </div>
-            `).join('')}
-          </div>
-          ` : ''}
-        </div>
-        ` : ''}
       </div>
 
       <!-- AI Solve All toggle -->
@@ -3945,11 +3910,48 @@ function renderCustomQuizModal() {
               ✅ AI Solve All Questions
             </div>
             <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
-              AI will also verify/solve questions that already have an answer key — uses the same source above
+              AI will also verify/solve questions that already have an answer key — uses the reference source below
             </div>
           </div>
         </label>
       </div>
+
+      <!-- Shared source input — shown when either AI toggle is on -->
+      ${(cqAiAnswerToggle || cqAiSolveAllToggle) ? `
+      <div style="margin:8px 0 4px;padding:12px 14px;background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;">
+        <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+          📚 Reference Source (optional) — paste text and/or upload images/PDFs the AI should use to answer
+        </div>
+        <textarea class="cq-textarea" id="cqAiSourceInput" rows="3"
+          placeholder="Paste lecture notes, textbook excerpt, or any reference text here…"
+          oninput="cqAiAnswerSource = this.value"
+          style="border-color:#CE93D8;margin-bottom:8px;">${escapeHtml(cqAiAnswerSource)}</textarea>
+        <div style="font-size:.73rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+          🖼️ Source Images / PDFs (optional) — upload diagrams, charts, or reference PDFs the AI can see
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+          background:#EDE7F6;border:1.5px dashed #CE93D8;border-radius:8px;padding:7px 14px;
+          font-size:.78rem;font-weight:700;color:#6A1B9A;transition:all .15s;"
+          onmouseover="this.style.background='#E1BEE7'" onmouseout="this.style.background='#EDE7F6'">
+          ➕ Add Image or PDF
+          <input type="file" accept="image/*,application/pdf" multiple style="display:none;"
+            onchange="handleCqAiSourceFiles(event)" />
+        </label>
+        ${cqAiSourceFiles.length > 0 ? `
+        <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:6px;">
+          ${cqAiSourceFiles.map((f, fi) => `
+            <div style="display:flex;align-items:center;gap:5px;background:#EDE7F6;
+              border:1px solid #CE93D8;border-radius:20px;padding:3px 10px;font-size:.73rem;color:#4A148C;">
+              <span>${f.mimeType.startsWith('image/') ? '🖼️' : '📄'} ${escapeHtml(f.name)}</span>
+              <button onclick="cqRemoveSourceFile(${fi})" type="button"
+                style="background:none;border:none;cursor:pointer;color:#9C27B0;font-size:.85rem;
+                padding:0 2px;line-height:1;">✕</button>
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+      </div>
+      ` : ''}
 
       <div class="cq-input-row">
         <input type="text" id="cqTitleInput" placeholder="Quiz title (e.g. 'Cardio Lecture 3')"
