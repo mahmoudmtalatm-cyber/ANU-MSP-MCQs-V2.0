@@ -4563,7 +4563,6 @@ async function generateQuizFromAI() {
       }],
       generationConfig: {
         responseMimeType: 'application/json',
-        responseSchema: CQ_RESPONSE_SCHEMA,
         temperature: 0,
         maxOutputTokens: 65536
       }
@@ -4578,7 +4577,7 @@ async function generateQuizFromAI() {
     if (!textOut.trim()) throw new Error('Gemini returned an empty response. Please try again.');
 
     let parsed;
-    try { parsed = JSON.parse(textOut); }
+    try { const cleanOut = textOut.replace(/```json|```/g, '').trim(); parsed = JSON.parse(cleanOut); }
     catch (e) { throw new Error('Could not understand the AI response. Please try again.'); }
 
     if (!Array.isArray(parsed) || !parsed.length) {
@@ -4769,7 +4768,6 @@ async function generateQuizFromLecture() {
         }],
         generationConfig: {
           responseMimeType: 'application/json',
-          responseSchema: CQ_RESPONSE_SCHEMA,
           temperature: 0.7,
           maxOutputTokens: 65536
         }
@@ -4788,7 +4786,6 @@ async function generateQuizFromLecture() {
         }],
         generationConfig: {
           responseMimeType: 'application/json',
-          responseSchema: CQ_RESPONSE_SCHEMA,
           temperature: 0.7,
           maxOutputTokens: 65536
         }
@@ -5227,12 +5224,14 @@ Return ONLY a JSON array with ONE object in the same format:
       const lectureText = await fileToText(sourceFile);
       requestBody = {
         contents: [{ parts: [{ text: `SOURCE:\n\n${lectureText}\n\n---\n\n${reaskPrompt}` }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: CQ_RESPONSE_SCHEMA, temperature: 0, maxOutputTokens: 4096 }
+        generationConfig: { responseMimeType: 'application/json',
+ temperature: 0, maxOutputTokens: 4096 }
       };
     } else {
       requestBody = {
         contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64Data } }, { text: reaskPrompt }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: CQ_RESPONSE_SCHEMA, temperature: 0, maxOutputTokens: 4096 }
+        generationConfig: { responseMimeType: 'application/json',
+ temperature: 0, maxOutputTokens: 4096 }
       };
     }
 
