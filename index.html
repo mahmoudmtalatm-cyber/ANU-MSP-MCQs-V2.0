@@ -1879,6 +1879,7 @@ let changeLog        = [];
 let selectedLectures = {}; // { subjectName: Set of lecture names }
 let correctToWrong   = 0;
 let wrongToCorrect   = 0;
+let currentQuizSource = 'curriculum'; // 'curriculum' | 'custom' | 'community'
 /* ══════════════════════════════════════════════════════════
    INIT — build subject grid
 ══════════════════════════════════════════════════════════ */
@@ -2114,6 +2115,7 @@ function startQuiz() {
   currentIndex = 0; userAnswers = {}; markedSet = new Set();
   questionTimes = {}; correctToWrong = 0; wrongToCorrect = 0; changeLog = [];
   timeLeft = mins * 60;
+  currentQuizSource = 'curriculum';
 
   showScreen('quiz');
   renderQuestion();
@@ -2320,6 +2322,16 @@ if (prevTotal < threshold && newTotal >= threshold) {
 
   buildResults();
   showScreen('results');
+
+  // Split Quiz button: curriculum quizzes are admin-only; custom & community are available to all
+  const splitBtn = document.getElementById('resultsSplitBtn');
+  if (splitBtn) {
+    if (currentQuizSource === 'curriculum') {
+      splitBtn.classList.toggle('hidden', !isAdminUser(window._currentUser));
+    } else {
+      splitBtn.classList.remove('hidden');
+    }
+  }
 }
 
 function buildResults() {
@@ -6054,6 +6066,7 @@ function startCustomQuiz(id) {
   currentIndex = 0; userAnswers = {}; markedSet = new Set();
   questionTimes = {}; correctToWrong = 0; wrongToCorrect = 0; changeLog = [];
   timeLeft = mins * 60;
+  currentQuizSource = 'custom';
 
   closeCustomQuizzes();
   showScreen('quiz');
@@ -6463,6 +6476,7 @@ async function startCommunityQuizByIdx(idx) {
   currentIndex = 0; userAnswers = {}; markedSet = new Set();
   questionTimes = {}; correctToWrong = 0; wrongToCorrect = 0; changeLog = [];
   timeLeft = mins * 60;
+  currentQuizSource = 'community';
 
   closeCommunityQuizzes();
   showScreen('quiz');
