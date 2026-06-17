@@ -5294,6 +5294,51 @@ function cqRemoveSourceFile(idx) {
 // sourceText: optional reference text
 // sourceFiles: optional array of {base64, mimeType, name}
 // onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
+// Upload a file to the Gemini File API and wait until it is ACTIVE.
+// Returns the file URI on success, or null on failure (caller falls back to inline).
+// For text/plain the file is active immediately; for PDF/image we poll up to ~30 s.
+async function uploadToFileApi(blob, mimeType, displayName, apiKey) {
+  try {
+    const meta     = JSON.stringify({ file: { display_name: displayName } });
+    const formData = new FormData();
+    formData.append('metadata', new Blob([meta], { type: 'application/json' }));
+    formData.append('file', blob, displayName);
+    const uploadResp = await fetch(
+      `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`,
+      { method: 'POST', body: formData }
+    );
+    if (!uploadResp.ok) {
+      console.warn('[fileapi] upload HTTP error:', uploadResp.status, await uploadResp.text());
+      return null;
+    }
+    const uploadData = await uploadResp.json();
+    const fileUri    = uploadData && uploadData.file && uploadData.file.uri;
+    const fileName   = uploadData && uploadData.file && uploadData.file.name; // e.g. "files/abc123"
+    if (!fileUri) { console.warn('[fileapi] no URI in upload response', uploadData); return null; }
+
+    // Text files are active instantly; binary files need processing time.
+    if (mimeType === 'text/plain') return fileUri;
+
+    // Poll until ACTIVE (or FAILED), max ~30 s
+    const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${encodeURIComponent(apiKey)}`;
+    for (let attempt = 0; attempt < 15; attempt++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const pollResp = await fetch(pollUrl);
+      if (!pollResp.ok) break;
+      const pollData = await pollResp.json();
+      const state    = pollData && pollData.state;
+      if (state === 'ACTIVE') { console.log('[fileapi] file ACTIVE:', fileUri); return fileUri; }
+      if (state === 'FAILED') { console.warn('[fileapi] file processing FAILED:', pollData); return null; }
+      console.log('[fileapi] still processing, state:', state, '— retrying…');
+    }
+    console.warn('[fileapi] timed out waiting for file to become ACTIVE');
+    return null;
+  } catch (err) {
+    console.warn('[fileapi] upload/poll error:', err);
+    return null;
+  }
+}
+
 async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl) {
   if (!targetIdxs || !targetIdxs.length) return;
 
@@ -5313,17 +5358,49 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
       'Some questions may include an image — analyse it carefully. ' +
       'Respond ONLY with a JSON array.';
 
-  // Build source parts (shared across all chunks)
+  // ── Upload source material to File API once so it is not re-sent every batch.
+  //    Per-question images (q.image) are small and stay inline — never uploaded.
+  //    Falls back to inline_data automatically if any upload fails. ──
   const sourceParts = [];
+
   if (sourceText && sourceText.trim()) {
-    sourceParts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📤 Uploading source text once…</div>`;
+    const txtBlob = new Blob([sourceText.trim()], { type: 'text/plain' });
+    const txtUri  = await uploadToFileApi(txtBlob, 'text/plain', 'source_text.txt', apiKey);
+    if (txtUri) {
+      sourceParts.push({ text: '## Reference Source Material (Text):' });
+      sourceParts.push({ file_data: { mime_type: 'text/plain', file_uri: txtUri } });
+      sourceParts.push({ text: '---' });
+      console.log('[solve] sourceText uploaded via File API');
+    } else {
+      // Fallback: inline
+      sourceParts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
+      console.warn('[solve] sourceText falling back to inline');
+    }
   }
+
   if (sourceFiles && sourceFiles.length > 0) {
     sourceParts.push({ text: '## Reference Source Material (Images/PDFs):' });
-    sourceFiles.forEach((sf, sfi) => {
+    for (let sfi = 0; sfi < sourceFiles.length; sfi++) {
+      const sf = sourceFiles[sfi];
+      if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📤 Uploading source file ${sfi + 1}/${sourceFiles.length} (${sf.name}) — waiting for image processing…</div>`;
+      // Convert base64 back to blob for upload
+      const byteChars = atob(sf.base64);
+      const byteArr   = new Uint8Array(byteChars.length);
+      for (let b = 0; b < byteChars.length; b++) byteArr[b] = byteChars.charCodeAt(b);
+      const fileBlob  = new Blob([byteArr], { type: sf.mimeType });
+      const fileUri   = await uploadToFileApi(fileBlob, sf.mimeType, sf.name, apiKey);
       sourceParts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
-      sourceParts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
-    });
+      if (fileUri) {
+        // file_data: Gemini reads the full file including all images inside PDFs
+        sourceParts.push({ file_data: { mime_type: sf.mimeType, file_uri: fileUri } });
+        console.log('[solve] source file uploaded via File API:', sf.name);
+      } else {
+        // Fallback: inline_data — identical vision quality, just re-sent every batch
+        sourceParts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
+        console.warn('[solve] source file falling back to inline:', sf.name);
+      }
+    }
     sourceParts.push({ text: '---' });
   }
 
