@@ -1652,20 +1652,17 @@
       <div class="sq-title">🌐 Share with Community</div>
       <div class="sq-sub">Your quiz will be visible to all signed-in users. Your display name will be shown.</div>
       <div class="sq-quiz-name" id="sqQuizName"></div>
-      <div class="sq-field-label">Category</div>
-      <select class="sq-select" id="sqCategory">
-        <option value="">— Select a category —</option>
-        <option value="Anatomy">🦴 Anatomy</option>
-        <option value="Histology">🔬 Histology</option>
-        <option value="Physiology">🫀 Physiology</option>
-        <option value="Biochemistry">🧪 Biochemistry</option>
-        <option value="Pharmacology">💊 Pharmacology</option>
-        <option value="Microbiology">🧫 Microbiology</option>
-        <option value="Pathology">🩺 Pathology</option>
-        <option value="Parasitology">🦠 Parasitology</option>
-        <option value="Research Methods">📊 Research Methods</option>
-        <option value="Mixed / General">📚 Mixed / General</option>
-        <option value="Other">✏️ Other</option>
+      <div class="sq-field-label">Year</div>
+      <select class="sq-select" id="sqYear" onchange="sqOnYearChange(this.value)">
+        <option value="">— Select a year —</option>
+      </select>
+      <div class="sq-field-label">Module</div>
+      <select class="sq-select" id="sqModule" onchange="sqOnModuleChange(this.value)" disabled>
+        <option value="">— Select a module —</option>
+      </select>
+      <div class="sq-field-label">Subject</div>
+      <select class="sq-select" id="sqSubject" disabled>
+        <option value="">— Select a subject —</option>
       </select>
       <div class="sq-field-label">Tags <span style="font-weight:400;text-transform:none;">(optional)</span></div>
       <input class="sq-input" id="sqTags" type="text" maxlength="80" placeholder="e.g. renal, exam1, OSCE" />
@@ -6469,6 +6466,10 @@ async function shareCustomQuiz(id) {
       sharedAt: Date.now(),
       questionCount: quiz.questions.length,
       category: shareDetails.category || '',
+      year: shareDetails.year || '',
+      module: shareDetails.module || '',
+      subjectKey: shareDetails.subjectKey || '',
+      subjectLabel: shareDetails.subjectLabel || '',
       tags: shareDetails.tags || []
     }));
 
@@ -6488,19 +6489,78 @@ function openShareQuizModal(quizTitle) {
   return new Promise(resolve => {
     _shareQuizResolve = resolve;
     document.getElementById('sqQuizName').textContent = quizTitle;
-    document.getElementById('sqCategory').value = '';
     document.getElementById('sqTags').value = '';
+
+    // Populate Year dropdown from live curriculum object
+    const yearSel = document.getElementById('sqYear');
+    const modSel  = document.getElementById('sqModule');
+    const subjSel = document.getElementById('sqSubject');
+
+    const years = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
+    yearSel.innerHTML = '<option value="">— Select a year —</option>' +
+      years.map(y => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`).join('');
+    yearSel.value = '';
+    modSel.innerHTML = '<option value="">— Select a module —</option>';
+    modSel.disabled = true;
+    subjSel.innerHTML = '<option value="">— Select a subject —</option>';
+    subjSel.disabled = true;
+
     document.getElementById('shareQuizOverlay').classList.remove('hidden');
-    setTimeout(() => document.getElementById('sqCategory').focus(), 50);
+    setTimeout(() => yearSel.focus(), 50);
   });
 }
 
+function sqOnYearChange(year) {
+  const modSel  = document.getElementById('sqModule');
+  const subjSel = document.getElementById('sqSubject');
+  modSel.innerHTML = '<option value="">— Select a module —</option>';
+  subjSel.innerHTML = '<option value="">— Select a subject —</option>';
+  subjSel.disabled = true;
+  if (!year) { modSel.disabled = true; return; }
+  const mods = Object.keys(curriculum[year] || {});
+  modSel.innerHTML += mods.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+  modSel.disabled = false;
+  modSel.value = '';
+}
+
+function sqOnModuleChange(mod) {
+  const year    = document.getElementById('sqYear').value;
+  const subjSel = document.getElementById('sqSubject');
+  subjSel.innerHTML = '<option value="">— Select a subject —</option>';
+  if (!year || !mod) { subjSel.disabled = true; return; }
+  const keys = (curriculum[year][mod] || []).filter(k => subjects[k]);
+  subjSel.innerHTML += keys.map(k => {
+    const label = subjects[k].label || k;
+    const icon  = subjects[k].icon  || '';
+    return `<option value="${escapeHtml(k)}">${icon} ${escapeHtml(label)}</option>`;
+  }).join('');
+  subjSel.disabled = false;
+  subjSel.value = '';
+}
+
 function confirmShareQuiz() {
-  const category = document.getElementById('sqCategory').value.trim();
+  const year     = document.getElementById('sqYear').value.trim();
+  const mod      = document.getElementById('sqModule').value.trim();
+  const subjKey  = document.getElementById('sqSubject').value.trim();
   const rawTags  = document.getElementById('sqTags').value;
   const tags = rawTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+
+  if (!year || !mod || !subjKey) {
+    alert('Please select a Year, Module, and Subject before sharing.');
+    return;
+  }
+
+  const subjLabel = (subjects[subjKey] && (subjects[subjKey].label || subjKey)) || subjKey;
   document.getElementById('shareQuizOverlay').classList.add('hidden');
-  if (_shareQuizResolve) { _shareQuizResolve({ category, tags }); _shareQuizResolve = null; }
+  if (_shareQuizResolve) {
+    _shareQuizResolve({
+      year, module: mod, subjectKey: subjKey, subjectLabel: subjLabel,
+      // flat category string for backwards-compatible search/display
+      category: `${year} › ${mod} › ${subjLabel}`,
+      tags
+    });
+    _shareQuizResolve = null;
+  }
 }
 
 function cancelShareQuiz() {
@@ -6524,7 +6584,9 @@ function restoreOptionsOrder(questions) {
 ══════════════════════════════════════════════════════════ */
 let communityTab = 'browse'; // 'browse' | 'mine'
 let communitySearchQuery = '';
-let communityCategoryFilter = '';
+let communityYearFilter    = '';
+let communityModuleFilter  = '';
+let communitySubjectFilter = '';
 let communitySort = 'newest';
 let _allSharedQuizzes = []; // cache for client-side filtering
 
@@ -6535,7 +6597,9 @@ function openCommunityQuizzes() {
   }
   communityTab = 'browse';
   communitySearchQuery = '';
-  communityCategoryFilter = '';
+  communityYearFilter    = '';
+  communityModuleFilter  = '';
+  communitySubjectFilter = '';
   communitySort = 'newest';
   document.getElementById('communityQuizOverlay').classList.remove('hidden');
   renderCommunityQuizzes();
@@ -6580,9 +6644,15 @@ async function renderCommunityQuizzes(forceReload) {
     });
   }
 
-  // Category filter
-  if (communityCategoryFilter) {
-    pool = pool.filter(item => (item.category || '') === communityCategoryFilter);
+  // Hierarchical curriculum filter
+  if (communityYearFilter) {
+    pool = pool.filter(item => (item.year || '') === communityYearFilter);
+  }
+  if (communityModuleFilter) {
+    pool = pool.filter(item => (item.module || '') === communityModuleFilter);
+  }
+  if (communitySubjectFilter) {
+    pool = pool.filter(item => (item.subjectKey || '') === communitySubjectFilter);
   }
 
   // Sorting
@@ -6596,8 +6666,14 @@ async function renderCommunityQuizzes(forceReload) {
     pool = [...pool].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
   }
 
-  // Collect unique categories across ALL quizzes for filter dropdown
-  const allCats = [...new Set(shared.map(item => item.category).filter(Boolean))].sort();
+  // Build cascading filter options from live curriculum + shared quiz metadata
+  const allYears   = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
+  const allModules = communityYearFilter
+    ? Object.keys(curriculum[communityYearFilter] || {})
+    : [...new Set(shared.map(i => i.module).filter(Boolean))].sort();
+  const allSubjects = (communityYearFilter && communityModuleFilter)
+    ? (curriculum[communityYearFilter][communityModuleFilter] || []).filter(k => subjects[k])
+    : [...new Set(shared.map(i => i.subjectKey).filter(Boolean))];
 
   // --- Build HTML ---
   const searchVal = escapeHtml(communitySearchQuery);
@@ -6605,7 +6681,7 @@ async function renderCommunityQuizzes(forceReload) {
 
   let html = `
     <div class="community-section-tabs">
-      <button class="community-tab-btn ${communityTab === 'browse' ? 'active' : ''}" onclick="communityTab='browse';communitySearchQuery='';communityCategoryFilter='';renderCommunityQuizzes()">&#127758; Browse All (${shared.length})</button>
+      <button class="community-tab-btn ${communityTab === 'browse' ? 'active' : ''}" onclick="communityTab='browse';communitySearchQuery='';communityYearFilter='';communityModuleFilter='';communitySubjectFilter='';renderCommunityQuizzes()">&#127758; Browse All (${shared.length})</button>
       <button class="community-tab-btn ${communityTab === 'mine' ? 'active' : ''}" onclick="communityTab='mine';renderCommunityQuizzes()">&#128100; My Shared (${myShared.length})</button>
     </div>
 
@@ -6620,10 +6696,26 @@ async function renderCommunityQuizzes(forceReload) {
                 onclick="communitySearchQuery='';document.getElementById('commSearchInput').value='';this.style.display='none';renderCommunityQuizzes()">✕</button>
       </div>
       <div class="comm-filter-row">
-        <select class="comm-filter-select" id="commCatFilter"
-                onchange="communityCategoryFilter=this.value;renderCommunityQuizzes()">
-          <option value="">All Categories</option>
-          ${allCats.map(c => `<option value="${escapeHtml(c)}" ${communityCategoryFilter === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+        <select class="comm-filter-select" id="commYearFilter"
+                onchange="communityYearFilter=this.value;communityModuleFilter='';communitySubjectFilter='';renderCommunityQuizzes()">
+          <option value="">All Years</option>
+          ${allYears.map(y => `<option value="${escapeHtml(y)}" ${communityYearFilter === y ? 'selected' : ''}>${escapeHtml(y)}</option>`).join('')}
+        </select>
+        <select class="comm-filter-select" id="commModuleFilter"
+                onchange="communityModuleFilter=this.value;communitySubjectFilter='';renderCommunityQuizzes()"
+                ${!communityYearFilter ? 'disabled' : ''}>
+          <option value="">All Modules</option>
+          ${allModules.map(m => `<option value="${escapeHtml(m)}" ${communityModuleFilter === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+        </select>
+        <select class="comm-filter-select" id="commSubjectFilter"
+                onchange="communitySubjectFilter=this.value;renderCommunityQuizzes()"
+                ${!communityModuleFilter ? 'disabled' : ''}>
+          <option value="">All Subjects</option>
+          ${allSubjects.map(k => {
+            const lbl = (subjects[k] && (subjects[k].label || k)) || k;
+            const ico = (subjects[k] && subjects[k].icon) || '';
+            return `<option value="${escapeHtml(k)}" ${communitySubjectFilter === k ? 'selected' : ''}>${ico} ${escapeHtml(lbl)}</option>`;
+          }).join('')}
         </select>
         <select class="comm-filter-select" id="commSortSelect"
                 onchange="communitySort=this.value;renderCommunityQuizzes()">
@@ -6638,8 +6730,8 @@ async function renderCommunityQuizzes(forceReload) {
 
   if (!pool.length) {
     html += `<div class="community-empty">
-      <div class="ce-icon">${communitySearchQuery || communityCategoryFilter ? '🔍' : (communityTab === 'mine' ? '&#128100;' : '&#127758;')}</div>
-      ${communitySearchQuery || communityCategoryFilter
+      <div class="ce-icon">${communitySearchQuery || communityYearFilter || communityModuleFilter || communitySubjectFilter ? '🔍' : (communityTab === 'mine' ? '&#128100;' : '&#127758;')}</div>
+      ${communitySearchQuery || communityYearFilter || communityModuleFilter || communitySubjectFilter
         ? 'No quizzes match your search. Try different keywords or clear the filters.'
         : communityTab === 'mine'
           ? 'You haven\'t shared any quizzes yet. Create one and tap the &#128279; Share button!'
@@ -6652,8 +6744,9 @@ async function renderCommunityQuizzes(forceReload) {
       _communityQuizzesCache[idx] = item;
       const isOwn = item.authorUid === myUid;
       const date  = new Date(item.sharedAt).toLocaleDateString();
-      const catBadge = item.category
-        ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '';
+      const catBadge = (item.year || item.subjectLabel)
+        ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
+        : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
       const tagsHtml = (item.tags && item.tags.length)
         ? `<div class="comm-tags-row">${item.tags.map(t =>
             `<span class="comm-tag" onclick="communitySearchQuery='${escapeHtml(t)}';renderCommunityQuizzes()" title="Filter by tag">#${escapeHtml(t)}</span>`
