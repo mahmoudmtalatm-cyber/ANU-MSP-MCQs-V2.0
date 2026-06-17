@@ -4944,9 +4944,29 @@ const CQ_RESPONSE_SCHEMA = {
   }
 };
 
-/* ── Retry helper: retries indefinitely with exponential back-off (2s, 4s, 8s… capped at 30s).
-   Only surfaces an error immediately if it's API-key-related
-   (HTTP 400 with API_KEY_INVALID / 401 / 403). ──────── */
+/* ── Global call-spacing gate: ensures consecutive Gemini calls never fire
+   closer together than MIN_GEMINI_CALL_GAP_MS, regardless of how many
+   files/batches are queued up. This prevents bursts of calls (one per file,
+   one per filter batch, etc.) from tripping the per-minute quota in the
+   first place, rather than just reacting to 429s after the fact. ──────── */
+const MIN_GEMINI_CALL_GAP_MS = 4000;
+let _lastGeminiCallAt = 0;
+async function _waitForGeminiSlot(cancelToken) {
+  const now = Date.now();
+  const elapsed = now - _lastGeminiCallAt;
+  if (elapsed < MIN_GEMINI_CALL_GAP_MS) {
+    await cancellableSleep(MIN_GEMINI_CALL_GAP_MS - elapsed, cancelToken);
+  }
+  _lastGeminiCallAt = Date.now();
+}
+
+/* ── Retry helper: retries indefinitely and silently — no error is ever
+   surfaced to the UI from here, no matter how many attempts it takes.
+   Rate-limit responses (429) and transient server errors (5xx) back off
+   more patiently than other errors, since those are quota-window issues
+   that need real wall-clock time to clear rather than a quick retry.
+   Only key errors (401/403/invalid key) are surfaced immediately, since no
+   amount of retrying fixes a bad key. ──────── */
 async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) {
   const KEY_ERRORS = ['API_KEY_INVALID', 'API_KEY_NOT_VALID', 'INVALID_API_KEY',
                       'PERMISSION_DENIED', 'API key not valid'];
@@ -4959,6 +4979,29 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) 
     return false;
   }
 
+  // Parses a Retry-After header (seconds, or an HTTP date) into milliseconds.
+  function retryAfterMs(resp) {
+    if (!resp || !resp.headers || typeof resp.headers.get !== 'function') return null;
+    const ra = resp.headers.get('Retry-After');
+    if (!ra) return null;
+    const secs = Number(ra);
+    if (!isNaN(secs)) return Math.max(0, secs * 1000);
+    const dateMs = Date.parse(ra);
+    if (!isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
+    return null;
+  }
+
+  // Backoff schedule: rate-limit/server errors get longer, more patient waits
+  // (quota windows are typically per-minute, so short backoffs just keep
+  // hitting the same closed window). Other transient errors use a shorter
+  // schedule. Both retry forever — this function never gives up and never
+  // throws for these cases, by design.
+  function backoffMs(attempt, isRateLimited, serverHintMs) {
+    if (serverHintMs != null) return Math.min(serverHintMs + 500, 90000);
+    if (isRateLimited) return Math.min(8000 * Math.pow(1.6, attempt - 1), 75000);
+    return Math.min(2000 * Math.pow(2, attempt - 1), 30000);
+  }
+
   let attempt = 0;
   while (true) {
     // Check for cancellation before every attempt (including between retries)
@@ -4967,12 +5010,18 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) 
     }
     attempt++;
     try {
+      // Space out calls so we don't burst past the per-minute quota.
+      await _waitForGeminiSlot(cancelToken);
+      if (cancelToken && cancelToken.cancelled) {
+        const e = new Error('cancelled'); e._cancelled = true; throw e;
+      }
+
       const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyObj)
       });
-      const data = await resp.json();
+      const data = await resp.json().catch(() => ({}));
 
       if (!resp.ok) {
         const msg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
@@ -4981,9 +5030,14 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) 
         err._apiData    = data;
         // Always surface key errors immediately — no point retrying
         if (isKeyError(resp.status, data)) throw Object.assign(err, { _keyError: true });
+
+        const isRateLimited = resp.status === 429 || resp.status === 503;
+        const serverHintMs  = retryAfterMs(resp);
         if (onRetry) onRetry(attempt);
-        // Cancellable sleep between retries
-        await cancellableSleep(Math.min(2000 * Math.pow(2, attempt - 1), 30000), cancelToken);
+        // Push the next allowed call slot out too, so other queued calls
+        // (e.g. from concurrent loops) also respect the cooldown.
+        _lastGeminiCallAt = Date.now() + backoffMs(attempt, isRateLimited, serverHintMs) - MIN_GEMINI_CALL_GAP_MS;
+        await cancellableSleep(backoffMs(attempt, isRateLimited, serverHintMs), cancelToken);
         continue;
       }
 
