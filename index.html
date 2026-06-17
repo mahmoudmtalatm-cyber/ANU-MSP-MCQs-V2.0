@@ -5526,6 +5526,7 @@ async function generateQuizFromAI() {
       }
 
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''} against your ${cqFilterFiles.length} lecture file${cqFilterFiles.length !== 1 ? 's' : ''}…</div>`;
+      console.log(`[lecture-filter] combined lectureText length: ${lectureText.length} chars (~${Math.round(lectureText.length / 4)} tokens) across ${cqFilterFiles.length} file(s)`);
 
       // ── Step 2b: batch filtering — process questions in chunks of 50 to avoid output token limits ──
       const FILTER_CHUNK_SIZE = 50;
@@ -5552,10 +5553,10 @@ LECTURE CONTENT:
 ${lectureText}
 
 TASK: For each numbered question, decide whether its core subject matter is covered by the provided lecture content.
-- Output 1 if the question's topic clearly relates to something taught in the lectures.
-- Output 0 if the question is about a different topic/subject not covered in the lectures, or if you are not reasonably confident it relates.
+- Output 1 ONLY if you can point to a specific topic, heading, or concept in the lecture content above that this question is directly testing.
+- Output 0 if the question's topic is not clearly present in the lecture content, even if it seems like a plausible related topic in the same general field.
 
-Be strict: when in doubt, output 0. The goal is to remove MCQs that don't belong with this curriculum, not to keep everything.
+Do not assume relevance just because the lectures and questions are in the same broad subject area (e.g. both "medicine" or both "biology") — judge each question against the SPECIFIC topics actually present in the lecture content, not the general field. It is expected and normal for some questions to be irrelevant; do not default to keeping everything.
 
 Return ONLY a JSON array of 0s and 1s, with exactly ${batchQs.length} elements (one per question below), in the same order, with no other text, no markdown fences, and no explanation.
 Example output for 5 questions: [1,0,1,1,0]
@@ -5577,6 +5578,7 @@ ${batchQs.map((q, i) => `${batchStart + i + 1}. ${q.question}`).join('\n')}`;
           const fcandidate = filterData && filterData.candidates && filterData.candidates[0];
           if (fcandidate) {
             const ftextOut = (fcandidate.content && fcandidate.content.parts || []).map(p => p.text || '').join('');
+            console.log(`[lecture-filter] batch ${batchIdx + 1}/${totalBatches} raw output:`, ftextOut);
             try {
               const parsed = JSON.parse(ftextOut.replace(/```json|```/g, '').trim());
               if (Array.isArray(parsed) && parsed.length === batchQs.length) {
@@ -5584,8 +5586,12 @@ ${batchQs.map((q, i) => `${batchStart + i + 1}. ${q.question}`).join('\n')}`;
               } else if (Array.isArray(parsed) && parsed.length > 0) {
                 // Partial response — pad with 1s (keep questions) to avoid silent data loss
                 batchFlags = batchQs.map((_, i) => parsed[i] !== undefined ? parsed[i] : 1);
+              } else {
+                console.warn(`[lecture-filter] batch ${batchIdx + 1} parsed but not a usable array:`, parsed);
               }
-            } catch (fe) { batchFlags = null; }
+            } catch (fe) { console.warn(`[lecture-filter] batch ${batchIdx + 1} JSON parse failed:`, fe, ftextOut); batchFlags = null; }
+          } else {
+            console.warn(`[lecture-filter] batch ${batchIdx + 1} returned no candidate`, filterData);
           }
         } catch (batchErr) {
           console.warn(`Filter batch ${batchIdx + 1} failed:`, batchErr);
@@ -5597,6 +5603,9 @@ ${batchQs.map((q, i) => `${batchStart + i + 1}. ${q.question}`).join('\n')}`;
           filterBatchFailed = true;
           batchFlags = new Array(batchQs.length).fill(1);
         }
+
+        const batchOnes = batchFlags.filter(f => f === 1 || f === true).length;
+        console.log(`[lecture-filter] batch ${batchIdx + 1}/${totalBatches}: kept ${batchOnes}/${batchFlags.length}`);
 
         allFlags.push(...batchFlags);
       }
