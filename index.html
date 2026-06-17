@@ -6609,6 +6609,15 @@ function closeCommunityQuizzes() {
   document.getElementById('communityQuizOverlay').classList.add('hidden');
 }
 
+function communityOnSearchInput(val) {
+  communitySearchQuery = val;
+  document.getElementById('commClearBtn').style.display = val ? 'block' : 'none';
+  window._commSearchFocused = true;
+  const el = document.getElementById('commSearchInput');
+  window._commSearchPos = el ? el.selectionStart : null;
+  renderCommunityQuizzes();
+}
+
 async function renderCommunityQuizzes(forceReload) {
   const body = document.getElementById('communityQuizBody');
 
@@ -6691,7 +6700,7 @@ async function renderCommunityQuizzes(forceReload) {
         <input class="comm-search-input" id="commSearchInput" type="text"
                placeholder="Search by title, author, category or tag…"
                value="${searchVal}"
-               oninput="communitySearchQuery=this.value;document.getElementById('commClearBtn').style.display=this.value?'block':'none';renderCommunityQuizzes()" />
+               oninput="communityOnSearchInput(this.value)" />
         <button class="comm-search-clear" id="commClearBtn" style="${clearStyle}"
                 onclick="communitySearchQuery='';document.getElementById('commSearchInput').value='';this.style.display='none';renderCommunityQuizzes()">✕</button>
       </div>
@@ -6782,6 +6791,15 @@ async function renderCommunityQuizzes(forceReload) {
   }
 
   body.innerHTML = html;
+
+  // Restore search input focus/caret if user was typing
+  const searchEl = document.getElementById('commSearchInput');
+  if (searchEl && document.activeElement !== searchEl && window._commSearchFocused) {
+    const pos = window._commSearchPos || searchEl.value.length;
+    searchEl.focus();
+    try { searchEl.setSelectionRange(pos, pos); } catch(e) {}
+    window._commSearchFocused = false;
+  }
 }
 
 async function startCommunityQuizByIdx(idx) {
