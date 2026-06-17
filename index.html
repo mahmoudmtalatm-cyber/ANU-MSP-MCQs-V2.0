@@ -5582,7 +5582,33 @@ async function generateQuizFromAI() {
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''} against your ${cqFilterFiles.length} lecture file${cqFilterFiles.length !== 1 ? 's' : ''}…</div>`;
       console.log(`[lecture-filter] combined lectureText length: ${lectureText.length} chars (~${Math.round(lectureText.length / 4)} tokens) across ${cqFilterFiles.length} file(s)`);
 
-      // ── Step 2b: batch filtering — process questions in chunks of 50 to avoid output token limits ──
+      // ── Step 2b-pre: upload lectureText to Gemini File API ONCE so it is not
+      //    re-sent as inline text on every batch request. Falls back to inline
+      //    text automatically if the upload fails for any reason. ──
+      let lectureFileUri = null;
+      try {
+        statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📤 Uploading lecture content once for efficient filtering…</div>`;
+        const lectureBlob = new Blob([lectureText], { type: 'text/plain' });
+        const uploadMeta  = JSON.stringify({ file: { display_name: 'lecture_context.txt' } });
+        const formData    = new FormData();
+        formData.append('metadata', new Blob([uploadMeta], { type: 'application/json' }));
+        formData.append('file', lectureBlob, 'lecture_context.txt');
+        const uploadResp  = await fetch(
+          `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`,
+          { method: 'POST', body: formData }
+        );
+        if (uploadResp.ok) {
+          const uploadData = await uploadResp.json();
+          lectureFileUri   = uploadData && uploadData.file && uploadData.file.uri;
+          console.log('[lecture-filter] File API upload succeeded, uri:', lectureFileUri);
+        } else {
+          console.warn('[lecture-filter] File API upload HTTP error:', uploadResp.status, await uploadResp.text());
+        }
+      } catch (uploadErr) {
+        console.warn('[lecture-filter] File API upload failed, falling back to inline text:', uploadErr);
+      }
+
+      // ── Step 2b: batch filtering — process questions in chunks of 50 ──
       const FILTER_CHUNK_SIZE = 50;
       const allFlags = [];
       let filterBatchFailed = false;
@@ -5597,15 +5623,10 @@ async function generateQuizFromAI() {
           statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering questions against lecture files… (batch ${batchIdx + 1} of ${totalBatches})</div>`;
         }
 
-        const filterPrompt = `You are a strict relevance filter for multiple-choice exam questions.
-
-You will be given:
-1. The full content of one or more lecture files (the curriculum the user actually studied).
-2. A numbered list of MCQ questions (question text only) that were extracted from a quiz file. Some of these questions may belong to a completely different course/curriculum than the lectures provided.
-
-LECTURE CONTENT:
-${lectureText}
-
+        // Build prompt parts. If File API upload succeeded, reference the lecture
+        // via file_data instead of embedding the full text inline every batch.
+        const questionListText = batchQs.map((q, i) => `${batchStart + i + 1}. ${q.question}`).join('\n');
+        const taskInstructions = `
 TASK: For each numbered question, decide whether its core subject matter is covered by the provided lecture content.
 - Output 1 ONLY if you can point to a specific topic, heading, or concept in the lecture content above that this question is directly testing.
 - Output 0 if the question's topic is not clearly present in the lecture content, even if it seems like a plausible related topic in the same general field.
@@ -5616,15 +5637,25 @@ Return ONLY a JSON array of 0s and 1s, with exactly ${batchQs.length} elements (
 Example output for 5 questions: [1,0,1,1,0]
 
 QUESTIONS TO EVALUATE:
-${batchQs.map((q, i) => `${batchStart + i + 1}. ${q.question}`).join('\n')}`;
+${questionListText}`;
+
+        let filterParts;
+        if (lectureFileUri) {
+          filterParts = [
+            { text: 'You are a strict relevance filter for multiple-choice exam questions.\n\nYou will be given:\n1. The full content of one or more lecture files (the curriculum the user actually studied).\n2. A numbered list of MCQ questions (question text only) extracted from a quiz file.\n\nLECTURE CONTENT:' },
+            { file_data: { mime_type: 'text/plain', file_uri: lectureFileUri } },
+            { text: taskInstructions }
+          ];
+        } else {
+          // Fallback: inline text (original behaviour)
+          filterParts = [{ text: `You are a strict relevance filter for multiple-choice exam questions.\n\nYou will be given:\n1. The full content of one or more lecture files (the curriculum the user actually studied).\n2. A numbered list of MCQ questions (question text only) that were extracted from a quiz file. Some of these questions may belong to a completely different course/curriculum than the lectures provided.\n\nLECTURE CONTENT:\n${lectureText}` + taskInstructions }];
+        }
 
         let batchFlags = null;
         try {
           const filterData = await callGeminiWithRetry(url, {
             contents: [{
-              parts: [
-                { text: filterPrompt }
-              ]
+              parts: filterParts
             }],
             generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 1024 }
           }, {});
