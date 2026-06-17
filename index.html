@@ -723,6 +723,88 @@
 .cq-help-box ol { margin: 6px 0 0 20px; }
 .cq-help-box a { color: var(--accent); font-weight: 700; text-decoration: none; }
 .cq-help-box a:hover { text-decoration: underline; }
+/* ── KEY MANAGER ── */
+.km-panel {
+  background: #F7FBFF;
+  border: 1.5px solid #B0D4F0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.km-title {
+  font-size: .82rem; font-weight: 800; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .7px;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.km-key-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }
+.km-key-row {
+  display: flex; align-items: center; gap: 6px;
+  background: #fff; border: 1.5px solid #D0E8F8;
+  border-radius: 8px; padding: 7px 10px;
+  transition: border-color .15s;
+}
+.km-key-row.ok   { border-left: 4px solid #43A047; }
+.km-key-row.rate_limited { border-left: 4px solid #FB8C00; }
+.km-key-row.invalid      { border-left: 4px solid #E53935; opacity: .75; }
+.km-key-label {
+  flex: 1; font-size: .82rem; font-weight: 700;
+  color: var(--text-main); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 90px;
+  cursor: pointer;
+}
+.km-key-val {
+  flex: 3; font-size: .75rem; font-family: monospace;
+  color: var(--text-muted); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.km-badge {
+  font-size: .68rem; font-weight: 800; border-radius: 20px;
+  padding: 2px 8px; white-space: nowrap; flex-shrink: 0;
+}
+.km-badge.ok           { background: #E8F5E9; color: #2E7D32; }
+.km-badge.rate_limited { background: #FFF3E0; color: #E65100; }
+.km-badge.invalid      { background: #FFEBEE; color: #C62828; }
+.km-badge.active       { background: #E3F2FD; color: #1565C0; }
+.km-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.km-icon-btn {
+  background: none; border: none; cursor: pointer; font-size: .95rem;
+  padding: 2px 4px; border-radius: 5px; line-height: 1;
+  transition: background .12s;
+}
+.km-icon-btn:hover { background: #EEF7FF; }
+.km-add-row {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.km-add-input {
+  flex: 1; min-width: 160px;
+  padding: 9px 12px;
+  border: 1.5px solid #B0D4F0; border-radius: 8px;
+  font-family: var(--font); font-size: .88rem;
+  color: var(--text-main); background: #fff;
+  outline: none; transition: border-color .2s, box-shadow .2s;
+}
+.km-add-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.15); }
+.km-label-input {
+  width: 90px;
+  padding: 9px 10px;
+  border: 1.5px solid #B0D4F0; border-radius: 8px;
+  font-family: var(--font); font-size: .82rem;
+  color: var(--text-main); background: #fff;
+  outline: none; transition: border-color .2s;
+}
+.km-label-input:focus { border-color: var(--accent); }
+.km-status-summary {
+  font-size: .78rem; color: var(--text-muted);
+  margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.km-no-keys {
+  text-align: center; padding: 12px 8px;
+  font-size: .83rem; color: var(--text-muted);
+  border: 1.5px dashed #B0D4F0; border-radius: 8px;
+  background: #fff;
+}
+
 .cq-input-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .cq-input-row input[type="password"],
 .cq-input-row input[type="text"] {
@@ -1632,6 +1714,17 @@
         <button class="stats-close-btn" onclick="closeCustomQuizzes()">✕</button>
       </div>
       <div class="stats-body" id="customQuizBody"></div>
+    </div>
+  </div>
+
+<!-- LECTURE FILTER REPORT MODAL -->
+  <div id="filterReportOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeFilterReport()">
+    <div class="stats-modal">
+      <div class="stats-modal-header">
+        <h2>📋&nbsp; Lecture Filter Report</h2>
+        <button class="stats-close-btn" onclick="closeFilterReport()">✕</button>
+      </div>
+      <div class="stats-body" id="filterReportBody"></div>
     </div>
   </div>
 
@@ -3197,12 +3290,9 @@ async function _getExplainFromPool(questionText) {
   } catch(e) { return null; }
 }
 
-function getExplainKey() {
-  try { return localStorage.getItem(AI_EXPLAIN_KEY_STORE) || ''; } catch(e) { return ''; }
-}
-function setExplainKey(key) {
-  try { localStorage.setItem(AI_EXPLAIN_KEY_STORE, (key || '').trim()); } catch(e) {} 
-}
+/* Explain key now reuses the multi-key pool */
+function getExplainKey() { return getGeminiKey(); }
+function setExplainKey(key) { setGeminiKey(key); }
 
 /* ── Build Gemini prompt for one question ── */
 function buildExplainPrompt(q, userAnswer) {
@@ -3275,9 +3365,7 @@ function handleExplainKeySave() {
   const key = (inp ? inp.value : '').trim();
   if (!key) { if(inp) inp.style.borderColor='#C62828'; return; }
   setExplainKey(key);
-  // Also sync with the custom quiz key input if it's open
-  const cqInp = document.getElementById('cqApiKeyInput');
-  if (cqInp) cqInp.value = key;
+  _refreshKmPanel();
   if (window._explainKeySaveCallback) {
     const cb = window._explainKeySaveCallback;
     window._explainKeySaveCallback = null;
@@ -3433,7 +3521,7 @@ async function explainQuestion(i, forceRegenerate = false) {
     const p = document.getElementById(`explainPanel_${i}`);
     if (p) {
       if (isKeyErr) {
-        setExplainKey('');
+        _refreshKmPanel();
         renderExplainKeyPrompt(p, (key) => {
           p.innerHTML = '';
           explainQuestion(i);
@@ -3927,7 +4015,7 @@ async function runChatRequest(i) {
 
     const isKeyErr = err._keyError || /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
-      setExplainKey('');
+      _refreshKmPanel();
       const panel = document.getElementById(`chatPanel_${i}`);
       if (panel) renderExplainKeyPrompt(panel, () => runChatRequest(i));
       return;
@@ -3965,6 +4053,7 @@ let cqAiSolveAllToggle  = false;  // whether to also AI-solve questions that alr
 
 // ── Split quiz into multiple quizzes ──
 let cqSplitState = null;
+let cqLastFilterReport = null; // [{question, verdict: 'kept'|'dropped'|'review', reason}] from the most recent lecture filter run
 // shape when active: { context: 'preview'|'saved', quizId: null|string,
 //   mode: 'equal'|'custom'|'visual', chunkSize: number,
 //   ranges: [{start:'', end:'', label:''}],
@@ -4137,11 +4226,266 @@ async function saveCustomQuizzesList(arr) {
     try { localStorage.setItem(CQ_KEY, JSON.stringify(arr)); } catch (e) {}
   }
 }
-function getGeminiKey() {
-  try { return localStorage.getItem(CQ_API_KEY_STORE) || ''; } catch (e) { return ''; }
+/* ══════════════════════════════════════════════════════════
+   MULTI-KEY POOL MANAGER
+   Keys are stored as an array of objects:
+     { key: string, label: string, status: 'ok'|'rate_limited'|'invalid', rateLimitedUntil: number }
+   Smart routing:
+   - Round-robin across all 'ok' keys
+   - If a key gets 429 → mark rate_limited for 65s, skip it and try next
+   - If a key gets 401/403 → mark invalid permanently
+   - If ALL keys are rate_limited → wait for the earliest one to recover
+   - Falls back to the old single-key store for backward compatibility
+══════════════════════════════════════════════════════════ */
+const CQ_KEY_POOL_STORE = 'anu_msp_gemini_key_pool';
+
+function _loadKeyPool() {
+  try {
+    const raw = localStorage.getItem(CQ_KEY_POOL_STORE);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  // Migrate legacy single key
+  try {
+    const legacy = localStorage.getItem(CQ_API_KEY_STORE);
+    if (legacy) return [{ key: legacy, label: 'Key 1', status: 'ok', rateLimitedUntil: 0 }];
+  } catch (e) {}
+  return [];
 }
+
+function _saveKeyPool(pool) {
+  try { localStorage.setItem(CQ_KEY_POOL_STORE, JSON.stringify(pool)); } catch (e) {}
+}
+
+// Internal pointer for round-robin
+let _keyPoolIndex = 0;
+
+/* Returns the best available key string, or '' if none */
+function getGeminiKey() {
+  const pool = _loadKeyPool();
+  if (!pool.length) return '';
+  const now = Date.now();
+  // Recover any rate-limited keys whose window has passed
+  pool.forEach(k => { if (k.status === 'rate_limited' && now >= (k.rateLimitedUntil || 0)) k.status = 'ok'; });
+  _saveKeyPool(pool);
+  // Find next available key via round-robin
+  const okKeys = pool.filter(k => k.status === 'ok');
+  if (!okKeys.length) {
+    // All rate-limited — return the one whose cooldown expires soonest
+    const soonest = pool.filter(k => k.status === 'rate_limited').sort((a,b) => (a.rateLimitedUntil||0) - (b.rateLimitedUntil||0))[0];
+    return soonest ? soonest.key : '';
+  }
+  _keyPoolIndex = _keyPoolIndex % okKeys.length;
+  return okKeys[_keyPoolIndex].key;
+}
+
+/* Called after a successful request to advance the round-robin pointer */
+function _advanceKeyPool() {
+  const pool = _loadKeyPool();
+  const okCount = pool.filter(k => k.status === 'ok').length;
+  if (okCount > 1) _keyPoolIndex = (_keyPoolIndex + 1) % okCount;
+}
+
+/* Called on 429 — mark the key as rate-limited for 65 seconds */
+function _markKeyRateLimited(key) {
+  const pool = _loadKeyPool();
+  const entry = pool.find(k => k.key === key);
+  if (entry) {
+    entry.status = 'rate_limited';
+    entry.rateLimitedUntil = Date.now() + 65000;
+    _saveKeyPool(pool);
+  }
+  // Reset round-robin so next call picks a fresh ok key
+  _keyPoolIndex = 0;
+}
+
+/* Called on 401/403 — mark the key as permanently invalid */
+function _markKeyInvalid(key) {
+  const pool = _loadKeyPool();
+  const entry = pool.find(k => k.key === key);
+  if (entry) { entry.status = 'invalid'; _saveKeyPool(pool); }
+  _keyPoolIndex = 0;
+}
+
+/* Compatibility shim — sets or adds a single key (used by legacy code paths) */
 function setGeminiKey(key) {
-  try { localStorage.setItem(CQ_API_KEY_STORE, (key || '').trim()); } catch (e) {}
+  const k = (key || '').trim();
+  if (!k) return;
+  const pool = _loadKeyPool();
+  if (!pool.find(e => e.key === k)) {
+    pool.push({ key: k, label: `Key ${pool.length + 1}`, status: 'ok', rateLimitedUntil: 0 });
+    _saveKeyPool(pool);
+  }
+  try { localStorage.setItem(CQ_API_KEY_STORE, k); } catch(e) {}
+}
+
+/* Add a new key to the pool */
+function addGeminiKey(key, label) {
+  const k = (key || '').trim();
+  if (!k) return false;
+  const pool = _loadKeyPool();
+  if (pool.find(e => e.key === k)) return false; // duplicate
+  pool.push({ key: k, label: label || `Key ${pool.length + 1}`, status: 'ok', rateLimitedUntil: 0 });
+  _saveKeyPool(pool);
+  return true;
+}
+
+/* Remove a key from the pool by index */
+function removeGeminiKey(idx) {
+  const pool = _loadKeyPool();
+  pool.splice(idx, 1);
+  _saveKeyPool(pool);
+  _keyPoolIndex = 0;
+}
+
+/* Rename a key label */
+function renameGeminiKey(idx, label) {
+  const pool = _loadKeyPool();
+  if (pool[idx]) { pool[idx].label = label || pool[idx].label; _saveKeyPool(pool); }
+}
+
+/* Retry a rate-limited or invalid key (reset to ok) */
+function retryGeminiKey(idx) {
+  const pool = _loadKeyPool();
+  if (pool[idx]) { pool[idx].status = 'ok'; pool[idx].rateLimitedUntil = 0; _saveKeyPool(pool); }
+  renderCustomQuizModal && renderCustomQuizModal();
+}
+
+/* Returns how many keys are currently usable */
+function _countOkKeys() {
+  const pool = _loadKeyPool();
+  const now = Date.now();
+  return pool.filter(k => k.status === 'ok' || (k.status === 'rate_limited' && now >= (k.rateLimitedUntil||0))).length;
+}
+
+/* ══════════════════════════════════════════════════════════
+   KEY MANAGER — UI renderer and helpers
+══════════════════════════════════════════════════════════ */
+function renderKeyManagerHTML() {
+  const pool    = _loadKeyPool();
+  const activeK = getGeminiKey();
+  const now     = Date.now();
+
+  let rows = '';
+  if (!pool.length) {
+    rows = '<div class="km-no-keys">🔑 No API keys added yet — add your first key below.</div>';
+  } else {
+    pool.forEach((entry, idx) => {
+      const status = (entry.status === 'rate_limited' && now >= (entry.rateLimitedUntil || 0))
+        ? 'ok' : entry.status;
+      const isActive = entry.key === activeK && status === 'ok';
+      const maskedKey = entry.key.length > 8
+        ? entry.key.slice(0, 4) + '••••••••' + entry.key.slice(-4)
+        : '••••••••';
+      const badgeLabel = status === 'ok' ? '✅ OK' : status === 'rate_limited' ? '⏳ Rate Limited' : '❌ Invalid';
+      const timeLeft = status === 'rate_limited'
+        ? Math.max(0, Math.ceil(((entry.rateLimitedUntil || 0) - now) / 1000)) + 's'
+        : '';
+      rows += `<div class="km-key-row ${status}" title="${escapeHtml(entry.key)}">
+        <span class="km-key-label" onclick="kmRenameKey(${idx})" title="Click to rename">${escapeHtml(entry.label || `Key ${idx+1}`)}</span>
+        <span class="km-key-val">${maskedKey}</span>
+        <span class="km-badge ${status}">${badgeLabel}${timeLeft ? ' · ' + timeLeft : ''}</span>
+        ${isActive ? '<span class="km-badge active">▶ Active</span>' : ''}
+        <div class="km-row-actions">
+          ${status !== 'ok' ? `<button class="km-icon-btn" onclick="kmRetryKey(${idx})" title="Retry this key">🔄</button>` : ''}
+          <button class="km-icon-btn" onclick="kmCopyKey(${idx})" title="Copy key">📋</button>
+          <button class="km-icon-btn" onclick="kmRemoveKey(${idx})" title="Remove key" style="color:#E53935;">🗑️</button>
+        </div>
+      </div>`;
+    });
+  }
+
+  const okCount  = pool.filter(k => k.status === 'ok' || (k.status === 'rate_limited' && now >= (k.rateLimitedUntil||0))).length;
+  const rlCount  = pool.filter(k => k.status === 'rate_limited' && now < (k.rateLimitedUntil||0)).length;
+  const badCount = pool.filter(k => k.status === 'invalid').length;
+  const summary  = pool.length
+    ? `<span>🔑 ${pool.length} key${pool.length !== 1 ? 's' : ''} total</span>` +
+      (okCount  ? ` <span>✅ ${okCount} ready</span>` : '') +
+      (rlCount  ? ` <span>⏳ ${rlCount} rate-limited</span>` : '') +
+      (badCount ? ` <span>❌ ${badCount} invalid</span>` : '')
+    : '<span>Add at least one key to use AI features.</span>';
+
+  return `
+    <div class="km-title">🔑 Gemini API Key Pool
+      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
+         style="font-size:.72rem;font-weight:600;color:var(--accent);text-decoration:none;margin-left:auto;"
+         title="Get a free key">Get free key ↗</a>
+    </div>
+    <div class="km-key-list">${rows}</div>
+    <div class="km-add-row">
+      <input class="km-add-input" type="password" id="kmNewKeyInput"
+             placeholder="Paste a Gemini API key…"
+             onkeydown="if(event.key==='Enter')kmAddKey()" />
+      <input class="km-label-input" type="text" id="kmNewKeyLabel"
+             placeholder="Label (opt.)"
+             onkeydown="if(event.key==='Enter')kmAddKey()" />
+      <button class="cq-btn" onclick="kmAddKey()" style="padding:9px 16px;font-size:.85rem;">➕ Add Key</button>
+      <button class="km-icon-btn" onclick="kmToggleNewKeyVis()" title="Show/hide" style="font-size:1.1rem;">👁</button>
+    </div>
+    <div class="km-status-summary">${summary}</div>
+    <div style="font-size:.7rem;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+      Keys stored only in this browser, sent directly to Google. Multiple keys rotate automatically — if one hits a rate limit the next is used instantly.
+    </div>`;
+}
+
+function _refreshKmPanel() {
+  const panel = document.getElementById('kmPanel');
+  if (panel) panel.innerHTML = renderKeyManagerHTML();
+}
+
+function kmAddKey() {
+  const inp   = document.getElementById('kmNewKeyInput');
+  const lblEl = document.getElementById('kmNewKeyLabel');
+  if (!inp) return;
+  const key   = inp.value.trim();
+  const label = lblEl ? lblEl.value.trim() : '';
+  if (!key) { inp.focus(); return; }
+  const added = addGeminiKey(key, label || undefined);
+  if (!added) {
+    inp.style.borderColor = '#E53935';
+    setTimeout(() => { inp.style.borderColor = ''; }, 2000);
+    return;
+  }
+  inp.value = '';
+  if (lblEl) lblEl.value = '';
+  _refreshKmPanel();
+}
+
+function kmRemoveKey(idx) {
+  if (!confirm('Remove this API key from the pool?')) return;
+  removeGeminiKey(idx);
+  _refreshKmPanel();
+}
+
+function kmRetryKey(idx) {
+  retryGeminiKey(idx);
+  _refreshKmPanel();
+}
+
+function kmCopyKey(idx) {
+  const pool = _loadKeyPool();
+  if (!pool[idx]) return;
+  navigator.clipboard.writeText(pool[idx].key).catch(() => {});
+  const rows = document.querySelectorAll('#kmPanel .km-key-row');
+  if (rows[idx]) {
+    const orig = rows[idx].style.background;
+    rows[idx].style.background = '#E8F5E9';
+    setTimeout(() => { rows[idx].style.background = orig; }, 600);
+  }
+}
+
+function kmRenameKey(idx) {
+  const pool = _loadKeyPool();
+  if (!pool[idx]) return;
+  const newLabel = prompt('Rename this key:', pool[idx].label || `Key ${idx + 1}`);
+  if (newLabel !== null && newLabel.trim()) {
+    renameGeminiKey(idx, newLabel.trim());
+    _refreshKmPanel();
+  }
+}
+
+function kmToggleNewKeyVis() {
+  const inp = document.getElementById('kmNewKeyInput');
+  if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
 function openCustomQuizzes() {
@@ -4160,12 +4504,51 @@ function closeCustomQuizzes() {
   document.getElementById('customQuizOverlay').classList.add('hidden');
 }
 
+function showFilterReport() {
+  const overlay = document.getElementById('filterReportOverlay');
+  const body    = document.getElementById('filterReportBody');
+  if (!overlay || !body) return;
+  if (!cqLastFilterReport || !cqLastFilterReport.length) {
+    body.innerHTML = `<div class="empty-state" style="padding:20px;"><div class="empty-icon">📭</div>No filter report available yet — run the lecture filter first.</div>`;
+    overlay.classList.remove('hidden');
+    return;
+  }
+  const VERDICT_META = {
+    kept:    { label: '✅ Kept',          bg: '#E8F5E9', fg: '#2E7D32', border: '#A5D6A7' },
+    dropped: { label: '🗑️ Dropped',       bg: '#FFEBEE', fg: '#C62828', border: '#EF9A9A' },
+    review:  { label: '⚠️ Needs Review',  bg: '#FFF3E0', fg: '#E65100', border: '#FFB74D' }
+  };
+  const keptN    = cqLastFilterReport.filter(r => r.verdict === 'kept').length;
+  const droppedN = cqLastFilterReport.filter(r => r.verdict === 'dropped').length;
+  const reviewN  = cqLastFilterReport.filter(r => r.verdict === 'review').length;
+
+  let html = `<div style="font-size:.82rem;font-weight:700;color:var(--text-muted);margin-bottom:12px;">
+    ${keptN} kept &middot; ${droppedN} dropped &middot; ${reviewN} need review &middot; ${cqLastFilterReport.length} total
+  </div>`;
+  html += `<div style="display:flex;flex-direction:column;gap:8px;">`;
+  cqLastFilterReport.forEach((r, i) => {
+    const m = VERDICT_META[r.verdict] || VERDICT_META.review;
+    html += `<div style="background:${m.bg};border:1.5px solid ${m.border};border-radius:8px;padding:10px 12px;">
+      <div style="display:flex;align-items:flex-start;gap:8px;justify-content:space-between;">
+        <div style="font-size:.85rem;font-weight:600;color:var(--text-main);flex:1;">${i + 1}. ${escapeHtml(r.question)}</div>
+        <span style="background:${m.fg};color:#fff;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">${m.label}</span>
+      </div>
+      ${r.reason ? `<div style="font-size:.76rem;color:${m.fg};margin-top:5px;">${escapeHtml(r.reason)}</div>` : ''}
+    </div>`;
+  });
+  html += `</div>`;
+  body.innerHTML = html;
+  overlay.classList.remove('hidden');
+}
+
+function closeFilterReport() {
+  const overlay = document.getElementById('filterReportOverlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
 function toggleCQKeyVisibility() {
-  const input = document.getElementById('cqApiKeyInput');
-  const btn   = document.getElementById('cqToggleKeyBtn');
-  if (!input) return;
-  if (input.type === 'password') { input.type = 'text';     btn.textContent = '🙈'; }
-  else                            { input.type = 'password'; btn.textContent = '👁'; }
+  const inp = document.getElementById('kmNewKeyInput');
+  if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
 function renderCustomQuizModal() {
@@ -4211,21 +4594,9 @@ function renderCustomQuizModal() {
   html += `<div class="cq-section">
     <div class="cq-section-title">✨ Create a New Quiz with AI (Gemini)</div>
 
-    <!-- API Key -->
-    <div class="cq-help-box">
-      <strong>How to get a free Gemini API key:</strong>
-      <ol>
-        <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
-        <li>Sign in with your Google account</li>
-        <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
-        <li>Copy the generated key and paste it into the box below</li>
-      </ol>
-      Your key is saved only in this browser and is sent directly to Google's API — it never passes through any other server.
-    </div>
-    <div class="cq-input-row">
-      <input type="password" id="cqApiKeyInput" placeholder="Paste your Gemini API key here"
-             value="${escapeHtml(savedKey)}" oninput="setGeminiKey(this.value)" />
-      <button class="cq-btn cq-btn-secondary" id="cqToggleKeyBtn" onclick="toggleCQKeyVisibility()" type="button">👁</button>
+    <!-- API Key Manager -->
+    <div class="km-panel" id="kmPanel">
+      ${renderKeyManagerHTML()}
     </div>
 
     <!-- Mode tabs -->
@@ -4967,7 +5338,9 @@ async function _waitForGeminiSlot(cancelToken) {
    that need real wall-clock time to clear rather than a quick retry.
    Only key errors (401/403/invalid key) are surfaced immediately, since no
    amount of retrying fixes a bad key. ──────── */
-async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) {
+async function callGeminiWithRetry(urlParam, bodyObj, { onRetry, cancelToken } = {}) {
+  let url = urlParam; // make mutable for key rotation
+  let usedKey = getGeminiKey(); // track which key is in use
   const KEY_ERRORS = ['API_KEY_INVALID', 'API_KEY_NOT_VALID', 'INVALID_API_KEY',
                       'PERMISSION_DENIED', 'API key not valid'];
 
@@ -5028,14 +5401,49 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) 
         const err = new Error(msg);
         err._httpStatus = resp.status;
         err._apiData    = data;
-        // Always surface key errors immediately — no point retrying
-        if (isKeyError(resp.status, data)) throw Object.assign(err, { _keyError: true });
 
-        const isRateLimited = resp.status === 429 || resp.status === 503;
+        // Key errors: mark the key as invalid, then try the next key in the pool
+        if (isKeyError(resp.status, data)) {
+          _markKeyInvalid(usedKey);
+          const nextKey = getGeminiKey();
+          if (nextKey && nextKey !== usedKey) {
+            // Rebuild the URL with the new key
+            usedKey = nextKey;
+            url = url.replace(/key=[^&]+/, `key=${encodeURIComponent(nextKey)}`);
+            if (onRetry) onRetry(attempt);
+            continue; // retry immediately with new key
+          }
+          throw Object.assign(err, { _keyError: true }); // no more keys
+        }
+
+        // Rate limit: mark current key, rotate to next key immediately
+        if (resp.status === 429) {
+          _markKeyRateLimited(usedKey);
+          const nextKey = getGeminiKey();
+          if (nextKey && nextKey !== usedKey) {
+            usedKey = nextKey;
+            url = url.replace(/key=[^&]+/, `key=${encodeURIComponent(nextKey)}`);
+            if (onRetry) onRetry(attempt);
+            await cancellableSleep(300, cancelToken); // tiny pause before switching
+            continue; // retry with new key, no long wait
+          }
+          // All keys exhausted — fall back to timed backoff on the current key
+          const serverHintMs = retryAfterMs(resp);
+          if (onRetry) onRetry(attempt);
+          _lastGeminiCallAt = Date.now() + backoffMs(attempt, true, serverHintMs) - MIN_GEMINI_CALL_GAP_MS;
+          await cancellableSleep(backoffMs(attempt, true, serverHintMs), cancelToken);
+          // After wait, reset all rate-limited keys so they can be tried again
+          const pool = _loadKeyPool();
+          pool.forEach(k => { if (k.status === 'rate_limited') { k.status = 'ok'; k.rateLimitedUntil = 0; } });
+          _saveKeyPool(pool);
+          usedKey = getGeminiKey();
+          url = url.replace(/key=[^&]+/, `key=${encodeURIComponent(usedKey)}`);
+          continue;
+        }
+
+        const isRateLimited = resp.status === 503;
         const serverHintMs  = retryAfterMs(resp);
         if (onRetry) onRetry(attempt);
-        // Push the next allowed call slot out too, so other queued calls
-        // (e.g. from concurrent loops) also respect the cooldown.
         _lastGeminiCallAt = Date.now() + backoffMs(attempt, isRateLimited, serverHintMs) - MIN_GEMINI_CALL_GAP_MS;
         await cancellableSleep(backoffMs(attempt, isRateLimited, serverHintMs), cancelToken);
         continue;
@@ -5046,6 +5454,7 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) 
         const e = new Error('cancelled'); e._cancelled = true; throw e;
       }
 
+      _advanceKeyPool(); // rotate for next call
       return data; // success
     } catch (err) {
       if (err._keyError || err._cancelled) throw err; // propagate immediately
@@ -5546,19 +5955,17 @@ async function cqAiSolveOne(i) {
 
 
 async function generateQuizFromAI() {
-  const apiKeyInput = document.getElementById('cqApiKeyInput');
   const titleInput  = document.getElementById('cqTitleInput');
   const statusEl    = document.getElementById('cqStatus');
   const genBtn      = document.getElementById('cqGenerateBtn');
 
-  const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
+  const apiKey = getGeminiKey().trim();
   const title  = (titleInput ? titleInput.value : cqGeneratedTitle).trim();
 
-  if (!apiKey)                { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
+  if (!apiKey)                { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please add at least one Gemini API key in the key manager above.</div>`; return; }
   if (!cqSelectedFiles.length) { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload at least one image or PDF of your quiz.</div>`; return; }
   if (!title)                  { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
 
-  setGeminiKey(apiKey);
   cqGeneratedTitle = title;
   cqBusy = true;
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
@@ -5724,29 +6131,45 @@ Output the numbered topic index now:` }] }],
         lectureTopicIndex = lectureText;
       }
 
-      // ── Step 2b-pre2: upload the topic index to File API once ──
-      let lectureFileUri = null;
-      try {
-        statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📤 Uploading lecture topic index…</div>`;
-        const lectureBlob = new Blob([lectureTopicIndex], { type: 'text/plain' });
-        const uploadMeta  = JSON.stringify({ file: { display_name: 'lecture_topic_index.txt' } });
-        const formData    = new FormData();
-        formData.append('metadata', new Blob([uploadMeta], { type: 'application/json' }));
-        formData.append('file', lectureBlob, 'lecture_topic_index.txt');
-        const uploadResp  = await fetch(
-          `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`,
-          { method: 'POST', body: formData }
-        );
-        if (uploadResp.ok) {
-          const uploadData = await uploadResp.json();
-          lectureFileUri   = uploadData && uploadData.file && uploadData.file.uri;
-          console.log('[lecture-filter] topic index uploaded, uri:', lectureFileUri);
-        } else {
-          console.warn('[lecture-filter] File API upload HTTP error:', uploadResp.status, await uploadResp.text());
+      // ── Step 2b-pre2: upload the topic index to File API ──
+      // File API files are scoped to the uploading key's project.
+      // We track which key was used so we can re-upload if the active key rotates.
+      let lectureFileUri    = null;
+      let lectureFileApiKey = null; // which key owns the current URI
+
+      async function ensureLectureFileUri() {
+        const currentKey = getGeminiKey();
+        // Re-upload if we have no URI yet, or if the active key changed
+        if (lectureFileUri && lectureFileApiKey === currentKey) return lectureFileUri;
+        try {
+          const lectureBlob = new Blob([lectureTopicIndex], { type: 'text/plain' });
+          const uploadMeta  = JSON.stringify({ file: { display_name: 'lecture_topic_index.txt' } });
+          const formData    = new FormData();
+          formData.append('metadata', new Blob([uploadMeta], { type: 'application/json' }));
+          formData.append('file', lectureBlob, 'lecture_topic_index.txt');
+          const uploadResp  = await fetch(
+            `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(currentKey)}`,
+            { method: 'POST', body: formData }
+          );
+          if (uploadResp.ok) {
+            const uploadData  = await uploadResp.json();
+            lectureFileUri    = uploadData && uploadData.file && uploadData.file.uri;
+            lectureFileApiKey = currentKey;
+            console.log('[lecture-filter] topic index uploaded, uri:', lectureFileUri, 'key:', currentKey.slice(0,8) + '…');
+          } else {
+            console.warn('[lecture-filter] File API upload HTTP error:', uploadResp.status);
+            lectureFileUri = null;
+          }
+        } catch (uploadErr) {
+          console.warn('[lecture-filter] File API upload failed, falling back to inline text:', uploadErr);
+          lectureFileUri = null;
         }
-      } catch (uploadErr) {
-        console.warn('[lecture-filter] File API upload failed, falling back to inline text:', uploadErr);
+        return lectureFileUri;
       }
+
+      // Initial upload
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📤 Uploading lecture topic index…</div>`;
+      await ensureLectureFileUri();
 
       // ── Step 2b: two-phase filtering ──
       //
@@ -5766,12 +6189,16 @@ Output the numbered topic index now:` }] }],
 
       const FILTER_CHUNK_SIZE        = 25; // phase 1 text batches
       const FILTER_CHUNK_SIZE_IMAGES =  8; // phase 2 image batches
+      const MAX_BATCH_RETRIES        =  4; // how many times to retry a batch that errored/failed to parse
 
-      // allFlags[i] holds the final 0/1 result for cleaned[i]
-      const allFlags = new Array(cleaned.length).fill(null);
-      let filterBatchFailed = false;
+      // allFlags[i]   holds the final 0 (drop) / 1 (keep) / 2 (genuinely ambiguous -> review) for cleaned[i]
+      // allReasons[i] holds a short human-readable reason for that verdict
+      const allFlags   = new Array(cleaned.length).fill(null);
+      const allReasons = new Array(cleaned.length).fill('');
+      let hadUnresolvedBatch = false; // true only if a batch failed every retry attempt
 
-      // ── Helper: run one text-only batch, returns array of 0/1/2 flags ──
+      // ── Helper: run one text-only batch. Returns { flags, reasons } arrays, or null if the
+      // batch could not be parsed at all (caller is responsible for retrying). ──
       async function runTextBatch(batchQs, batchLabel) {
         const questionListText = batchQs.map((q, i) => {
           const optLines = Object.entries(q.options || {}).map(([k, v]) => `   ${k}. ${v}`).join('\n');
@@ -5780,42 +6207,49 @@ Output the numbered topic index now:` }] }],
         }).join('\n\n');
 
         const taskText = `
-TOPIC INDEX (all specific topics covered in the lecture):`;
+LECTURE MATERIAL (the only resource available to answer these questions):`;
         const taskText2 = `
 
-TASK: For each numbered question, decide if its core subject is covered by the lecture topics above.
+TASK: For each numbered question, decide whether it can be FULLY answered using ONLY the lecture material above —
+no outside knowledge required to pick the correct option with confidence.
 
 Scoring rules:
-- 1 = YES: the question's topic (or a clear synonym/related term) appears in the topic index
-- 0 = NO: the topic is genuinely absent from the lecture — not just phrased differently
-- 2 = UNSURE: you cannot confidently decide from the question text alone (e.g. the question says "What does the image show?" with no other context)
+- 1 = YES: the lecture material directly contains the specific fact, mechanism, value, or concept needed to answer this question and distinguish the correct option from the others.
+- 0 = NO: the lecture material does not contain what's needed — including cases where the general topic is mentioned but the specific detail the question asks about is missing, or where answering would require outside knowledge not present in the material.
+- 2 = UNSURE: you genuinely cannot tell from the question text alone whether the lecture covers it (e.g. the question refers to "the image" or "the diagram above" with no other context, and you have no image to check).
 
-Important:
-- Match on MEANING not exact words. "Cardiac output" and "stroke volume × heart rate" are the same concept → match.
-- If the question tests a sub-topic of something in the index, that counts as a match → 1.
-- Only score 0 when confident the topic is absent. Only score 2 when the text is genuinely ambiguous.
+Important — be strict:
+- "The lecture mentions this general topic" is NOT enough — the specific fact/value/distinction the question needs must actually be present.
+- Do NOT use your own outside knowledge to decide whether an option is correct or to fill gaps in the lecture material — judge ONLY based on whether the material itself contains what's needed.
+- Default to 0 when in doubt about coverage of the SPECIFIC detail, even if the general subject area is mentioned. Reserve 2 only for cases of genuine textual ambiguity (e.g. missing visual context), not for "the lecture probably covers this."
 
-Return ONLY a JSON array with exactly ${batchQs.length} elements (0, 1, or 2), one per question, same order. No other text.
-Example for 4 questions: [1,0,2,1]
+For EACH question also give a short reason (max ~12 words) explaining the verdict, e.g. "lecture covers X mechanism in detail" or "lecture never mentions Y" or "needs image, no visual context here".
+
+Return ONLY a JSON array with exactly ${batchQs.length} objects, one per question, same order, shaped like:
+{"v":0,"r":"short reason"}
+Example for 2 questions: [{"v":1,"r":"lecture defines this directly"},{"v":0,"r":"topic not mentioned in lecture"}]
+No other text, no markdown fences.
 
 QUESTIONS TO EVALUATE:
 ${questionListText}`;
 
+        // Re-upload if the active key has rotated since last upload
+        const currentUri = await ensureLectureFileUri();
         let parts;
-        if (lectureFileUri) {
+        if (currentUri) {
           parts = [
-            { text: 'You are a precise academic relevance filter.' + taskText },
-            { file_data: { mime_type: 'text/plain', file_uri: lectureFileUri } },
+            { text: 'You are a strict academic relevance filter.' + taskText },
+            { file_data: { mime_type: 'text/plain', file_uri: currentUri } },
             { text: taskText2 }
           ];
         } else {
-          parts = [{ text: `You are a precise academic relevance filter.${taskText}\n${lectureTopicIndex}${taskText2}` }];
+          parts = [{ text: `You are a strict academic relevance filter.${taskText}\n${lectureTopicIndex}${taskText2}` }];
         }
 
         try {
           const data = await callGeminiWithRetry(url, {
             contents: [{ parts }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 1024 }
+            generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 2048 }
           }, {});
           const candidate = data && data.candidates && data.candidates[0];
           if (!candidate) return null;
@@ -5824,65 +6258,93 @@ ${questionListText}`;
           let cj = textOut.replace(/```json|```/g, '').trim();
           if (cj.startsWith('[') && !cj.endsWith(']')) cj = cj.replace(/[,\s]+$/, '') + ']';
           const parsed = JSON.parse(cj);
-          if (Array.isArray(parsed) && parsed.length >= batchQs.length) return parsed.slice(0, batchQs.length);
-          if (Array.isArray(parsed) && parsed.length > 0) return batchQs.map((_, i) => parsed[i] !== undefined ? parsed[i] : 2);
-          return null;
+          if (!Array.isArray(parsed) || !parsed.length) return null;
+          const flags   = batchQs.map((_, i) => {
+            const item = parsed[i];
+            const v = item && typeof item === 'object' ? item.v : item; // tolerate plain-number fallback
+            return (v === 0 || v === 1 || v === 2) ? v : null; // null = unparseable entry -> treat batch as failed
+          });
+          const reasons = batchQs.map((_, i) => {
+            const item = parsed[i];
+            return (item && typeof item === 'object' && item.r) ? String(item.r).slice(0, 160) : '';
+          });
+          if (flags.some(f => f === null)) return null; // any unparseable entry -> retry whole batch
+          return { flags, reasons };
         } catch (e) {
           console.warn(`[lecture-filter] ${batchLabel} failed:`, e);
           return null;
         }
       }
 
-      // ── PHASE 1: text-only pass over all questions ──
-      const p1Total = Math.ceil(cleaned.length / FILTER_CHUNK_SIZE);
-      for (let bi = 0; bi < p1Total; bi++) {
-        const start   = bi * FILTER_CHUNK_SIZE;
-        const batchQs = cleaned.slice(start, Math.min(start + FILTER_CHUNK_SIZE, cleaned.length));
-        if (p1Total > 1) {
-          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering questions against lecture… (${bi + 1}/${p1Total})</div>`;
+      // ── Generic retry-until-resolved runner for a list of batches ──
+      // batchFn(batchQs, label) must return { flags, reasons } or null.
+      // Retries failed batches up to MAX_BATCH_RETRIES times each before giving up.
+      async function runBatchesWithRetry(items, chunkSize, labelPrefix, batchFn, onProgress) {
+        const chunks = [];
+        for (let start = 0; start < items.length; start += chunkSize) {
+          chunks.push(items.slice(start, start + chunkSize));
         }
-        const flags = await runTextBatch(batchQs, `phase-1 batch ${bi + 1}/${p1Total}`);
-        if (flags === null) {
-          filterBatchFailed = true;
-          batchQs.forEach((_, i) => { allFlags[start + i] = 2; }); // treat failure as uncertain
-        } else {
-          flags.forEach((f, i) => { allFlags[start + i] = f; });
+        for (let ci = 0; ci < chunks.length; ci++) {
+          let chunk = chunks[ci];
+          let result = null;
+          for (let attempt = 1; attempt <= MAX_BATCH_RETRIES; attempt++) {
+            if (onProgress) onProgress(ci + 1, chunks.length, attempt);
+            result = await batchFn(chunk, `${labelPrefix} batch ${ci + 1}/${chunks.length} (try ${attempt})`);
+            if (result) break;
+            console.warn(`[lecture-filter] ${labelPrefix} batch ${ci + 1}/${chunks.length} failed parse/response — retrying (attempt ${attempt}/${MAX_BATCH_RETRIES})`);
+          }
+          if (!result) {
+            // Exhausted retries — mark every question in this batch for manual review, never silently kept/dropped.
+            hadUnresolvedBatch = true;
+            chunk.forEach(({ origIdx }) => {
+              allFlags[origIdx]   = 2;
+              allReasons[origIdx] = `Filter could not get a reliable AI response after ${MAX_BATCH_RETRIES} attempts — needs manual review.`;
+            });
+          } else {
+            chunk.forEach(({ origIdx }, i) => {
+              allFlags[origIdx]   = result.flags[i];
+              allReasons[origIdx] = result.reasons[i] || '';
+            });
+          }
         }
       }
 
+      // ── PHASE 1: text-only pass over all questions ──
+      const p1Items = cleaned.map((q, i) => ({ q, origIdx: i }));
+      await runBatchesWithRetry(
+        p1Items, FILTER_CHUNK_SIZE, 'phase-1',
+        (chunk, label) => runTextBatch(chunk.map(c => c.q), label),
+        (cur, total) => {
+          if (total > 1) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering questions against lecture… (${cur}/${total})</div>`;
+        }
+      );
+
       // ── PHASE 2: visual re-evaluation for uncertain image-bearing questions ──
-      // Collect all uncertain questions that have an image
       const visualReaskPool = cleaned
         .map((q, i) => ({ q, origIdx: i }))
         .filter(({ q, origIdx }) => allFlags[origIdx] === 2 && !!q.image);
 
       if (visualReaskPool.length > 0) {
         console.log(`[lecture-filter] phase-2: ${visualReaskPool.length} uncertain image question(s) will be re-evaluated visually`);
-        const p2Total = Math.ceil(visualReaskPool.length / FILTER_CHUNK_SIZE_IMAGES);
-        for (let bi = 0; bi < p2Total; bi++) {
-          const batchItems = visualReaskPool.slice(bi * FILTER_CHUNK_SIZE_IMAGES, (bi + 1) * FILTER_CHUNK_SIZE_IMAGES);
-          const batchQs    = batchItems.map(({ q }) => q);
-          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🖼️ Re-evaluating ${visualReaskPool.length} borderline image question${visualReaskPool.length !== 1 ? 's' : ''} visually… (${bi + 1}/${p2Total})</div>`;
 
-          // Build parts: inline lecture index + interleaved question images
-          const introText = `You are a precise academic relevance filter.
-TOPIC INDEX (all specific topics covered in the lecture):
+        async function runImageBatch(batchItems, batchLabel) {
+          const batchQs = batchItems.map(({ q }) => q);
+          const introText = `You are a strict academic relevance filter.
+LECTURE MATERIAL (the only resource available to answer these questions):
 ${lectureTopicIndex}
 
-TASK: For each numbered question, decide if its core subject is covered by the lecture topics above.
-These questions were ambiguous from text alone — use the attached image for each to identify the topic.
+TASK: For each numbered question, decide whether it can be FULLY answered using ONLY the lecture material above plus its attached image —
+no outside knowledge required to pick the correct option with confidence.
+These questions were ambiguous from text alone — use the attached image for each to resolve that ambiguity.
 
 Scoring rules:
-- 1 = YES: the topic (or synonym/sub-topic) is covered in the index
-- 0 = NO: the topic is genuinely absent
+- 1 = YES: the lecture material (+ image) directly contains what's needed to answer this with confidence.
+- 0 = NO: it does not — including when only the general topic is present but not the specific detail needed.
 
-Important:
-- Each question's image follows its text inline.
-- Use the image content (e.g. ECG → cardiac electrophysiology, histology slide → relevant organ/pathology).
-- Match on meaning, not exact words.
+Important — be strict: do not use outside knowledge to fill gaps; judge only by what the material + image actually show.
+For EACH question give a short reason (max ~12 words).
 
-Return ONLY a JSON array with exactly ${batchQs.length} elements (1 or 0), one per question, same order. No other text.
-Example for 3 questions: [1,0,1]
+Return ONLY a JSON array with exactly ${batchQs.length} objects, shaped like {"v":1,"r":"short reason"}, same order as the questions. No other text.
 
 QUESTIONS TO EVALUATE (image follows each question):`;
 
@@ -5898,28 +6360,39 @@ QUESTIONS TO EVALUATE (image follows each question):`;
           try {
             const data = await callGeminiWithRetry(url, {
               contents: [{ parts }],
-              generationConfig: { temperature: 0, maxOutputTokens: 256 } // no responseMimeType with images
+              generationConfig: { temperature: 0, maxOutputTokens: 1024 } // no responseMimeType with images
             }, {});
             const candidate = data && data.candidates && data.candidates[0];
             const textOut   = candidate ? (candidate.content && candidate.content.parts || []).map(p => p.text || '').join('') : '';
-            console.log(`[lecture-filter] phase-2 batch ${bi + 1} raw:`, textOut);
+            console.log(`[lecture-filter] ${batchLabel} raw:`, textOut);
             let cj = textOut.replace(/```json|```/g, '').trim();
             if (cj.startsWith('[') && !cj.endsWith(']')) cj = cj.replace(/[,\s]+$/, '') + ']';
             const parsed = JSON.parse(cj);
-            if (Array.isArray(parsed)) {
-              batchItems.forEach(({ origIdx }, i) => {
-                const val = parsed[i];
-                allFlags[origIdx] = (val === 0 || val === 1) ? val : 1; // default keep if unclear
-              });
-            } else {
-              batchItems.forEach(({ origIdx }) => { allFlags[origIdx] = 1; }); // keep on parse failure
-            }
+            if (!Array.isArray(parsed) || !parsed.length) return null;
+            const flags = batchQs.map((_, i) => {
+              const item = parsed[i];
+              const v = item && typeof item === 'object' ? item.v : item;
+              return (v === 0 || v === 1) ? v : null;
+            });
+            const reasons = batchQs.map((_, i) => {
+              const item = parsed[i];
+              return (item && typeof item === 'object' && item.r) ? String(item.r).slice(0, 160) : '';
+            });
+            if (flags.some(f => f === null)) return null;
+            return { flags, reasons };
           } catch (e) {
-            console.warn(`[lecture-filter] phase-2 batch ${bi + 1} failed, keeping:`, e);
-            batchItems.forEach(({ origIdx }) => { allFlags[origIdx] = 1; });
-            filterBatchFailed = true;
+            console.warn(`[lecture-filter] ${batchLabel} failed:`, e);
+            return null;
           }
         }
+
+        await runBatchesWithRetry(
+          visualReaskPool, FILTER_CHUNK_SIZE_IMAGES, 'phase-2-visual',
+          (chunk, label) => runImageBatch(chunk, label),
+          (cur, total) => {
+            statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🖼️ Re-evaluating ${visualReaskPool.length} borderline image question${visualReaskPool.length !== 1 ? 's' : ''} visually… (${cur}/${total})</div>`;
+          }
+        );
       }
 
       // ── Text-only re-evaluation for remaining uncertain questions (no image) ──
@@ -5929,66 +6402,71 @@ QUESTIONS TO EVALUATE (image follows each question):`;
 
       if (textReaskPool.length > 0) {
         console.log(`[lecture-filter] text re-evaluation: ${textReaskPool.length} uncertain question(s) without image`);
-        statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🔍 Double-checking ${textReaskPool.length} borderline question${textReaskPool.length !== 1 ? 's' : ''}…</div>`;
-        for (const { q, origIdx } of textReaskPool) {
-          const optLines = Object.entries(q.options || {}).map(([k, v]) => `   ${k}. ${v}`).join('\n');
-          const reaskText = `
-
-QUESTION TO RE-EVALUATE:
-${q.question}
-${optLines}
-
-Is this question's topic covered in the lecture topic index above?
-Answer ONLY with JSON: {"result": 1} if yes (including synonyms/sub-topics), {"result": 0} if genuinely not covered.`;
-
-          let reaskParts;
-          if (lectureFileUri) {
-            reaskParts = [
-              { text: 'You are a precise academic relevance filter. Given this lecture topic index:' },
-              { file_data: { mime_type: 'text/plain', file_uri: lectureFileUri } },
-              { text: reaskText }
-            ];
-          } else {
-            reaskParts = [{ text: `You are a precise academic relevance filter. Given this lecture topic index:\n${lectureTopicIndex}${reaskText}` }];
+        await runBatchesWithRetry(
+          textReaskPool, FILTER_CHUNK_SIZE, 'phase-3-text-reeval',
+          (chunk, label) => runTextBatch(chunk.map(c => c.q), label),
+          (cur, total) => {
+            statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🔍 Double-checking ${textReaskPool.length} borderline question${textReaskPool.length !== 1 ? 's' : ''}…${total > 1 ? ` (batch ${cur}/${total})` : ''}</div>`;
           }
-
-          try {
-            const data = await callGeminiWithRetry(url, {
-              contents: [{ parts: reaskParts }],
-              generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 64 }
-            }, {});
-            const rc = data && data.candidates && data.candidates[0];
-            const rt = rc ? (rc.content && rc.content.parts || []).map(p => p.text || '').join('') : '';
-            const rp = JSON.parse(rt.replace(/```json|```/g, '').trim());
-            allFlags[origIdx] = (rp && (rp.result === 0 || rp.result === 1)) ? rp.result : 1;
-            console.log(`[lecture-filter] text re-eval Q${origIdx + 1} → ${allFlags[origIdx]}`);
-          } catch (e) {
-            console.warn(`[lecture-filter] text re-eval Q${origIdx + 1} failed, keeping:`, e);
-            allFlags[origIdx] = 1;
+        );
+        // Anything still flagged 2 after this dedicated re-eval pass is genuinely ambiguous —
+        // it goes to manual review, it is NOT auto-kept.
+        textReaskPool.forEach(({ origIdx }) => {
+          if (allFlags[origIdx] === 2 && !allReasons[origIdx]) {
+            allReasons[origIdx] = 'Genuinely ambiguous from available text — needs manual review.';
           }
-        }
+        });
       }
 
-      // Fallback: any slot still null defaults to keep
-      for (let i = 0; i < allFlags.length; i++) if (allFlags[i] === null) allFlags[i] = 1;
+      // Any slot still null (shouldn't normally happen) is treated as needing review, never silently kept.
+      for (let i = 0; i < allFlags.length; i++) {
+        if (allFlags[i] === null) { allFlags[i] = 2; allReasons[i] = 'Filter did not produce a verdict — needs manual review.'; }
+      }
 
-      const kept = allFlags.filter(f => f === 1).length;
-      console.log(`[lecture-filter] final: keeping ${kept}/${cleaned.length} questions`);
+      const keptCount    = allFlags.filter(f => f === 1).length;
+      const droppedCount = allFlags.filter(f => f === 0).length;
+      const reviewCount  = allFlags.filter(f => f === 2).length;
+      console.log(`[lecture-filter] final: keep ${keptCount} / drop ${droppedCount} / review ${reviewCount} of ${cleaned.length}`);
 
-      if (allFlags.length === cleaned.length) {
-        const before = cleaned.length;
-        cleaned = cleaned.filter((_, i) => allFlags[i] === 1);
-        filteredOutCount = before - cleaned.length;
-        if (!cleaned.length) {
-          throw new Error('No questions remained after filtering against the uploaded lecture(s) — the MCQ file(s) may not overlap with this curriculum. Try different files, or remove the lecture filter to keep all questions.');
+      // Build the full reasons report BEFORE removing dropped questions, so the user can see everything.
+      cqLastFilterReport = cleaned.map((q, i) => ({
+        question: q.question,
+        verdict:  allFlags[i] === 1 ? 'kept' : allFlags[i] === 0 ? 'dropped' : 'review',
+        reason:   allReasons[i] || ''
+      }));
+
+      // Keep questions flagged 1 or 2 (review items survive but get visibly badged). Drop only flag 0.
+      const before = cleaned.length;
+      const survivingFlags   = [];
+      const survivingReasons = [];
+      cleaned = cleaned.filter((_, i) => {
+        if (allFlags[i] === 0) return false;
+        survivingFlags.push(allFlags[i]);
+        survivingReasons.push(allReasons[i]);
+        return true;
+      });
+      cleaned.forEach((q, i) => {
+        if (survivingFlags[i] === 2) {
+          q.needs_review  = true;
+          q.review_reason = survivingReasons[i];
         }
-        if (filterBatchFailed) {
-          statusEl.insertAdjacentHTML('beforeend',
-            `<div class="cq-status warning" style="margin-top:6px;">⚠️ One or more filter batches encountered an error — those questions were kept to avoid data loss.</div>`);
-        }
-      } else {
+      });
+      filteredOutCount = before - cleaned.length;
+
+      if (!cleaned.length) {
+        throw new Error('No questions remained after filtering against the uploaded lecture(s) — every question was judged unanswerable from the provided material. Try different files, or remove the lecture filter to keep all questions.');
+      }
+
+      const reviewNote = reviewCount > 0
+        ? ` ${reviewCount} question${reviewCount !== 1 ? 's are' : ' is'} marked ⚠️ Needs Review below — the filter could not confidently decide, so they were kept but flagged rather than silently included or removed.`
+        : '';
+      statusEl.insertAdjacentHTML('beforeend',
+        `<div class="cq-status info" style="margin-top:6px;">🎯 Filter result: ${keptCount} kept, ${droppedCount} dropped as unanswerable from the provided material${reviewNote ? ',' : '.'}${reviewNote}
+          <button type="button" class="cq-btn cq-btn-secondary" style="margin-top:6px;" onclick="showFilterReport()">📋 View full filter report</button>
+        </div>`);
+      if (hadUnresolvedBatch) {
         statusEl.insertAdjacentHTML('beforeend',
-          `<div class="cq-status warning" style="margin-top:6px;">⚠️ Lecture filter could not be fully applied (unexpected AI response) — all extracted questions were kept.</div>`);
+          `<div class="cq-status warning" style="margin-top:6px;">⚠️ Some batches failed every retry attempt (${MAX_BATCH_RETRIES}×) — those questions are marked ⚠️ Needs Review rather than being guessed at.</div>`);
       }
     }
 
@@ -6041,13 +6519,10 @@ Answer ONLY with JSON: {"result": 1} if yes (including synonyms/sub-topics), {"r
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
-        <strong>Please enter a new Gemini API key above and try again.</strong><br>
+        <strong>The bad key has been flagged. Add a new key in the key manager above and try again.</strong><br>
         <small>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">aistudio.google.com/apikey</a></small>
       </div>`;
-      // Clear the stored bad key and focus the input
-      setGeminiKey('');
-      const inp = document.getElementById('cqApiKeyInput');
-      if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+      _refreshKmPanel();
     } else {
       statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
     }
@@ -6109,23 +6584,21 @@ function fileToText(file) {
 }
 
 async function generateQuizFromLecture() {
-  const apiKeyInput   = document.getElementById('cqApiKeyInput');
   const titleInput    = document.getElementById('cqLectureTitleInput');
   const qCountInput   = document.getElementById('cqQCountInput');
   const promptInput   = document.getElementById('cqCustomPromptInput');
   const statusEl      = document.getElementById('cqStatus');
   const genBtn        = document.getElementById('cqLectureGenBtn');
 
-  const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
+  const apiKey = getGeminiKey().trim();
   const title  = (titleInput  ? titleInput.value  : cqGeneratedTitle).trim();
   const qCount = (qCountInput ? qCountInput.value : cqQuestionCount).trim();
   const prompt = (promptInput ? promptInput.value : cqCustomPrompt).trim();
 
-  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
+  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please add at least one Gemini API key in the key manager above.</div>`; return; }
   if (!cqLectureFile) { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload a lecture file first.</div>`; return; }
   if (!title)         { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
 
-  setGeminiKey(apiKey);
   cqGeneratedTitle = title;
   cqCustomPrompt   = prompt;
   cqQuestionCount  = qCount;
@@ -6232,13 +6705,10 @@ async function generateQuizFromLecture() {
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
-        <strong>Please enter a new Gemini API key above and try again.</strong><br>
+        <strong>The bad key has been flagged. Add a new key in the key manager above and try again.</strong><br>
         <small>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">aistudio.google.com/apikey</a></small>
       </div>`;
-      // Clear the stored bad key and focus the input
-      setGeminiKey('');
-      const inp = document.getElementById('cqApiKeyInput');
-      if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+      _refreshKmPanel();
     } else {
       statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
     }
@@ -6275,7 +6745,9 @@ function renderCQPreview() {
     html += `<div class="cq-preview-q cq-editable-q" id="cqQ_${i}">`;
 
     /* ── Question header ── */
-    const qBadge = q.ai_guessed
+    const qBadge = q.needs_review
+      ? `<span title="${escapeHtml(q.review_reason || 'The lecture filter could not confidently decide on this question.')}" style="background:#FFF3E0;color:#E65100;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #FFB74D;">⚠️ Needs Review</span>`
+      : q.ai_guessed
       ? `<span title="AI answered this from its own knowledge — answer was not found in the provided source. Please verify." style="background:#FFF8E1;color:#E65100;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #FFB300;">🧠 AI Guess</span>`
       : q.ai_answered
       ? `<span title="AI answered this question from the provided source" style="background:#EDE7F6;color:#6A1B9A;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #CE93D8;">🤖 AI-answered</span>`
@@ -6287,6 +6759,9 @@ function renderCQPreview() {
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
       ${qBadge}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
+      ${q.needs_review ? `<button class="cq-edit-reask-btn" title="Clear the Needs Review flag once you've manually checked this question"
+        onclick="cqMarkReviewed(${i})"
+        style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">✅ Mark Reviewed</button>` : ''}
       <button class="cq-edit-reask-btn" title="Ask AI to solve this question using the configured source"
         onclick="cqAiSolveOne(${i})"
         style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 AI Solve</button>
@@ -6480,6 +6955,14 @@ function cqDeleteQuestion(idx) {
   if (!cqGeneratedQuestions) return;
   if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
   cqGeneratedQuestions.splice(idx, 1);
+  renderCQPreview();
+}
+
+/* ── Clear the "needs review" flag once the user has manually checked a question ── */
+function cqMarkReviewed(idx) {
+  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  delete cqGeneratedQuestions[idx].needs_review;
+  delete cqGeneratedQuestions[idx].review_reason;
   renderCQPreview();
 }
 
