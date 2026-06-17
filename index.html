@@ -5626,7 +5626,7 @@ ${batchQs.map((q, i) => `${batchStart + i + 1}. ${q.question}`).join('\n')}`;
                 { text: filterPrompt }
               ]
             }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 512 }
+            generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 1024 }
           }, {});
 
           const fcandidate = filterData && filterData.candidates && filterData.candidates[0];
@@ -5634,7 +5634,13 @@ ${batchQs.map((q, i) => `${batchStart + i + 1}. ${q.question}`).join('\n')}`;
             const ftextOut = (fcandidate.content && fcandidate.content.parts || []).map(p => p.text || '').join('');
             console.log(`[lecture-filter] batch ${batchIdx + 1}/${totalBatches} raw output:`, ftextOut);
             try {
-              const parsed = JSON.parse(ftextOut.replace(/```json|```/g, '').trim());
+              // Repair truncated JSON arrays: strip fences, ensure the string ends with ]
+              let cleaned_json = ftextOut.replace(/```json|```/g, '').trim();
+              // If the array was cut off mid-stream, close it so JSON.parse can succeed
+              if (cleaned_json.startsWith('[') && !cleaned_json.endsWith(']')) {
+                cleaned_json = cleaned_json.replace(/[,\s]+$/, '') + ']';
+              }
+              const parsed = JSON.parse(cleaned_json);
               if (Array.isArray(parsed) && parsed.length === batchQs.length) {
                 batchFlags = parsed;
               } else if (Array.isArray(parsed) && parsed.length > 0) {
