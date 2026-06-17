@@ -3934,7 +3934,8 @@ const CQ_KEY           = 'anu_msp_custom_quizzes_v1';
 const CQ_API_KEY_STORE = 'anu_msp_gemini_api_key';
 const CQ_MODEL         = 'gemini-2.5-flash';
 
-let cqSelectedFile      = null;
+let cqSelectedFiles     = [];   // multiple MCQ source files
+let cqFilterFiles       = [];   // lecture files used to filter extracted MCQs by relevance
 let cqGeneratedQuestions = null;
 let cqGeneratedTitle    = '';
 let cqBusy              = false;
@@ -4133,7 +4134,8 @@ function setGeminiKey(key) {
 }
 
 function openCustomQuizzes() {
-  cqSelectedFile = null;
+  cqSelectedFiles = [];
+  cqFilterFiles = [];
   cqGeneratedQuestions = null;
   cqGeneratedTitle = '';
   cqBusy = false;
@@ -4223,13 +4225,57 @@ function renderCustomQuizModal() {
 
     <!-- TAB: Extract from MCQs (original flow) -->
     <div id="cqTabExtract" ${cqMode !== 'extract' ? 'style="display:none"' : ''}>
-      <div class="cq-field-hint">Upload an image or PDF that already contains MCQ questions — the AI will extract them exactly as written.</div>
+      <div class="cq-field-hint">Upload one or more images or PDFs that contain MCQ questions — the AI will extract them all and merge the results.</div>
+
+      <!-- MCQ source files dropzone (multi) -->
       <div class="cq-dropzone" id="cqDropzone" onclick="document.getElementById('cqFileInput').click()">
         <div class="cq-dz-icon">📄🖼️</div>
-        <div class="cq-dz-text">Click to upload, or drag &amp; drop — an image or PDF of your quiz questions</div>
-        ${cqSelectedFile ? `<div class="cq-dz-file">✅ ${escapeHtml(cqSelectedFile.name)}</div>` : ''}
+        <div class="cq-dz-text">Click to upload, or drag &amp; drop — images or PDFs of your quiz questions (multiple allowed)</div>
+        ${cqSelectedFiles.length ? `
+          <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">
+            ${cqSelectedFiles.map((f, fi) => `
+              <div style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.85);
+                border:1px solid var(--accent);border-radius:20px;padding:3px 10px;font-size:.73rem;color:var(--accent);font-weight:700;">
+                ${f.type.startsWith('image/') ? '🖼️' : '📄'} ${escapeHtml(f.name)}
+                <button onclick="event.stopPropagation();cqRemoveMcqFile(${fi})" type="button"
+                  style="background:none;border:none;cursor:pointer;color:#888;font-size:.8rem;padding:0 0 0 3px;line-height:1;">✕</button>
+              </div>`).join('')}
+          </div>` : ''}
       </div>
-      <input type="file" id="cqFileInput" accept="image/*,application/pdf" style="display:none;" onchange="handleCQFileSelect(event)" />
+      <input type="file" id="cqFileInput" accept="image/*,application/pdf" multiple style="display:none;" onchange="handleCQFileSelect(event)" />
+
+      <!-- Lecture filter section -->
+      <div style="margin:10px 0 4px;padding:12px 14px;background:${cqFilterFiles.length ? '#E3F2FD' : 'var(--card)'};border:1.5px ${cqFilterFiles.length ? 'solid #1565C0' : 'dashed var(--border)'};border-radius:10px;transition:all .2s;">
+        <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:180px;">
+            <div style="font-size:.82rem;font-weight:800;color:${cqFilterFiles.length ? '#0D47A1' : 'var(--text)'};letter-spacing:.2px;">
+              🎯 Lecture Filter <span style="font-weight:400;font-size:.75rem;color:var(--text-muted);">(optional)</span>
+            </div>
+            <div style="font-size:.73rem;color:var(--text-muted);margin-top:3px;line-height:1.4;">
+              Upload your lecture files — only MCQs related to these lectures will be kept. Useful when the uploaded quiz file mixes in questions from other curricula.
+            </div>
+          </div>
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+            background:${cqFilterFiles.length ? '#BBDEFB' : '#f0f4ff'};border:1.5px dashed ${cqFilterFiles.length ? '#1565C0' : '#90CAF9'};
+            border-radius:8px;padding:7px 14px;font-size:.78rem;font-weight:700;
+            color:${cqFilterFiles.length ? '#0D47A1' : '#1976D2'};white-space:nowrap;transition:all .15s;flex-shrink:0;"
+            onmouseover="this.style.background='#BBDEFB'" onmouseout="this.style.background='${cqFilterFiles.length ? '#BBDEFB' : '#f0f4ff'}'">
+            ➕ Add Lecture File
+            <input type="file" accept="image/*,application/pdf,text/plain,.txt" multiple style="display:none;"
+              onchange="handleCQFilterFileSelect(event)" />
+          </label>
+        </div>
+        ${cqFilterFiles.length ? `
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">
+          ${cqFilterFiles.map((f, fi) => `
+            <div style="display:flex;align-items:center;gap:5px;background:#BBDEFB;
+              border:1px solid #1565C0;border-radius:20px;padding:3px 10px;font-size:.73rem;color:#0D47A1;font-weight:700;">
+              ${f.type && f.type.startsWith('image/') ? '🖼️' : (f.type === 'text/plain' || f.name.toLowerCase().endsWith('.txt')) ? '📝' : '📄'} ${escapeHtml(f.name)}
+              <button onclick="cqRemoveFilterFile(${fi})" type="button"
+                style="background:none;border:none;cursor:pointer;color:#1565C0;font-size:.85rem;padding:0 2px;line-height:1;">✕</button>
+            </div>`).join('')}
+        </div>` : ''}
+      </div>
 
       <!-- AI Answer Mode toggle -->
       <div style="margin:10px 0 4px;padding:12px 14px;background:${cqAiAnswerToggle ? '#EDE7F6' : 'var(--card)'};border:1.5px solid ${cqAiAnswerToggle ? '#9C27B0' : 'var(--border)'};border-radius:10px;transition:all .2s;">
@@ -4378,8 +4424,8 @@ function setupCQDropzone() {
     e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag-over');
   }));
   dz.addEventListener('drop', e => {
-    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) acceptCQFile(file);
+    const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+    files.forEach(f => acceptCQFile(f));
   });
 }
 
@@ -4399,8 +4445,46 @@ function setupLectureDropzone() {
 }
 
 function handleCQFileSelect(event) {
-  const file = event.target.files && event.target.files[0];
-  if (file) acceptCQFile(file);
+  const files = event.target.files ? Array.from(event.target.files) : [];
+  files.forEach(f => acceptCQFile(f));
+  event.target.value = ''; // allow re-selecting the same file(s) later
+}
+
+function handleCQFilterFileSelect(event) {
+  const files = event.target.files ? Array.from(event.target.files) : [];
+  files.forEach(f => acceptCQFilterFile(f));
+  event.target.value = '';
+}
+
+function cqRemoveMcqFile(idx) {
+  cqSelectedFiles.splice(idx, 1);
+  renderCustomQuizModal();
+}
+
+function cqRemoveFilterFile(idx) {
+  cqFilterFiles.splice(idx, 1);
+  renderCustomQuizModal();
+}
+
+function acceptCQFilterFile(file) {
+  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+  const isTxt   = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
+  const statusEl = document.getElementById('cqStatus');
+
+  if (!isPdf && !isImage && !isTxt) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Lecture filter files must be PDF, image (JPG/PNG/WEBP), or .txt.</div>`;
+    return;
+  }
+  if (file.size > 19 * 1024 * 1024) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File too large (max ~19MB): ${escapeHtml(file.name)}</div>`;
+    return;
+  }
+  if (cqFilterFiles.some(f => f.name === file.name && f.size === file.size)) return; // dedupe
+
+  cqFilterFiles.push(file);
+  if (statusEl) statusEl.innerHTML = '';
+  renderCustomQuizModal();
 }
 
 function handleLectureFileSelect(event) {
@@ -4434,18 +4518,20 @@ function acceptCQFile(file) {
   const statusEl = document.getElementById('cqStatus');
 
   if (!isPdf && !isImage) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload an image (JPG/PNG/WEBP) or a PDF file.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload images (JPG/PNG/WEBP) or PDF files.</div>`;
     return;
   }
   if (file.size > 19 * 1024 * 1024) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File is too large (max ~19MB).</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File too large (max ~19MB): ${escapeHtml(file.name)}</div>`;
     return;
   }
+  if (cqSelectedFiles.some(f => f.name === file.name && f.size === file.size)) return; // dedupe
 
-  cqSelectedFile = file;
+  cqSelectedFiles.push(file);
   if (statusEl) statusEl.innerHTML = '';
   renderCustomQuizModal();
 }
+
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -4945,76 +5031,158 @@ async function generateQuizFromAI() {
   const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
   const title  = (titleInput ? titleInput.value : cqGeneratedTitle).trim();
 
-  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
-  if (!cqSelectedFile){ statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload an image or PDF of your quiz first.</div>`; return; }
-  if (!title)         { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
+  if (!apiKey)                { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
+  if (!cqSelectedFiles.length) { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload at least one image or PDF of your quiz.</div>`; return; }
+  if (!title)                  { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
 
   setGeminiKey(apiKey);
   cqGeneratedTitle = title;
   cqBusy = true;
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
-  statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions… this can take a moment for longer documents.</div>`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   try {
-    const base64Data = await fileToBase64(cqSelectedFile);
-    const mimeType = cqSelectedFile.type ||
-      (cqSelectedFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    // ── Step 1: extract questions from every uploaded MCQ file, merge results ──
+    let cleaned = [];
+    let finishReason = null;
+    const firstFileRef = { base64Data: null, mimeType: null }; // kept for backward-compat re-extract flows
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    for (let fi = 0; fi < cqSelectedFiles.length; fi++) {
+      const file = cqSelectedFiles[fi];
+      const fileLabel = cqSelectedFiles.length > 1 ? ` (file ${fi + 1} of ${cqSelectedFiles.length}: ${escapeHtml(file.name)})` : '';
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions${fileLabel}… this can take a moment for longer documents.</div>`;
 
-    const data = await callGeminiWithRetry(url, {
-      contents: [{
-        parts: [
-          { inline_data: { mime_type: mimeType, data: base64Data } },
-          { text: CQ_EXTRACTION_PROMPT }
-        ]
-      }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0,
-        maxOutputTokens: 65536
+      const base64Data = await fileToBase64(file);
+      const mimeType = file.type ||
+        (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      if (fi === 0) { firstFileRef.base64Data = base64Data; firstFileRef.mimeType = mimeType; }
+
+      const data = await callGeminiWithRetry(url, {
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: mimeType, data: base64Data } },
+            { text: CQ_EXTRACTION_PROMPT }
+          ]
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0,
+          maxOutputTokens: 65536
+        }
+      }, {});
+
+      const candidate = data && data.candidates && data.candidates[0];
+      if (!candidate) throw new Error(`Gemini returned no result for "${file.name}". The file may be unsupported or blocked — try a clearer image or PDF.`);
+
+      if (candidate.finishReason === 'MAX_TOKENS') finishReason = 'MAX_TOKENS';
+      const textOut = (candidate.content && candidate.content.parts || [])
+        .map(p => p.text || '').join('');
+      if (!textOut.trim()) throw new Error(`Gemini returned an empty response for "${file.name}". Please try again.`);
+
+      let parsed;
+      try { const cleanOut = textOut.replace(/```json|```/g, '').trim(); parsed = JSON.parse(cleanOut); }
+      catch (e) { throw new Error(`Could not understand the AI response for "${file.name}". Please try again.`); }
+
+      if (!Array.isArray(parsed)) continue;
+
+      const fileCleaned = parsed.map(q => {
+        if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
+        const opts = {};
+        Object.entries(q.options)
+          .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
+          .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
+          .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
+        if (!Object.keys(opts).length) return null;
+        const rawAnswer = (typeof q.answer === 'string') ? q.answer.trim() : '';
+        const noKey = rawAnswer === '__NO_KEY__';
+        let answer = noKey ? '' : rawAnswer.toUpperCase();
+        if (!noKey && !opts[answer]) answer = Object.keys(opts)[0];
+        const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
+        return {
+          question: q.question, options: opts, optionsOrder, answer,
+          has_image: !!q.has_image, no_answer_key: noKey,
+          _srcBase64: base64Data, _srcMime: mimeType, _srcName: file.name
+        };
+      }).filter(Boolean);
+
+      // Extract embedded images for questions that have them, per source file
+      const imageQuestions = fileCleaned.filter(q => q.has_image);
+      if (imageQuestions.length > 0) {
+        statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting images${fileLabel} for ${imageQuestions.length} question${imageQuestions.length !== 1 ? 's' : ''}… please wait.</div>`;
+        await extractImagesForQuestions(fileCleaned, base64Data, mimeType, apiKey);
       }
-    }, {});
 
-    const candidate = data && data.candidates && data.candidates[0];
-    if (!candidate) throw new Error('Gemini returned no result. The file may be unsupported or blocked — try a clearer image or PDF.');
-
-    const finishReason = candidate.finishReason;
-    const textOut = (candidate.content && candidate.content.parts || [])
-      .map(p => p.text || '').join('');
-    if (!textOut.trim()) throw new Error('Gemini returned an empty response. Please try again.');
-
-    let parsed;
-    try { const cleanOut = textOut.replace(/```json|```/g, '').trim(); parsed = JSON.parse(cleanOut); }
-    catch (e) { throw new Error('Could not understand the AI response. Please try again.'); }
-
-    if (!Array.isArray(parsed) || !parsed.length) {
-      throw new Error('No questions could be detected in the uploaded file.');
+      cleaned = cleaned.concat(fileCleaned);
     }
 
-    const cleaned = parsed.map(q => {
-      if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
-      const opts = {};
-      Object.entries(q.options)
-        .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
-        .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
-        .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
-      if (!Object.keys(opts).length) return null;
-      const rawAnswer = (typeof q.answer === 'string') ? q.answer.trim() : '';
-      const noKey = rawAnswer === '__NO_KEY__';
-      let answer = noKey ? '' : rawAnswer.toUpperCase();
-      if (!noKey && !opts[answer]) answer = Object.keys(opts)[0];
-      const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
-      return { question: q.question, options: opts, optionsOrder, answer, has_image: !!q.has_image, no_answer_key: noKey };
-    }).filter(Boolean);
+    if (!cleaned.length) throw new Error('No questions could be detected in the uploaded file(s).');
 
-    if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
+    // ── Step 2: optional lecture filter — keep only MCQs relevant to the uploaded lectures ──
+    let filteredOutCount = 0;
+    if (cqFilterFiles.length > 0) {
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''} against your ${cqFilterFiles.length} lecture file${cqFilterFiles.length !== 1 ? 's' : ''}…</div>`;
 
-    // Extract embedded images for questions that have them
-    const imageQuestions = cleaned.filter(q => q.has_image);
-    if (imageQuestions.length > 0) {
-      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting images for ${imageQuestions.length} question${imageQuestions.length !== 1 ? 's' : ''}… please wait.</div>`;
-      await extractImagesForQuestions(cleaned, base64Data, mimeType, apiKey);
+      const lectureParts = [];
+      for (const lf of cqFilterFiles) {
+        const isTxt = lf.type === 'text/plain' || lf.name.toLowerCase().endsWith('.txt');
+        if (isTxt) {
+          const txt = await fileToText(lf);
+          lectureParts.push({ text: `--- LECTURE FILE: ${lf.name} ---\n${txt}\n--- END LECTURE FILE ---` });
+        } else {
+          const lb64 = await fileToBase64(lf);
+          const lmime = lf.type || (lf.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+          lectureParts.push({ text: `--- LECTURE FILE: ${lf.name} ---` });
+          lectureParts.push({ inline_data: { mime_type: lmime, data: lb64 } });
+        }
+      }
+
+      const filterPrompt = `You are a strict relevance filter for multiple-choice exam questions.
+
+You will be given:
+1. The full content of one or more lecture files (the curriculum the user actually studied).
+2. A numbered list of MCQ questions (question text only) that were extracted from a quiz file. Some of these questions may belong to a completely different course/curriculum than the lectures provided.
+
+TASK: For each numbered question, decide whether its core subject matter is covered by the provided lecture content.
+- Output 1 if the question's topic clearly relates to something taught in the lectures.
+- Output 0 if the question is about a different topic/subject not covered in the lectures, or if you are not reasonably confident it relates.
+
+Be strict: when in doubt, output 0. The goal is to remove MCQs that don't belong with this curriculum, not to keep everything.
+
+Return ONLY a JSON array of 0s and 1s, the same length and order as the question list, with no other text, no markdown fences, and no explanation.
+Example output for 5 questions: [1,0,1,1,0]
+
+QUESTIONS TO EVALUATE:
+${cleaned.map((q, i) => `${i + 1}. ${q.question}`).join('\n')}`;
+
+      const filterData = await callGeminiWithRetry(url, {
+        contents: [{
+          parts: [
+            ...lectureParts,
+            { text: filterPrompt }
+          ]
+        }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
+      }, {});
+
+      const fcandidate = filterData && filterData.candidates && filterData.candidates[0];
+      if (fcandidate) {
+        const ftextOut = (fcandidate.content && fcandidate.content.parts || []).map(p => p.text || '').join('');
+        let flags = null;
+        try { flags = JSON.parse(ftextOut.replace(/```json|```/g, '').trim()); } catch (fe) { flags = null; }
+
+        if (Array.isArray(flags) && flags.length === cleaned.length) {
+          const before = cleaned.length;
+          cleaned = cleaned.filter((_, i) => flags[i] === 1 || flags[i] === true);
+          filteredOutCount = before - cleaned.length;
+          if (!cleaned.length) {
+            throw new Error('No questions remained after filtering against the uploaded lecture(s) — the MCQ file(s) may not overlap with this curriculum. Try different files, or remove the lecture filter to keep all questions.');
+          }
+        } else {
+          statusEl.insertAdjacentHTML('beforeend',
+            `<div class="cq-status warning" style="margin-top:6px;">⚠️ Lecture filter could not be applied (unexpected AI response) — all extracted questions were kept.</div>`);
+        }
+      }
     }
 
     cqGeneratedQuestions = cleaned;
@@ -5034,7 +5202,7 @@ async function generateQuizFromAI() {
 
     let warn = '';
     if (finishReason === 'MAX_TOKENS') {
-      warn = ` ⚠️ The response may have been cut off because the document is very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
+      warn = ` ⚠️ The response may have been cut off because a document was very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
     }
 
     const imgCount    = cleaned.filter(q => q.image).length;
@@ -5042,12 +5210,13 @@ async function generateQuizFromAI() {
     const noKeyCount  = noKeyQs.length;
     const aiCount     = cleaned.filter(q => q.ai_answered).length;
     const guessCount  = cleaned.filter(q => q.ai_guessed).length;
+    const filterNote  = filteredOutCount > 0 ? ` · 🎯 ${filteredOutCount} unrelated question${filteredOutCount !== 1 ? 's' : ''} filtered out` : '';
     const solveNote   = cqAiSolveAllToggle && aiCount > 0
       ? ` · 🤖 ${aiCount} AI-solved${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
       : noKeyCount > 0 && cqAiAnswerToggle && aiCount > 0
       ? ` · 🤖 ${aiCount} AI-answered${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
       : noKeyCount > 0 ? ` · ⚠️ ${noKeyCount} without key` : '';
-    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}${solveNote}. Review below, then save.${warn}</div>`;
+    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}${filterNote}${solveNote}. Review below, then save.${warn}</div>`;
     if (noKeyCount > 0 && !cqAiAnswerToggle && !cqAiSolveAllToggle) {
       statusEl.insertAdjacentHTML('beforeend',
         `<div class="cq-status warning" style="margin-top:6px;">⚠️ ${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong>⚠️ No Key</strong> badge. You can set the correct answer manually, or enable <strong>🤖 AI Answer Mode</strong> before extracting to let AI answer them automatically.</div>`
@@ -5342,7 +5511,7 @@ function renderCQPreview() {
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
           <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqRemoveImage(${i})" type="button">🗑️ Remove Image</button>
-          ${(cqSelectedFile || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
+          ${(cqSelectedFiles.length || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
             style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
         </div>
       </div>`;
@@ -5357,7 +5526,7 @@ function renderCQPreview() {
             📎 Upload Image Manually
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
-          ${(cqSelectedFile || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
+          ${(cqSelectedFiles.length || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
             style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
         </div>
       </div>`;
@@ -5567,7 +5736,7 @@ async function cqReExtractImage(idx) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
   const apiKey = getGeminiKey();
   if (!apiKey) { alert('Please enter your Gemini API key first.'); return; }
-  const sourceFile = cqSelectedFile || cqLectureFile;
+  const sourceFile = (cqSelectedFiles && cqSelectedFiles[0]) || cqLectureFile;
   if (!sourceFile) { alert('The original source file is no longer available. Please re-upload the file first.'); return; }
 
   const statusEl = document.getElementById(`cqReaskStatus_${idx}`);
@@ -5603,7 +5772,7 @@ async function cqReaskQuestion(idx) {
     alert('Please enter your Gemini API key first.');
     return;
   }
-  if (!cqSelectedFile && !cqLectureFile) {
+  if (!cqSelectedFiles.length && !cqLectureFile) {
     alert('The original source file is no longer available. Please re-upload the file first.');
     return;
   }
@@ -5624,7 +5793,7 @@ Return ONLY a JSON array with ONE object in the same format:
 [{"question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A","has_image":false}]`;
 
   try {
-    const sourceFile = cqSelectedFile || cqLectureFile;
+    const sourceFile = (cqSelectedFiles && cqSelectedFiles[0]) || cqLectureFile;
     const base64Data = await fileToBase64(sourceFile);
     const mimeType   = sourceFile.type ||
       (sourceFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
@@ -5715,7 +5884,7 @@ async function saveGeneratedCustomQuiz() {
   await saveCustomQuizzesList(quizzes);
 
   cqGeneratedQuestions = null;
-  cqSelectedFile = null;
+  cqSelectedFiles = [];
   cqLectureFile = null;
   cqGeneratedTitle = '';
 
@@ -6144,7 +6313,7 @@ async function executeSplitQuiz() {
   // If preview context, also clear preview state
   if (cqSplitState.context === 'preview') {
     cqGeneratedQuestions = null;
-    cqSelectedFile = null;
+    cqSelectedFiles = [];
     cqLectureFile = null;
     cqGeneratedTitle = '';
   }
