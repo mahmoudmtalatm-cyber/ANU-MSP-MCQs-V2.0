@@ -1717,17 +1717,6 @@
     </div>
   </div>
 
-<!-- LECTURE FILTER REPORT MODAL -->
-  <div id="filterReportOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeFilterReport()">
-    <div class="stats-modal">
-      <div class="stats-modal-header">
-        <h2>📋&nbsp; Lecture Filter Report</h2>
-        <button class="stats-close-btn" onclick="closeFilterReport()">✕</button>
-      </div>
-      <div class="stats-body" id="filterReportBody"></div>
-    </div>
-  </div>
-
 <!-- COMMUNITY QUIZZES MODAL -->
   <div id="communityQuizOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeCommunityQuizzes()">
     <div class="stats-modal">
@@ -4053,7 +4042,6 @@ let cqAiSolveAllToggle  = false;  // whether to also AI-solve questions that alr
 
 // ── Split quiz into multiple quizzes ──
 let cqSplitState = null;
-let cqLastFilterReport = null; // [{question, verdict: 'kept'|'dropped'|'review', reason}] from the most recent lecture filter run
 // shape when active: { context: 'preview'|'saved', quizId: null|string,
 //   mode: 'equal'|'custom'|'visual', chunkSize: number,
 //   ranges: [{start:'', end:'', label:''}],
@@ -4504,48 +4492,6 @@ function closeCustomQuizzes() {
   document.getElementById('customQuizOverlay').classList.add('hidden');
 }
 
-function showFilterReport() {
-  const overlay = document.getElementById('filterReportOverlay');
-  const body    = document.getElementById('filterReportBody');
-  if (!overlay || !body) return;
-  if (!cqLastFilterReport || !cqLastFilterReport.length) {
-    body.innerHTML = `<div class="empty-state" style="padding:20px;"><div class="empty-icon">📭</div>No filter report available yet — run the lecture filter first.</div>`;
-    overlay.classList.remove('hidden');
-    return;
-  }
-  const VERDICT_META = {
-    kept:    { label: '✅ Kept',          bg: '#E8F5E9', fg: '#2E7D32', border: '#A5D6A7' },
-    dropped: { label: '🗑️ Dropped',       bg: '#FFEBEE', fg: '#C62828', border: '#EF9A9A' },
-    review:  { label: '⚠️ Needs Review',  bg: '#FFF3E0', fg: '#E65100', border: '#FFB74D' }
-  };
-  const keptN    = cqLastFilterReport.filter(r => r.verdict === 'kept').length;
-  const droppedN = cqLastFilterReport.filter(r => r.verdict === 'dropped').length;
-  const reviewN  = cqLastFilterReport.filter(r => r.verdict === 'review').length;
-
-  let html = `<div style="font-size:.82rem;font-weight:700;color:var(--text-muted);margin-bottom:12px;">
-    ${keptN} kept &middot; ${droppedN} dropped &middot; ${reviewN} need review &middot; ${cqLastFilterReport.length} total
-  </div>`;
-  html += `<div style="display:flex;flex-direction:column;gap:8px;">`;
-  cqLastFilterReport.forEach((r, i) => {
-    const m = VERDICT_META[r.verdict] || VERDICT_META.review;
-    html += `<div style="background:${m.bg};border:1.5px solid ${m.border};border-radius:8px;padding:10px 12px;">
-      <div style="display:flex;align-items:flex-start;gap:8px;justify-content:space-between;">
-        <div style="font-size:.85rem;font-weight:600;color:var(--text-main);flex:1;">${i + 1}. ${escapeHtml(r.question)}</div>
-        <span style="background:${m.fg};color:#fff;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">${m.label}</span>
-      </div>
-      ${r.reason ? `<div style="font-size:.76rem;color:${m.fg};margin-top:5px;">${escapeHtml(r.reason)}</div>` : ''}
-    </div>`;
-  });
-  html += `</div>`;
-  body.innerHTML = html;
-  overlay.classList.remove('hidden');
-}
-
-function closeFilterReport() {
-  const overlay = document.getElementById('filterReportOverlay');
-  if (overlay) overlay.classList.add('hidden');
-}
-
 function toggleCQKeyVisibility() {
   const inp = document.getElementById('kmNewKeyInput');
   if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
@@ -4596,7 +4542,7 @@ function renderCustomQuizModal() {
 
     <!-- API Key Manager -->
     <div class="km-panel" id="kmPanel">
-      ${renderKeyManagerHTML()}
+      \${renderKeyManagerHTML()}
     </div>
 
     <!-- Mode tabs -->
@@ -6189,16 +6135,12 @@ Output the numbered topic index now:` }] }],
 
       const FILTER_CHUNK_SIZE        = 25; // phase 1 text batches
       const FILTER_CHUNK_SIZE_IMAGES =  8; // phase 2 image batches
-      const MAX_BATCH_RETRIES        =  4; // how many times to retry a batch that errored/failed to parse
 
-      // allFlags[i]   holds the final 0 (drop) / 1 (keep) / 2 (genuinely ambiguous -> review) for cleaned[i]
-      // allReasons[i] holds a short human-readable reason for that verdict
-      const allFlags   = new Array(cleaned.length).fill(null);
-      const allReasons = new Array(cleaned.length).fill('');
-      let hadUnresolvedBatch = false; // true only if a batch failed every retry attempt
+      // allFlags[i] holds the final 0/1 result for cleaned[i]
+      const allFlags = new Array(cleaned.length).fill(null);
+      let filterBatchFailed = false;
 
-      // ── Helper: run one text-only batch. Returns { flags, reasons } arrays, or null if the
-      // batch could not be parsed at all (caller is responsible for retrying). ──
+      // ── Helper: run one text-only batch, returns array of 0/1/2 flags ──
       async function runTextBatch(batchQs, batchLabel) {
         const questionListText = batchQs.map((q, i) => {
           const optLines = Object.entries(q.options || {}).map(([k, v]) => `   ${k}. ${v}`).join('\n');
@@ -6207,28 +6149,23 @@ Output the numbered topic index now:` }] }],
         }).join('\n\n');
 
         const taskText = `
-LECTURE MATERIAL (the only resource available to answer these questions):`;
+TOPIC INDEX (all specific topics covered in the lecture):`;
         const taskText2 = `
 
-TASK: For each numbered question, decide whether it can be FULLY answered using ONLY the lecture material above —
-no outside knowledge required to pick the correct option with confidence.
+TASK: For each numbered question, decide if its core subject is covered by the lecture topics above.
 
 Scoring rules:
-- 1 = YES: the lecture material directly contains the specific fact, mechanism, value, or concept needed to answer this question and distinguish the correct option from the others.
-- 0 = NO: the lecture material does not contain what's needed — including cases where the general topic is mentioned but the specific detail the question asks about is missing, or where answering would require outside knowledge not present in the material.
-- 2 = UNSURE: you genuinely cannot tell from the question text alone whether the lecture covers it (e.g. the question refers to "the image" or "the diagram above" with no other context, and you have no image to check).
+- 1 = YES: the question's topic (or a clear synonym/related term) appears in the topic index
+- 0 = NO: the topic is genuinely absent from the lecture — not just phrased differently
+- 2 = UNSURE: you cannot confidently decide from the question text alone (e.g. the question says "What does the image show?" with no other context)
 
-Important — be strict:
-- "The lecture mentions this general topic" is NOT enough — the specific fact/value/distinction the question needs must actually be present.
-- Do NOT use your own outside knowledge to decide whether an option is correct or to fill gaps in the lecture material — judge ONLY based on whether the material itself contains what's needed.
-- Default to 0 when in doubt about coverage of the SPECIFIC detail, even if the general subject area is mentioned. Reserve 2 only for cases of genuine textual ambiguity (e.g. missing visual context), not for "the lecture probably covers this."
+Important:
+- Match on MEANING not exact words. "Cardiac output" and "stroke volume × heart rate" are the same concept → match.
+- If the question tests a sub-topic of something in the index, that counts as a match → 1.
+- Only score 0 when confident the topic is absent. Only score 2 when the text is genuinely ambiguous.
 
-For EACH question also give a short reason (max ~12 words) explaining the verdict, e.g. "lecture covers X mechanism in detail" or "lecture never mentions Y" or "needs image, no visual context here".
-
-Return ONLY a JSON array with exactly ${batchQs.length} objects, one per question, same order, shaped like:
-{"v":0,"r":"short reason"}
-Example for 2 questions: [{"v":1,"r":"lecture defines this directly"},{"v":0,"r":"topic not mentioned in lecture"}]
-No other text, no markdown fences.
+Return ONLY a JSON array with exactly ${batchQs.length} elements (0, 1, or 2), one per question, same order. No other text.
+Example for 4 questions: [1,0,2,1]
 
 QUESTIONS TO EVALUATE:
 ${questionListText}`;
@@ -6238,18 +6175,18 @@ ${questionListText}`;
         let parts;
         if (currentUri) {
           parts = [
-            { text: 'You are a strict academic relevance filter.' + taskText },
+            { text: 'You are a precise academic relevance filter.' + taskText },
             { file_data: { mime_type: 'text/plain', file_uri: currentUri } },
             { text: taskText2 }
           ];
         } else {
-          parts = [{ text: `You are a strict academic relevance filter.${taskText}\n${lectureTopicIndex}${taskText2}` }];
+          parts = [{ text: `You are a precise academic relevance filter.${taskText}\n${lectureTopicIndex}${taskText2}` }];
         }
 
         try {
           const data = await callGeminiWithRetry(url, {
             contents: [{ parts }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 2048 }
+            generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 1024 }
           }, {});
           const candidate = data && data.candidates && data.candidates[0];
           if (!candidate) return null;
@@ -6258,93 +6195,65 @@ ${questionListText}`;
           let cj = textOut.replace(/```json|```/g, '').trim();
           if (cj.startsWith('[') && !cj.endsWith(']')) cj = cj.replace(/[,\s]+$/, '') + ']';
           const parsed = JSON.parse(cj);
-          if (!Array.isArray(parsed) || !parsed.length) return null;
-          const flags   = batchQs.map((_, i) => {
-            const item = parsed[i];
-            const v = item && typeof item === 'object' ? item.v : item; // tolerate plain-number fallback
-            return (v === 0 || v === 1 || v === 2) ? v : null; // null = unparseable entry -> treat batch as failed
-          });
-          const reasons = batchQs.map((_, i) => {
-            const item = parsed[i];
-            return (item && typeof item === 'object' && item.r) ? String(item.r).slice(0, 160) : '';
-          });
-          if (flags.some(f => f === null)) return null; // any unparseable entry -> retry whole batch
-          return { flags, reasons };
+          if (Array.isArray(parsed) && parsed.length >= batchQs.length) return parsed.slice(0, batchQs.length);
+          if (Array.isArray(parsed) && parsed.length > 0) return batchQs.map((_, i) => parsed[i] !== undefined ? parsed[i] : 2);
+          return null;
         } catch (e) {
           console.warn(`[lecture-filter] ${batchLabel} failed:`, e);
           return null;
         }
       }
 
-      // ── Generic retry-until-resolved runner for a list of batches ──
-      // batchFn(batchQs, label) must return { flags, reasons } or null.
-      // Retries failed batches up to MAX_BATCH_RETRIES times each before giving up.
-      async function runBatchesWithRetry(items, chunkSize, labelPrefix, batchFn, onProgress) {
-        const chunks = [];
-        for (let start = 0; start < items.length; start += chunkSize) {
-          chunks.push(items.slice(start, start + chunkSize));
+      // ── PHASE 1: text-only pass over all questions ──
+      const p1Total = Math.ceil(cleaned.length / FILTER_CHUNK_SIZE);
+      for (let bi = 0; bi < p1Total; bi++) {
+        const start   = bi * FILTER_CHUNK_SIZE;
+        const batchQs = cleaned.slice(start, Math.min(start + FILTER_CHUNK_SIZE, cleaned.length));
+        if (p1Total > 1) {
+          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering questions against lecture… (${bi + 1}/${p1Total})</div>`;
         }
-        for (let ci = 0; ci < chunks.length; ci++) {
-          let chunk = chunks[ci];
-          let result = null;
-          for (let attempt = 1; attempt <= MAX_BATCH_RETRIES; attempt++) {
-            if (onProgress) onProgress(ci + 1, chunks.length, attempt);
-            result = await batchFn(chunk, `${labelPrefix} batch ${ci + 1}/${chunks.length} (try ${attempt})`);
-            if (result) break;
-            console.warn(`[lecture-filter] ${labelPrefix} batch ${ci + 1}/${chunks.length} failed parse/response — retrying (attempt ${attempt}/${MAX_BATCH_RETRIES})`);
-          }
-          if (!result) {
-            // Exhausted retries — mark every question in this batch for manual review, never silently kept/dropped.
-            hadUnresolvedBatch = true;
-            chunk.forEach(({ origIdx }) => {
-              allFlags[origIdx]   = 2;
-              allReasons[origIdx] = `Filter could not get a reliable AI response after ${MAX_BATCH_RETRIES} attempts — needs manual review.`;
-            });
-          } else {
-            chunk.forEach(({ origIdx }, i) => {
-              allFlags[origIdx]   = result.flags[i];
-              allReasons[origIdx] = result.reasons[i] || '';
-            });
-          }
+        const flags = await runTextBatch(batchQs, `phase-1 batch ${bi + 1}/${p1Total}`);
+        if (flags === null) {
+          filterBatchFailed = true;
+          batchQs.forEach((_, i) => { allFlags[start + i] = 2; }); // treat failure as uncertain
+        } else {
+          flags.forEach((f, i) => { allFlags[start + i] = f; });
         }
       }
 
-      // ── PHASE 1: text-only pass over all questions ──
-      const p1Items = cleaned.map((q, i) => ({ q, origIdx: i }));
-      await runBatchesWithRetry(
-        p1Items, FILTER_CHUNK_SIZE, 'phase-1',
-        (chunk, label) => runTextBatch(chunk.map(c => c.q), label),
-        (cur, total) => {
-          if (total > 1) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering questions against lecture… (${cur}/${total})</div>`;
-        }
-      );
-
       // ── PHASE 2: visual re-evaluation for uncertain image-bearing questions ──
+      // Collect all uncertain questions that have an image
       const visualReaskPool = cleaned
         .map((q, i) => ({ q, origIdx: i }))
         .filter(({ q, origIdx }) => allFlags[origIdx] === 2 && !!q.image);
 
       if (visualReaskPool.length > 0) {
         console.log(`[lecture-filter] phase-2: ${visualReaskPool.length} uncertain image question(s) will be re-evaluated visually`);
+        const p2Total = Math.ceil(visualReaskPool.length / FILTER_CHUNK_SIZE_IMAGES);
+        for (let bi = 0; bi < p2Total; bi++) {
+          const batchItems = visualReaskPool.slice(bi * FILTER_CHUNK_SIZE_IMAGES, (bi + 1) * FILTER_CHUNK_SIZE_IMAGES);
+          const batchQs    = batchItems.map(({ q }) => q);
+          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🖼️ Re-evaluating ${visualReaskPool.length} borderline image question${visualReaskPool.length !== 1 ? 's' : ''} visually… (${bi + 1}/${p2Total})</div>`;
 
-        async function runImageBatch(batchItems, batchLabel) {
-          const batchQs = batchItems.map(({ q }) => q);
-          const introText = `You are a strict academic relevance filter.
-LECTURE MATERIAL (the only resource available to answer these questions):
+          // Build parts: inline lecture index + interleaved question images
+          const introText = `You are a precise academic relevance filter.
+TOPIC INDEX (all specific topics covered in the lecture):
 ${lectureTopicIndex}
 
-TASK: For each numbered question, decide whether it can be FULLY answered using ONLY the lecture material above plus its attached image —
-no outside knowledge required to pick the correct option with confidence.
-These questions were ambiguous from text alone — use the attached image for each to resolve that ambiguity.
+TASK: For each numbered question, decide if its core subject is covered by the lecture topics above.
+These questions were ambiguous from text alone — use the attached image for each to identify the topic.
 
 Scoring rules:
-- 1 = YES: the lecture material (+ image) directly contains what's needed to answer this with confidence.
-- 0 = NO: it does not — including when only the general topic is present but not the specific detail needed.
+- 1 = YES: the topic (or synonym/sub-topic) is covered in the index
+- 0 = NO: the topic is genuinely absent
 
-Important — be strict: do not use outside knowledge to fill gaps; judge only by what the material + image actually show.
-For EACH question give a short reason (max ~12 words).
+Important:
+- Each question's image follows its text inline.
+- Use the image content (e.g. ECG → cardiac electrophysiology, histology slide → relevant organ/pathology).
+- Match on meaning, not exact words.
 
-Return ONLY a JSON array with exactly ${batchQs.length} objects, shaped like {"v":1,"r":"short reason"}, same order as the questions. No other text.
+Return ONLY a JSON array with exactly ${batchQs.length} elements (1 or 0), one per question, same order. No other text.
+Example for 3 questions: [1,0,1]
 
 QUESTIONS TO EVALUATE (image follows each question):`;
 
@@ -6360,113 +6269,80 @@ QUESTIONS TO EVALUATE (image follows each question):`;
           try {
             const data = await callGeminiWithRetry(url, {
               contents: [{ parts }],
-              generationConfig: { temperature: 0, maxOutputTokens: 1024 } // no responseMimeType with images
+              generationConfig: { temperature: 0, maxOutputTokens: 256 } // no responseMimeType with images
             }, {});
             const candidate = data && data.candidates && data.candidates[0];
             const textOut   = candidate ? (candidate.content && candidate.content.parts || []).map(p => p.text || '').join('') : '';
-            console.log(`[lecture-filter] ${batchLabel} raw:`, textOut);
+            console.log(`[lecture-filter] phase-2 batch ${bi + 1} raw:`, textOut);
             let cj = textOut.replace(/```json|```/g, '').trim();
             if (cj.startsWith('[') && !cj.endsWith(']')) cj = cj.replace(/[,\s]+$/, '') + ']';
             const parsed = JSON.parse(cj);
-            if (!Array.isArray(parsed) || !parsed.length) return null;
-            const flags = batchQs.map((_, i) => {
-              const item = parsed[i];
-              const v = item && typeof item === 'object' ? item.v : item;
-              return (v === 0 || v === 1) ? v : null;
-            });
-            const reasons = batchQs.map((_, i) => {
-              const item = parsed[i];
-              return (item && typeof item === 'object' && item.r) ? String(item.r).slice(0, 160) : '';
-            });
-            if (flags.some(f => f === null)) return null;
-            return { flags, reasons };
+            if (Array.isArray(parsed)) {
+              batchItems.forEach(({ origIdx }, i) => {
+                const val = parsed[i];
+                allFlags[origIdx] = (val === 0 || val === 1) ? val : 1; // default keep if unclear
+              });
+            } else {
+              batchItems.forEach(({ origIdx }) => { allFlags[origIdx] = 1; }); // keep on parse failure
+            }
           } catch (e) {
-            console.warn(`[lecture-filter] ${batchLabel} failed:`, e);
-            return null;
+            console.warn(`[lecture-filter] phase-2 batch ${bi + 1} failed, keeping:`, e);
+            batchItems.forEach(({ origIdx }) => { allFlags[origIdx] = 1; });
+            filterBatchFailed = true;
           }
         }
-
-        await runBatchesWithRetry(
-          visualReaskPool, FILTER_CHUNK_SIZE_IMAGES, 'phase-2-visual',
-          (chunk, label) => runImageBatch(chunk, label),
-          (cur, total) => {
-            statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🖼️ Re-evaluating ${visualReaskPool.length} borderline image question${visualReaskPool.length !== 1 ? 's' : ''} visually… (${cur}/${total})</div>`;
-          }
-        );
       }
 
       // ── Text-only re-evaluation for remaining uncertain questions (no image) ──
+      // Reuses runTextBatch so all uncertain questions are sent in batches of 25
+      // (one API call per batch) instead of one call per question.
       const textReaskPool = cleaned
         .map((q, i) => ({ q, origIdx: i }))
         .filter(({ origIdx }) => allFlags[origIdx] === 2);
 
       if (textReaskPool.length > 0) {
         console.log(`[lecture-filter] text re-evaluation: ${textReaskPool.length} uncertain question(s) without image`);
-        await runBatchesWithRetry(
-          textReaskPool, FILTER_CHUNK_SIZE, 'phase-3-text-reeval',
-          (chunk, label) => runTextBatch(chunk.map(c => c.q), label),
-          (cur, total) => {
-            statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🔍 Double-checking ${textReaskPool.length} borderline question${textReaskPool.length !== 1 ? 's' : ''}…${total > 1 ? ` (batch ${cur}/${total})` : ''}</div>`;
+        const p3Total = Math.ceil(textReaskPool.length / FILTER_CHUNK_SIZE);
+        for (let bi = 0; bi < p3Total; bi++) {
+          const batchItems = textReaskPool.slice(bi * FILTER_CHUNK_SIZE, (bi + 1) * FILTER_CHUNK_SIZE);
+          const batchQs    = batchItems.map(({ q }) => q);
+          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🔍 Double-checking ${textReaskPool.length} borderline question${textReaskPool.length !== 1 ? 's' : ''}…${p3Total > 1 ? ` (batch ${bi + 1}/${p3Total})` : ''}</div>`;
+          const flags = await runTextBatch(batchQs, `text re-eval batch ${bi + 1}`);
+          if (flags) {
+            batchItems.forEach(({ origIdx }, i) => {
+              const val = flags[i];
+              // Phase-3 re-eval: collapse 2 (unsure) -> keep (1)
+              allFlags[origIdx] = (val === 0) ? 0 : 1;
+              console.log(`[lecture-filter] text re-eval Q${origIdx + 1} -> ${allFlags[origIdx]}`);
+            });
+          } else {
+            // Batch failed entirely -- keep all questions in this batch
+            batchItems.forEach(({ origIdx }) => { allFlags[origIdx] = 1; });
+            filterBatchFailed = true;
           }
-        );
-        // Anything still flagged 2 after this dedicated re-eval pass is genuinely ambiguous —
-        // it goes to manual review, it is NOT auto-kept.
-        textReaskPool.forEach(({ origIdx }) => {
-          if (allFlags[origIdx] === 2 && !allReasons[origIdx]) {
-            allReasons[origIdx] = 'Genuinely ambiguous from available text — needs manual review.';
-          }
-        });
-      }
-
-      // Any slot still null (shouldn't normally happen) is treated as needing review, never silently kept.
-      for (let i = 0; i < allFlags.length; i++) {
-        if (allFlags[i] === null) { allFlags[i] = 2; allReasons[i] = 'Filter did not produce a verdict — needs manual review.'; }
-      }
-
-      const keptCount    = allFlags.filter(f => f === 1).length;
-      const droppedCount = allFlags.filter(f => f === 0).length;
-      const reviewCount  = allFlags.filter(f => f === 2).length;
-      console.log(`[lecture-filter] final: keep ${keptCount} / drop ${droppedCount} / review ${reviewCount} of ${cleaned.length}`);
-
-      // Build the full reasons report BEFORE removing dropped questions, so the user can see everything.
-      cqLastFilterReport = cleaned.map((q, i) => ({
-        question: q.question,
-        verdict:  allFlags[i] === 1 ? 'kept' : allFlags[i] === 0 ? 'dropped' : 'review',
-        reason:   allReasons[i] || ''
-      }));
-
-      // Keep questions flagged 1 or 2 (review items survive but get visibly badged). Drop only flag 0.
-      const before = cleaned.length;
-      const survivingFlags   = [];
-      const survivingReasons = [];
-      cleaned = cleaned.filter((_, i) => {
-        if (allFlags[i] === 0) return false;
-        survivingFlags.push(allFlags[i]);
-        survivingReasons.push(allReasons[i]);
-        return true;
-      });
-      cleaned.forEach((q, i) => {
-        if (survivingFlags[i] === 2) {
-          q.needs_review  = true;
-          q.review_reason = survivingReasons[i];
         }
-      });
-      filteredOutCount = before - cleaned.length;
-
-      if (!cleaned.length) {
-        throw new Error('No questions remained after filtering against the uploaded lecture(s) — every question was judged unanswerable from the provided material. Try different files, or remove the lecture filter to keep all questions.');
       }
 
-      const reviewNote = reviewCount > 0
-        ? ` ${reviewCount} question${reviewCount !== 1 ? 's are' : ' is'} marked ⚠️ Needs Review below — the filter could not confidently decide, so they were kept but flagged rather than silently included or removed.`
-        : '';
-      statusEl.insertAdjacentHTML('beforeend',
-        `<div class="cq-status info" style="margin-top:6px;">🎯 Filter result: ${keptCount} kept, ${droppedCount} dropped as unanswerable from the provided material${reviewNote ? ',' : '.'}${reviewNote}
-          <button type="button" class="cq-btn cq-btn-secondary" style="margin-top:6px;" onclick="showFilterReport()">📋 View full filter report</button>
-        </div>`);
-      if (hadUnresolvedBatch) {
+      // Fallback: any slot still null defaults to keep
+      for (let i = 0; i < allFlags.length; i++) if (allFlags[i] === null) allFlags[i] = 1;
+
+      const kept = allFlags.filter(f => f === 1).length;
+      console.log(`[lecture-filter] final: keeping ${kept}/${cleaned.length} questions`);
+
+      if (allFlags.length === cleaned.length) {
+        const before = cleaned.length;
+        cleaned = cleaned.filter((_, i) => allFlags[i] === 1);
+        filteredOutCount = before - cleaned.length;
+        if (!cleaned.length) {
+          throw new Error('No questions remained after filtering against the uploaded lecture(s) — the MCQ file(s) may not overlap with this curriculum. Try different files, or remove the lecture filter to keep all questions.');
+        }
+        if (filterBatchFailed) {
+          statusEl.insertAdjacentHTML('beforeend',
+            `<div class="cq-status warning" style="margin-top:6px;">⚠️ One or more filter batches encountered an error — those questions were kept to avoid data loss.</div>`);
+        }
+      } else {
         statusEl.insertAdjacentHTML('beforeend',
-          `<div class="cq-status warning" style="margin-top:6px;">⚠️ Some batches failed every retry attempt (${MAX_BATCH_RETRIES}×) — those questions are marked ⚠️ Needs Review rather than being guessed at.</div>`);
+          `<div class="cq-status warning" style="margin-top:6px;">⚠️ Lecture filter could not be fully applied (unexpected AI response) — all extracted questions were kept.</div>`);
       }
     }
 
@@ -6745,9 +6621,7 @@ function renderCQPreview() {
     html += `<div class="cq-preview-q cq-editable-q" id="cqQ_${i}">`;
 
     /* ── Question header ── */
-    const qBadge = q.needs_review
-      ? `<span title="${escapeHtml(q.review_reason || 'The lecture filter could not confidently decide on this question.')}" style="background:#FFF3E0;color:#E65100;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #FFB74D;">⚠️ Needs Review</span>`
-      : q.ai_guessed
+    const qBadge = q.ai_guessed
       ? `<span title="AI answered this from its own knowledge — answer was not found in the provided source. Please verify." style="background:#FFF8E1;color:#E65100;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #FFB300;">🧠 AI Guess</span>`
       : q.ai_answered
       ? `<span title="AI answered this question from the provided source" style="background:#EDE7F6;color:#6A1B9A;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #CE93D8;">🤖 AI-answered</span>`
@@ -6759,9 +6633,6 @@ function renderCQPreview() {
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
       ${qBadge}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
-      ${q.needs_review ? `<button class="cq-edit-reask-btn" title="Clear the Needs Review flag once you've manually checked this question"
-        onclick="cqMarkReviewed(${i})"
-        style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">✅ Mark Reviewed</button>` : ''}
       <button class="cq-edit-reask-btn" title="Ask AI to solve this question using the configured source"
         onclick="cqAiSolveOne(${i})"
         style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 AI Solve</button>
@@ -6955,14 +6826,6 @@ function cqDeleteQuestion(idx) {
   if (!cqGeneratedQuestions) return;
   if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
   cqGeneratedQuestions.splice(idx, 1);
-  renderCQPreview();
-}
-
-/* ── Clear the "needs review" flag once the user has manually checked a question ── */
-function cqMarkReviewed(idx) {
-  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
-  delete cqGeneratedQuestions[idx].needs_review;
-  delete cqGeneratedQuestions[idx].review_reason;
   renderCQPreview();
 }
 
