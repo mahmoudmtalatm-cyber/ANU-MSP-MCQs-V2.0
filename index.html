@@ -7634,6 +7634,24 @@ function renderAdminQuestionEditor(containerId) {
       🔘 = correct answer
     </div>
   </div>`;
+
+  // Warning banner if any questions were guessed from AI general knowledge
+  const guessedCount = adminEditQuestions.filter(q => q.ai_guessed).length;
+  if (guessedCount > 0) {
+    html += `<div style="background:#FFF8E1;border:1.5px solid #FFB300;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px;">
+      <span style="font-size:1.2rem;flex-shrink:0;">⚠️</span>
+      <div>
+        <div style="font-size:.82rem;font-weight:800;color:#E65100;margin-bottom:3px;">
+          ${guessedCount} question${guessedCount !== 1 ? 's' : ''} answered from AI general knowledge — not from your source
+        </div>
+        <div style="font-size:.76rem;color:#BF360C;line-height:1.5;">
+          These are marked <strong>🧠 AI Guess</strong> and may be incorrect. 
+          Please review each one carefully and correct the answer if needed before publishing.
+          To improve accuracy, add the relevant lecture file or notes in the AI Solve panel.
+        </div>
+      </div>
+    </div>`;
+  }
   html += `<div class="cq-preview-list" id="adminEditList">`;
 
   adminEditQuestions.forEach((q, i) => {
@@ -7643,9 +7661,16 @@ function renderAdminQuestionEditor(containerId) {
 
     html += `<div class="cq-preview-q cq-editable-q" id="adminEditQ_${i}">`;
 
-    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+    const adminQBadge = q.ai_guessed
+      ? `<span title="AI answered this from its own knowledge — answer was not found in the provided source. Please verify." style="background:#FFF8E1;color:#E65100;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #FFB300;flex-shrink:0;">🧠 AI Guess</span>`
+      : q.ai_answered
+      ? `<span title="AI answered this question from the provided source" style="background:#EDE7F6;color:#6A1B9A;font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #CE93D8;flex-shrink:0;">🤖 AI-answered</span>`
+      : '';
+
+    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;">
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
+      ${adminQBadge}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="adminEditDeleteQuestion(${i})"
@@ -8028,8 +8053,12 @@ async function adminAiSolveQuestions() {
       statusEl
     );
     if (statusEl) {
-      const solved = targetIdxs.filter(i => adminEditQuestions[i] && adminEditQuestions[i].answer).length;
-      statusEl.innerHTML = `<div class="cq-status ok">✅ Done — ${solved} of ${targetIdxs.length} question${targetIdxs.length !== 1 ? 's' : ''} answered. Review and save when ready.</div>`;
+      const solved      = targetIdxs.filter(i => adminEditQuestions[i] && adminEditQuestions[i].answer).length;
+      const guessedNow  = targetIdxs.filter(i => adminEditQuestions[i] && adminEditQuestions[i].ai_guessed).length;
+      const guessNote   = guessedNow > 0
+        ? `<br><span style="color:#E65100;">🧠 ${guessedNow} answered from AI general knowledge — please verify those before publishing.</span>`
+        : '';
+      statusEl.innerHTML = `<div class="cq-status ok">✅ Done — ${solved} of ${targetIdxs.length} question${targetIdxs.length !== 1 ? 's' : ''} answered.${guessNote}</div>`;
     }
   } catch (e) {
     if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(e.message || String(e))}</div>`;
