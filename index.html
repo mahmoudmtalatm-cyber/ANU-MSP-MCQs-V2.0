@@ -723,6 +723,36 @@
 .cq-help-box ol { margin: 6px 0 0 20px; }
 .cq-help-box a { color: var(--accent); font-weight: 700; text-decoration: none; }
 .cq-help-box a:hover { text-decoration: underline; }
+
+/* ── Multi-key list ── */
+.cq-key-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.cq-key-item {
+  display: flex; align-items: center; gap: 8px;
+  background: #F7FBFF; border: 1.5px solid #B0D4F0; border-radius: 8px;
+  padding: 7px 10px; font-size: .85rem;
+}
+.cq-key-item.key-ok    { border-color: #81C784; background: #F1FBF2; }
+.cq-key-item.key-error { border-color: #EF9A9A; background: #FFF5F5; }
+.cq-key-item.key-active{ border-color: var(--accent); background: #EEF7FF; }
+.cq-key-badge {
+  font-size: .72rem; font-weight: 700; padding: 2px 7px; border-radius: 20px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.cq-key-badge.badge-ok     { background: #C8E6C9; color: #2E7D32; }
+.cq-key-badge.badge-active { background: #BBDEFB; color: #1565C0; }
+.cq-key-badge.badge-error  { background: #FFCDD2; color: #B71C1C; }
+.cq-key-badge.badge-idle   { background: #ECEFF1; color: #546E7A; }
+.cq-key-label {
+  flex: 1; font-family: monospace; font-size: .82rem; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cq-key-remove {
+  background: none; border: none; cursor: pointer; color: #C62828;
+  font-size: 1rem; line-height: 1; padding: 2px 4px; border-radius: 4px;
+  flex-shrink: 0;
+}
+.cq-key-remove:hover { background: #FFEBEE; }
+
 .cq-input-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .cq-input-row input[type="password"],
 .cq-input-row input[type="text"] {
@@ -3198,10 +3228,17 @@ async function _getExplainFromPool(questionText) {
 }
 
 function getExplainKey() {
-  try { return localStorage.getItem(AI_EXPLAIN_KEY_STORE) || ''; } catch(e) { return ''; }
+  // Reuse the same multi-key store; returns first healthy key
+  try {
+    const raw = localStorage.getItem(AI_EXPLAIN_KEY_STORE) || '';
+    if (!raw) return '';
+    if (raw.startsWith('[')) { const a = JSON.parse(raw); return (a[0] || '').trim(); }
+    return raw.trim();
+  } catch(e) { return ''; }
 }
 function setExplainKey(key) {
-  try { localStorage.setItem(AI_EXPLAIN_KEY_STORE, (key || '').trim()); } catch(e) {} 
+  // Delegate to the shared setter so both UIs stay in sync
+  setGeminiKey(key);
 }
 
 /* ── Build Gemini prompt for one question ── */
@@ -3220,7 +3257,7 @@ WRONG — ${k}. ${v}:
 [1–2 sentences: why this option is incorrect and what makes it a plausible distractor]`).join('');
 
   const imageNote = q.image
-    ? '\nA visual element (image/diagram/figure) associated with this question is attached — refer to it in your explanation as needed.\n'
+    ? '\nVISUAL ELEMENT: An image (e.g. X-ray, ECG, histology slide, diagram, or figure) associated with this question has been attached. Analyse it carefully and reference specific visual findings from it in your explanation — describe what is visible and how it relates to the correct answer.\n'
     : '';
 
   return `You are a medical education expert. Explain this MCQ question clearly for a medical student.
@@ -3274,10 +3311,10 @@ function handleExplainKeySave() {
   const inp = document.getElementById('explainKeyInput');
   const key = (inp ? inp.value : '').trim();
   if (!key) { if(inp) inp.style.borderColor='#C62828'; return; }
-  setExplainKey(key);
-  // Also sync with the custom quiz key input if it's open
-  const cqInp = document.getElementById('cqApiKeyInput');
-  if (cqInp) cqInp.value = key;
+  // Add to the shared key list (addGeminiKey deduplicates)
+  addGeminiKey(key);
+  // Sync with the custom quiz modal key list if open
+  renderCustomQuizModal();
   if (window._explainKeySaveCallback) {
     const cb = window._explainKeySaveCallback;
     window._explainKeySaveCallback = null;
@@ -3433,7 +3470,7 @@ async function explainQuestion(i, forceRegenerate = false) {
     const p = document.getElementById(`explainPanel_${i}`);
     if (p) {
       if (isKeyErr) {
-        setExplainKey('');
+        removeGeminiKey(0);
         renderExplainKeyPrompt(p, (key) => {
           p.innerHTML = '';
           explainQuestion(i);
@@ -3664,7 +3701,7 @@ CORRECT ANSWER: ${q.answer}. ${q.options[q.answer] || ''}
 ${userLine}`;
 
   if (q.image) {
-    ctx += `\n\nThis question includes a visual element (image, diagram, figure, X-ray, ECG, histology slide, etc.) that has been provided to you alongside this conversation. Use it when answering questions about the image or any visual findings.`;
+    ctx += `\n\nVISUAL ELEMENT: This question includes an embedded image (e.g. an X-ray, ECG, histology slide, diagram, or figure) that has been provided to you as the first part of the conversation. This image is central to the question — always analyse it carefully when answering anything related to visual findings, clinical features shown, or what the image depicts. Describe what you see in the image when relevant.`;
   }
 
   const rawExplain = _explainRawText[i];
@@ -3916,7 +3953,7 @@ async function runChatRequest(i) {
 
     const isKeyErr = err._keyError || /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
-      setExplainKey('');
+      removeGeminiKey(0);
       const panel = document.getElementById(`chatPanel_${i}`);
       if (panel) renderExplainKeyPrompt(panel, () => runChatRequest(i));
       return;
@@ -4125,11 +4162,104 @@ async function saveCustomQuizzesList(arr) {
     try { localStorage.setItem(CQ_KEY, JSON.stringify(arr)); } catch (e) {}
   }
 }
-function getGeminiKey() {
-  try { return localStorage.getItem(CQ_API_KEY_STORE) || ''; } catch (e) { return ''; }
+// ── Multi-key storage ─────────────────────────────────────────────────────
+// Keys are stored as a JSON array under CQ_API_KEY_STORE.
+// Legacy: if the stored value is a plain string (not JSON array), it is
+// transparently migrated to a single-element array on first read.
+
+function _loadKeyList() {
+  try {
+    const raw = localStorage.getItem(CQ_API_KEY_STORE) || '';
+    if (!raw) return [];
+    if (raw.startsWith('[')) return JSON.parse(raw).filter(k => k && k.trim());
+    // Legacy plain string → migrate
+    const k = raw.trim();
+    return k ? [k] : [];
+  } catch (e) { return []; }
 }
+function _saveKeyList(list) {
+  try { localStorage.setItem(CQ_API_KEY_STORE, JSON.stringify(list)); } catch (e) {}
+}
+
+// Returns the first valid key (for legacy callers that need a single key).
+// Explained-AI and other single-key callers still work via this.
+function getGeminiKey() {
+  const list = _loadKeyList();
+  return list[0] || '';
+}
+// Legacy single-key setter: replaces list with one key (used by explain flow).
 function setGeminiKey(key) {
-  try { localStorage.setItem(CQ_API_KEY_STORE, (key || '').trim()); } catch (e) {}
+  const k = (key || '').trim();
+  if (!k) { _saveKeyList([]); return; }
+  const list = _loadKeyList();
+  // If the key is already in the list keep order, otherwise replace first slot
+  if (!list.includes(k)) { _saveKeyList([k, ...list.slice(1)]); }
+}
+
+// Add a new key (if not duplicate and not empty)
+function addGeminiKey(key) {
+  const k = (key || '').trim();
+  if (!k) return false;
+  const list = _loadKeyList();
+  if (list.includes(k)) return false;
+  _saveKeyList([...list, k]);
+  return true;
+}
+// Remove key by index
+function removeGeminiKey(idx) {
+  const list = _loadKeyList();
+  list.splice(idx, 1);
+  _saveKeyList(list);
+}
+
+// ── Smart multi-key manager ───────────────────────────────────────────────
+// Provides a "get next key" interface that:
+//   • Round-robins across all healthy keys
+//   • Skips keys that just returned an auth/key error (marks them bad)
+//   • If ALL keys are bad, waits then resets and retries (in case quota refreshed)
+//   • Re-validates reset keys on first use
+// Usage: create one instance per solve session with createKeyManager().
+
+function createKeyManager() {
+  const keys = _loadKeyList();
+  if (!keys.length) return null;
+
+  // State per key: 'ok' | 'bad'
+  const state = Object.fromEntries(keys.map(k => [k, 'ok']));
+  let roundRobinIdx = 0;
+
+  function healthyKeys() { return keys.filter(k => state[k] === 'ok'); }
+
+  return {
+    count: keys.length,
+
+    // Returns the next key to use, or null if none are currently healthy.
+    next() {
+      const healthy = healthyKeys();
+      if (!healthy.length) return null;
+      // Round-robin among healthy keys
+      const key = healthy[roundRobinIdx % healthy.length];
+      roundRobinIdx++;
+      return key;
+    },
+
+    // Mark a key as bad (auth error). If ALL keys become bad, reset them all
+    // so they get another chance (quota may have refreshed).
+    markBad(key) {
+      state[key] = 'bad';
+      if (healthyKeys().length === 0) {
+        // Reset all so we can retry — quota windows reset periodically
+        keys.forEach(k => { state[k] = 'ok'; });
+        roundRobinIdx = 0;
+      }
+    },
+
+    // True if every key in the manager has been marked bad (and reset hasn't fired yet).
+    allBad() { return healthyKeys().length === 0; },
+
+    // Snapshot of key states for UI rendering
+    getStates() { return keys.map(k => ({ key: k, state: state[k] })); }
+  };
 }
 
 function openCustomQuizzes() {
@@ -4155,10 +4285,51 @@ function toggleCQKeyVisibility() {
   else                            { input.type = 'password'; btn.textContent = '👁'; }
 }
 
+function cqAddKeyFromInput() {
+  const input = document.getElementById('cqApiKeyInput');
+  if (!input) return;
+  const key = input.value.trim();
+  if (!key) return;
+  if (addGeminiKey(key)) {
+    input.value = '';
+    renderCustomQuizModal();
+  } else {
+    input.style.borderColor = '#EF9A9A';
+    setTimeout(() => { input.style.borderColor = ''; }, 1200);
+  }
+}
+
+function cqRemoveKeyAt(idx) {
+  removeGeminiKey(idx);
+  renderCustomQuizModal();
+}
+
+// Mask key for display: show first 8 and last 4 chars
+function maskKey(k) {
+  if (!k || k.length < 14) return '••••••••••••';
+  return k.slice(0, 8) + '••••••••' + k.slice(-4);
+}
+
+function renderKeyList() {
+  const keys = _loadKeyList();
+  if (!keys.length) {
+    return `<div style="font-size:.82rem;color:var(--text-muted);margin-bottom:8px;">No API keys added yet.</div>`;
+  }
+  let html = `<div class="cq-key-list">`;
+  keys.forEach((k, i) => {
+    html += `<div class="cq-key-item" id="cqKeyItem_${i}">
+      <span class="cq-key-badge badge-idle" id="cqKeyBadge_${i}">Key ${i + 1}</span>
+      <span class="cq-key-label" title="${escapeHtml(k)}">${escapeHtml(maskKey(k))}</span>
+      <button class="cq-key-remove" onclick="cqRemoveKeyAt(${i})" title="Remove this key">✕</button>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
 function renderCustomQuizModal() {
-  const body     = document.getElementById('customQuizBody');
-  const savedKey = getGeminiKey();
-  const quizzes  = loadCustomQuizzes();
+  const body    = document.getElementById('customQuizBody');
+  const quizzes = loadCustomQuizzes();
 
   let html = '';
 
@@ -4209,10 +4380,15 @@ function renderCustomQuizModal() {
       </ol>
       Your key is saved only in this browser and is sent directly to Google's API — it never passes through any other server.
     </div>
+    ${renderKeyList()}
     <div class="cq-input-row">
-      <input type="password" id="cqApiKeyInput" placeholder="Paste your Gemini API key here"
-             value="${escapeHtml(savedKey)}" oninput="setGeminiKey(this.value)" />
+      <input type="password" id="cqApiKeyInput" placeholder="Paste a Gemini API key and click Add"
+             onkeydown="if(event.key==='Enter')cqAddKeyFromInput()" />
       <button class="cq-btn cq-btn-secondary" id="cqToggleKeyBtn" onclick="toggleCQKeyVisibility()" type="button">👁</button>
+      <button class="cq-btn" onclick="cqAddKeyFromInput()" type="button">＋ Add Key</button>
+    </div>
+    <div style="font-size:.78rem;color:var(--text-muted);margin-top:-4px;margin-bottom:10px;">
+      Add multiple keys — they are used in rotation. If one hits its quota limit the others take over automatically.
     </div>
 
     <!-- Mode tabs -->
@@ -4466,6 +4642,7 @@ STRICT RULES — follow exactly, no exceptions:
 5. If a specific question has NO indicated correct answer anywhere in the document, set its "answer" to the special value "__NO_KEY__". Do NOT guess or infer an answer — use "__NO_KEY__" exactly.
 6. Do not invent, add, duplicate, or remove any questions or options that are not present in the source document.
 7. For each question, set "has_image" to true if the question is accompanied by an image, diagram, figure, table, chart, graph, X-ray, CT scan, ECG, histology slide, or any other visual element that is part of that question. Set it to false otherwise.
+8. CASE-BASED QUESTIONS: Some documents contain a clinical vignette or scenario (a "case") followed by multiple numbered questions that all refer to that same case. If a question belongs to such a group, copy the FULL shared case text (the vignette/scenario/stem that precedes the questions) into the "case_intro" field for EVERY question in that group — reproduce it word-for-word. If a question has its own self-contained stem and does NOT share a case with other questions, set "case_intro" to "".
 
 Return ONLY a JSON array, one object per question, in exactly this format:
 [
@@ -4473,7 +4650,8 @@ Return ONLY a JSON array, one object per question, in exactly this format:
     "question": "exact question text",
     "options": { "A": "exact choice text", "B": "exact choice text", "C": "exact choice text", "D": "exact choice text" },
     "answer": "A",
-    "has_image": false
+    "has_image": false,
+    "case_intro": ""
   }
 ]
 
@@ -4494,7 +4672,8 @@ const CQ_RESPONSE_SCHEMA = {
         }
       },
       answer: { type: 'STRING' },
-      has_image: { type: 'BOOLEAN' }
+      has_image: { type: 'BOOLEAN' },
+      case_intro: { type: 'STRING' }
     },
     required: ['question', 'options', 'answer']
   }
@@ -4787,51 +4966,87 @@ function cqRemoveSourceFile(idx) {
 // targetIdxs: array of question indices to solve (can be no-key or keyed questions)
 // sourceText: optional reference text
 // sourceFiles: optional array of {base64, mimeType, name}
-// onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
+// Never skips any question. Retries forever — whole-batch errors retry the full batch;
+// individual question failures are isolated into solo batches and retried forever.
 async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl) {
   if (!targetIdxs || !targetIdxs.length) return;
 
-  const apiKey = getGeminiKey();
-  if (!apiKey) { console.warn('cqAiSolveQuestions: no Gemini API key'); return; }
+  const keyMgr = createKeyManager();
+  if (!keyMgr || keyMgr.count === 0) { console.warn('cqAiSolveQuestions: no Gemini API keys configured'); return; }
+
+  // ── Source-file integrity check ──────────────────────────────────────────
+  // If source files were provided but ANY file has missing, empty, or clearly
+  // truncated base64 data, the upload failed or is incomplete. Block solving
+  // entirely — do NOT fall back to AI general knowledge under any circumstance.
+  if (sourceFiles && sourceFiles.length > 0) {
+    const broken = sourceFiles.filter(sf =>
+      !sf.base64 ||
+      typeof sf.base64 !== 'string' ||
+      sf.base64.trim() === '' ||
+      sf.base64.trim().length < 8  // valid base64 is always longer than this
+    );
+    if (broken.length > 0) {
+      const names = broken.map(sf => `"${sf.name || 'unknown'}"`).join(', ');
+      if (statusEl) {
+        statusEl.innerHTML = `<div class="cq-status error">
+          ⚠️ Source file upload failed or incomplete — ${names} could not be read.<br>
+          Please remove the file(s) and re-upload them, then try again.<br>
+          <strong>AI solving is blocked until all source files are fully and correctly loaded.
+          No questions will be answered from AI general knowledge while source files are attached.</strong>
+        </div>`;
+      }
+      return; // hard stop — do not proceed
+    }
+  }
 
   const hasSource = (sourceText && sourceText.trim()) || (sourceFiles && sourceFiles.length > 0);
 
   const systemInstruction = hasSource
     ? 'You are a medical/academic expert helping a student study from their own course material. ' +
-      'Reference source material has been provided (text and/or images/PDFs). ' +
+      'Reference source material has been provided (text and/or images/PDFs) at the beginning of this message. ' +
       'CRITICAL RULE: You MUST answer every question using ONLY the provided source material. ' +
       'Read the entire source carefully and thoroughly before answering. ' +
       'The source is the student\'s lecture or textbook — the correct answers are defined by what the source says, NOT by general medical consensus. ' +
       'Even if you personally know the answer differently, always defer to the source. ' +
       'Search the source exhaustively — look for keywords, synonyms, related concepts, and context clues. ' +
       'Only if a question\'s topic is genuinely absent from the source entirely may you fall back to your general knowledge, and in that case set found_in_source to false. ' +
-      'Some questions may include an image — analyse it carefully alongside the source. ' +
+      'CASE-BASED QUESTIONS: Some questions are preceded by a shared clinical vignette or scenario marked "SHARED CASE". ' +
+      'Read that shared case carefully — all subsequent questions in the group refer to it. ' +
+      'QUESTION IMAGES: Some questions include their own embedded image (e.g. an X-ray, ECG, histology slide, diagram). ' +
+      'These appear immediately after the question text and are labelled "(Embedded image for question N:)". ' +
+      'Analyse each question image carefully in conjunction with the source material — the image shows the clinical or visual finding the question is asking about. ' +
+      'SOURCE IMAGES: Source files may also be images or PDFs containing diagrams, tables, or figures from the lecture/textbook. ' +
+      'Use these to find the correct answer, and cross-reference with any question image when relevant. ' +
       'Respond ONLY with a JSON array. No explanation, no preamble.'
     : 'You are a medical/academic expert. Answer each question using your expert knowledge. ' +
-      'Some questions may include an image — analyse it carefully. ' +
+      'QUESTION IMAGES: Some questions include their own embedded image (e.g. an X-ray, ECG, histology slide, diagram). ' +
+      'These appear immediately after the question text and are labelled "(Embedded image for question N:)". ' +
+      'Analyse each question image carefully — it shows the clinical or visual finding the question is about, and may be essential to choosing the correct answer. ' +
       'Since no source is provided, set found_in_source to false for all. ' +
       'Respond ONLY with a JSON array. No explanation, no preamble.';
 
   // Build source parts (shared across all chunks)
   const sourceParts = [];
   if (sourceText && sourceText.trim()) {
-    sourceParts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
+    sourceParts.push({ text: '## REFERENCE SOURCE MATERIAL (Text) — use this to answer all questions below:\n' + sourceText.trim() + '\n\n---END OF SOURCE TEXT---\n' });
   }
   if (sourceFiles && sourceFiles.length > 0) {
-    sourceParts.push({ text: '## Reference Source Material (Images/PDFs):' });
+    sourceParts.push({ text: '## REFERENCE SOURCE MATERIAL (Images/PDFs) — use these to answer all questions below:' });
     sourceFiles.forEach((sf, sfi) => {
-      sourceParts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
+      sourceParts.push({ text: `Source file ${sfi + 1} of ${sourceFiles.length} — "${sf.name}" (study material, not a question):` });
       sourceParts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
     });
-    sourceParts.push({ text: '---' });
+    sourceParts.push({ text: '---END OF SOURCE FILES---\n' });
   }
 
   const instructionPart = {
     text: (hasSource
-      ? 'Using the reference source material provided above, determine the correct answer for each question. ' +
+      ? 'Using the reference source material provided above, determine the correct answer for each question below. ' +
         'The source is authoritative — answers MUST match what the source states, even if general medical knowledge differs. ' +
-        'Read the entire source carefully and scan it for each question before deciding. '
-      : 'Using your expert medical/academic knowledge, determine the correct answer for each question. ') +
+        'Read the entire source carefully and scan it for each question before deciding. ' +
+        'Where a question has an embedded image (labelled "(Embedded image for question N:)"), analyse that image alongside the source to determine the answer — the image shows the clinical or visual finding being tested. '
+      : 'Using your expert medical/academic knowledge, determine the correct answer for each question below. ' +
+        'Where a question has an embedded image (labelled "(Embedded image for question N:)"), analyse it carefully — it depicts the clinical or visual finding the question is asking about and may be critical to selecting the correct answer. ') +
       'Respond ONLY with a JSON array (one object per question, same order) with these exact keys:\n' +
       '  "index": the number inside [index:N]\n' +
       '  "answer": the correct option letter (e.g. "A")\n' +
@@ -4839,93 +5054,285 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
       'No explanation, no preamble, no markdown fences. Output the JSON array only.'
   };
 
-  // Chunk into batches of 20 to stay well within token limits
-  const CHUNK_SIZE = 20;
-  const chunks = [];
-  for (let i = 0; i < targetIdxs.length; i += CHUNK_SIZE) {
-    chunks.push(targetIdxs.slice(i, i + CHUNK_SIZE));
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  let totalSolved = 0;
-  const errors = [];
-
-  for (let ci = 0; ci < chunks.length; ci++) {
-    const chunk = chunks[ci];
-
-    if (statusEl && chunks.length > 1) {
-      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is solving questions… (batch ${ci + 1} of ${chunks.length})</div>`;
-    }
-
+  // ── Helper: build the message parts for a given set of question indices ──
+  function buildPartsForChunk(chunkIdxs) {
     const parts = [...sourceParts, instructionPart];
-
-    chunk.forEach((qi, serial) => {
+    let lastEmittedCaseIntro = null;
+    chunkIdxs.forEach((qi, serial) => {
       const q = questions[qi];
       const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
-      parts.push({ text: 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts });
+      const caseIntro = (q.case_intro || '').trim();
+      let qText = '';
+      if (caseIntro && caseIntro !== lastEmittedCaseIntro) {
+        qText += '--- SHARED CASE (applies to the following questions until the next case or end) ---\n' + caseIntro + '\n---\n\n';
+        lastEmittedCaseIntro = caseIntro;
+      } else if (!caseIntro) {
+        lastEmittedCaseIntro = null;
+      }
+      qText += 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts;
+      parts.push({ text: qText });
       if (q.image) {
         const match = q.image.match(/^data:([^;]+);base64,(.+)$/);
         if (match) {
-          parts.push({ text: '(Image for question ' + (serial + 1) + ':)' });
+          parts.push({ text: `(Embedded image for question ${serial + 1} above — analyse this image when answering question ${serial + 1}:)` });
           parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
         }
       }
     });
+    return parts;
+  }
 
+  // ── Helper: call Gemini once and return solved answers map { qi → { answer, found_in_source } }
+  //    Throws on key errors (propagated up). Returns {} for parse/format failures.
+  //    Uses the key manager to rotate keys and skip bad ones automatically.
+  async function callBatch(chunkIdxs) {
+    // Get the next healthy key from the manager
+    let apiKey = keyMgr.next();
+    if (!apiKey) {
+      // All keys currently marked bad — wait and let the manager reset
+      await new Promise(r => setTimeout(r, RETRY_WAIT_MS));
+      apiKey = keyMgr.next();
+      if (!apiKey) throw new Error('No valid API keys available');
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const parts = buildPartsForChunk(chunkIdxs);
+
+    let data;
     try {
-      const data = await callGeminiWithRetry(url, {
+      data = await callGeminiWithRetry(url, {
         system_instruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: 'user', parts }],
         generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
       }, {});
+    } catch (e) {
+      if (e._keyError) {
+        // This specific key is bad — mark it and rethrow so caller can retry with another key
+        keyMgr.markBad(apiKey);
+        throw e;
+      }
+      throw e;
+    }
 
-      const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
-      const cleanText = textOut.replace(/```json|```/g, '').trim();
+    const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+    const cleanText = textOut.replace(/```json|```/g, '').trim();
 
-      let answers;
-      try {
-        answers = JSON.parse(cleanText);
-      } catch (parseErr) {
-        // Try to salvage partial JSON by finding the last complete object
-        const lastBrace = cleanText.lastIndexOf('},');
-        if (lastBrace !== -1) {
-          try { answers = JSON.parse(cleanText.substring(0, lastBrace + 1) + ']'); } catch (_) {}
-        }
-        if (!answers) {
-          errors.push(`Batch ${ci + 1}: Could not parse AI response (response may have been truncated).`);
+    let answers;
+    try {
+      answers = JSON.parse(cleanText);
+    } catch (_) {
+      // Try to salvage partial JSON
+      const lastBrace = cleanText.lastIndexOf('},');
+      if (lastBrace !== -1) {
+        try { answers = JSON.parse(cleanText.substring(0, lastBrace + 1) + ']'); } catch (_2) {}
+      }
+    }
+
+    if (!Array.isArray(answers)) return {}; // unparseable — caller will retry
+
+    const solved = {};
+    answers.forEach(item => {
+      const qi = item.index;
+      const ans = (item.answer || '').trim().toUpperCase();
+      if (questions[qi] !== undefined && questions[qi].options && questions[qi].options[ans]) {
+        solved[qi] = { answer: ans, found_in_source: !!item.found_in_source };
+      }
+    });
+    return solved;
+  }
+
+  // ── Chunk builder (respects case groups, never splits them) ──────────────
+  function buildChunks(idxs, chunkSize) {
+    const result = [];
+    let current = [];
+    for (let i = 0; i < idxs.length; i++) {
+      const qi = idxs[i];
+      const intro = (questions[qi] && questions[qi].case_intro) ? questions[qi].case_intro.trim() : '';
+      const prevQi = i > 0 ? idxs[i - 1] : null;
+      const prevIntro = (prevQi !== null && questions[prevQi] && questions[prevQi].case_intro)
+        ? questions[prevQi].case_intro.trim() : '';
+      const startsNewCase = intro && intro !== prevIntro;
+      if (current.length >= chunkSize && (startsNewCase || !intro)) {
+        result.push(current);
+        current = [];
+      }
+      current.push(qi);
+    }
+    if (current.length) result.push(current);
+    return result;
+  }
+
+  // ── Status helper ─────────────────────────────────────────────────────────
+  function setStatus(html) {
+    if (statusEl) statusEl.innerHTML = html;
+  }
+
+  // ── Main solving loop ─────────────────────────────────────────────────────
+  // Strategy:
+  //   • Split pending questions into normal-sized batches (CHUNK_SIZE).
+  //   • If a whole batch call throws a network/server error → keep all those
+  //     questions in pending and retry the full batch next pass (forever).
+  //   • If a batch call succeeds but some questions are missing from the
+  //     response → those questions accumulate "miss" counts.
+  //     Once a question has been missed ISOLATE_AFTER times it is moved to
+  //     a solo-question batch and retried forever on its own until it is solved.
+  //   • Key (auth) errors are the only thing that stops solving — nothing else.
+  //   • No question is ever dropped. No retry limit.
+
+  const CHUNK_SIZE    = 20;
+  const ISOLATE_AFTER = 3;  // missed this many times in multi-question batches → go solo
+  const RETRY_WAIT_MS = 5000; // fixed wait between full retry passes (no ramp-up)
+
+  const totalTarget = targetIdxs.length;
+  let totalSolved = 0;
+
+  // pending: indices still needing an answer, in two pools
+  let pendingBatch = [...targetIdxs]; // these are batched normally (CHUNK_SIZE)
+  let pendingSolo  = [];              // these failed too many times → tried one-by-one
+
+  // miss counter per question index (for the batch pool only)
+  const missCount = {};
+  targetIdxs.forEach(qi => { missCount[qi] = 0; });
+
+  let globalPass = 0;
+
+  while (pendingBatch.length > 0 || pendingSolo.length > 0) {
+    globalPass++;
+
+    // ── Phase A: batch pool ──────────────────────────────────────────────
+    if (pendingBatch.length > 0) {
+      const chunks = buildChunks(pendingBatch, CHUNK_SIZE);
+      const stillBatch = [];
+
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const chunk = chunks[ci];
+        const solvedSoFar = totalTarget - pendingBatch.length - pendingSolo.length + totalSolved;
+        const retryLabel  = globalPass > 1 ? ` (retry pass ${globalPass})` : '';
+
+        setStatus(`<div class="cq-status info"><div class="cq-spinner"></div>
+          🤖 AI is solving questions… batch ${ci + 1} / ${chunks.length}${retryLabel}
+          — ${totalSolved} / ${totalTarget} done
+        </div>`);
+
+        let batchSolved = {};
+        let batchFailed = false;
+        try {
+          batchSolved = await callBatch(chunk);
+        } catch (e) {
+          if (e._keyError) {
+            // Key was already marked bad in callBatch; retry chunk with next key next pass
+            chunk.forEach(qi => stillBatch.push(qi));
+            setStatus(`<div class="cq-status info"><div class="cq-spinner"></div>
+              🔑 API key rejected — switching to next key and retrying… (${totalSolved} / ${totalTarget} done)
+            </div>`);
+            await new Promise(r => setTimeout(r, RETRY_WAIT_MS));
+            continue;
+          }
+          // Network / server / timeout error — the whole batch failed.
+          // Keep all these questions in the batch pool for next pass.
+          batchFailed = true;
+          chunk.forEach(qi => stillBatch.push(qi));
+          setStatus(`<div class="cq-status info"><div class="cq-spinner"></div>
+            ⚠️ Network error on batch ${ci + 1} — will retry entire batch (pass ${globalPass + 1})…
+          </div>`);
+          await new Promise(r => setTimeout(r, RETRY_WAIT_MS));
           continue;
         }
-      }
 
-      if (Array.isArray(answers)) {
-        answers.forEach(item => {
-          const qi = item.index;
-          const ans = (item.answer || '').trim().toUpperCase();
-          if (questions[qi] !== undefined && questions[qi].options && questions[qi].options[ans]) {
-            questions[qi].answer      = ans;
-            questions[qi].ai_answered = true;
-            questions[qi].ai_guessed  = !item.found_in_source;
-            totalSolved++;
+        // Apply answers returned for this chunk
+        Object.entries(batchSolved).forEach(([qi, item]) => {
+          qi = Number(qi);
+          questions[qi].answer      = item.answer;
+          questions[qi].ai_answered = true;
+          questions[qi].ai_guessed  = !item.found_in_source;
+          totalSolved++;
+        });
+
+        // Questions in chunk but NOT in batchSolved → increment miss count
+        chunk.forEach(qi => {
+          if (batchSolved[qi] === undefined) {
+            missCount[qi] = (missCount[qi] || 0) + 1;
+            if (missCount[qi] >= ISOLATE_AFTER) {
+              // Graduated to solo pool — retry forever one-by-one
+              pendingSolo.push(qi);
+            } else {
+              // Still in batch pool for next pass
+              stillBatch.push(qi);
+            }
           }
         });
-      } else {
-        errors.push(`Batch ${ci + 1}: AI returned unexpected format (not an array).`);
       }
-    } catch (e) {
-      console.warn('cqAiSolveQuestions batch ' + (ci + 1) + ' failed:', e);
-      errors.push(`Batch ${ci + 1}: ${e.message || String(e)}`);
+
+      pendingBatch = stillBatch;
+    }
+
+    // ── Phase B: solo pool (one question at a time, forever) ────────────
+    if (pendingSolo.length > 0) {
+      const stillSolo = [];
+
+      for (let si = 0; si < pendingSolo.length; si++) {
+        const qi = pendingSolo[si];
+        const retryLabel = globalPass > 1 ? ` (retry pass ${globalPass})` : '';
+
+        setStatus(`<div class="cq-status info"><div class="cq-spinner"></div>
+          🤖 Solving stubborn question ${si + 1} / ${pendingSolo.length}${retryLabel}
+          — ${totalSolved} / ${totalTarget} done (retrying individually until solved)
+        </div>`);
+
+        let solved = false;
+        let soloAttempt = 0;
+        while (!solved) {
+          soloAttempt++;
+          setStatus(`<div class="cq-status info"><div class="cq-spinner"></div>
+            🤖 Retrying question [index:${qi}] individually — attempt ${soloAttempt}…
+            (${totalSolved} / ${totalTarget} done)
+          </div>`);
+
+          let batchSolved = {};
+          try {
+            batchSolved = await callBatch([qi]);
+          } catch (e) {
+            if (e._keyError) {
+              // Key marked bad; key manager will try another next attempt
+              setStatus(`<div class="cq-status info"><div class="cq-spinner"></div>
+                🔑 API key rejected on solo retry — switching key… (${totalSolved} / ${totalTarget} done)
+              </div>`);
+            }
+            // Network error or key error — wait and retry with next available key
+            await new Promise(r => setTimeout(r, RETRY_WAIT_MS));
+            continue;
+          }
+
+          if (batchSolved[qi] !== undefined) {
+            questions[qi].answer      = batchSolved[qi].answer;
+            questions[qi].ai_answered = true;
+            questions[qi].ai_guessed  = !batchSolved[qi].found_in_source;
+            totalSolved++;
+            solved = true;
+          } else {
+            // Still no answer — wait and retry the solo call
+            await new Promise(r => setTimeout(r, RETRY_WAIT_MS));
+          }
+        }
+      }
+
+      pendingSolo = stillSolo; // all solos that weren't solved this pass
+    }
+
+    // If anything is still pending after this pass, pause before next pass
+    if ((pendingBatch.length > 0 || pendingSolo.length > 0)) {
+      const remaining = pendingBatch.length + pendingSolo.length;
+      setStatus(`<div class="cq-status info"><div class="cq-spinner"></div>
+        🤖 ${remaining} question${remaining !== 1 ? 's' : ''} still pending —
+        retrying in ${Math.round(RETRY_WAIT_MS / 1000)}s… (pass ${globalPass + 1})
+      </div>`);
+      await new Promise(r => setTimeout(r, RETRY_WAIT_MS));
     }
   }
 
-  // Surface any errors to the user
-  if (errors.length > 0 && statusEl) {
-    const errHtml = errors.map(err => `<div>⚠️ ${escapeHtml(err)}</div>`).join('');
-    statusEl.insertAdjacentHTML('beforeend',
-      `<div class="cq-status warning" style="margin-top:6px;">
-        🤖 AI Solve encountered issues — ${totalSolved} question${totalSolved !== 1 ? 's' : ''} solved successfully:<br>${errHtml}
-      </div>`
-    );
-  }
+  setStatus(`<div class="cq-status success">
+    ✅ All ${totalSolved} question${totalSolved !== 1 ? 's' : ''} solved successfully.
+  </div>`);
 }
 
 // Backward-compat wrapper used in the extraction flow for no-key questions
@@ -4946,19 +5353,17 @@ async function cqAiSolveOne(i) {
 
 
 async function generateQuizFromAI() {
-  const apiKeyInput = document.getElementById('cqApiKeyInput');
   const titleInput  = document.getElementById('cqTitleInput');
   const statusEl    = document.getElementById('cqStatus');
   const genBtn      = document.getElementById('cqGenerateBtn');
 
-  const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
+  const apiKey = getGeminiKey();
   const title  = (titleInput ? titleInput.value : cqGeneratedTitle).trim();
 
-  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
+  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please add at least one Gemini API key above first.</div>`; return; }
   if (!cqSelectedFile){ statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload an image or PDF of your quiz first.</div>`; return; }
   if (!title)         { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
 
-  setGeminiKey(apiKey);
   cqGeneratedTitle = title;
   cqBusy = true;
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
@@ -5077,10 +5482,11 @@ async function generateQuizFromAI() {
         <strong>Please enter a new Gemini API key above and try again.</strong><br>
         <small>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">aistudio.google.com/apikey</a></small>
       </div>`;
-      // Clear the stored bad key and focus the input
-      setGeminiKey('');
+      // Remove the bad key from the list and re-render
+      removeGeminiKey(0);
+      renderCustomQuizModal();
       const inp = document.getElementById('cqApiKeyInput');
-      if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+      if (inp) setTimeout(() => inp.focus(), 50);
     } else {
       statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
     }
@@ -5142,23 +5548,21 @@ function fileToText(file) {
 }
 
 async function generateQuizFromLecture() {
-  const apiKeyInput   = document.getElementById('cqApiKeyInput');
   const titleInput    = document.getElementById('cqLectureTitleInput');
   const qCountInput   = document.getElementById('cqQCountInput');
   const promptInput   = document.getElementById('cqCustomPromptInput');
   const statusEl      = document.getElementById('cqStatus');
   const genBtn        = document.getElementById('cqLectureGenBtn');
 
-  const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
+  const apiKey = getGeminiKey();
   const title  = (titleInput  ? titleInput.value  : cqGeneratedTitle).trim();
   const qCount = (qCountInput ? qCountInput.value : cqQuestionCount).trim();
   const prompt = (promptInput ? promptInput.value : cqCustomPrompt).trim();
 
-  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
+  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please add at least one Gemini API key above first.</div>`; return; }
   if (!cqLectureFile) { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload a lecture file first.</div>`; return; }
   if (!title)         { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
 
-  setGeminiKey(apiKey);
   cqGeneratedTitle = title;
   cqCustomPrompt   = prompt;
   cqQuestionCount  = qCount;
@@ -5268,10 +5672,11 @@ async function generateQuizFromLecture() {
         <strong>Please enter a new Gemini API key above and try again.</strong><br>
         <small>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">aistudio.google.com/apikey</a></small>
       </div>`;
-      // Clear the stored bad key and focus the input
-      setGeminiKey('');
+      // Remove the bad key from the list and re-render
+      removeGeminiKey(0);
+      renderCustomQuizModal();
       const inp = document.getElementById('cqApiKeyInput');
-      if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+      if (inp) setTimeout(() => inp.focus(), 50);
     } else {
       statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
     }
@@ -5575,8 +5980,7 @@ function cqAddOption(qIdx) {
 async function cqReExtractImage(idx) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
   const apiKey = getGeminiKey();
-  if (!apiKey) { alert('Please enter your Gemini API key first.'); return; }
-  const sourceFile = cqSelectedFile || cqLectureFile;
+  if (!apiKey) { alert('Please add at least one Gemini API key in the AI settings panel first.'); return; }
   if (!sourceFile) { alert('The original source file is no longer available. Please re-upload the file first.'); return; }
 
   const statusEl = document.getElementById(`cqReaskStatus_${idx}`);
@@ -5609,7 +6013,7 @@ async function cqReaskQuestion(idx) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
   const apiKey = getGeminiKey();
   if (!apiKey) {
-    alert('Please enter your Gemini API key first.');
+    alert('Please add at least one Gemini API key in the AI settings panel first.');
     return;
   }
   if (!cqSelectedFile && !cqLectureFile) {
@@ -6931,6 +7335,13 @@ let adminEditingPublishedName = '';   // its lecture name
 
 let adminActiveTab = 'publish'; // 'publish' | 'curriculum'
 
+// Admin AI-solve state (source files / text attached during editing)
+let adminSolveSourceFiles = [];  // [{base64, mimeType, name}]
+let adminSolveSourceText  = '';  // optional pasted text
+let adminSolvePanelOpen   = false;
+let adminSolveBusy        = false;
+let adminSolveMode        = 'unanswered'; // 'unanswered' | 'all'
+
 function openAdminPanel() {
   if (!isAdminUser(window._currentUser)) {
     alert('You do not have admin access.');
@@ -7199,6 +7610,8 @@ function adminToggleEditBeforePublish() {
     adminEditMode = 'publish';
     adminEditQuestions = JSON.parse(JSON.stringify(adminSelectedQuiz.questions));
   }
+  adminSolvePanelOpen = false;
+  adminSolveBusy = false;
   renderAdminAssignForm();
 }
 
@@ -7314,6 +7727,10 @@ function renderAdminQuestionEditor(containerId) {
 
   html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="cq-btn cq-btn-secondary" onclick="adminEditAddBlankQuestion()" style="background:#4CAF50;">＋ Add Question</button>
+    <button class="cq-btn" onclick="adminToggleSolvePanel()"
+      style="background:${adminSolvePanelOpen ? '#7B1FA2' : '#9C27B0'};display:flex;align-items:center;gap:6px;">
+      🤖 AI Solve Questions ${adminSolvePanelOpen ? '▲' : '▼'}
+    </button>
     ${adminEditMode === 'published' ? `
       <button class="cq-btn" onclick="adminSavePublishedEdits()">💾 Save Changes</button>
       <button class="cq-btn cq-btn-secondary" onclick="adminCancelEditPublished()">✖ Cancel</button>
@@ -7321,6 +7738,89 @@ function renderAdminQuestionEditor(containerId) {
       <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;">Edits will be used when you publish below.</div>
     `}
   </div>
+
+  ${adminSolvePanelOpen ? `
+  <div id="adminSolvePanel" style="margin-top:12px;background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;">
+    <div style="font-size:.82rem;font-weight:800;color:#6A1B9A;text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px;">
+      🤖 AI Answer Solver — Gemini fills in correct answers
+    </div>
+
+    <!-- Key check -->
+    ${_loadKeyList().length === 0 ? `
+    <div style="background:#FFF3E0;border:1.5px solid #FFCC80;border-radius:8px;padding:10px 12px;font-size:.8rem;color:#E65100;">
+      ⚠️ No Gemini API keys configured. Add at least one key in the <strong>Custom Quizzes</strong> panel first.
+    </div>` : `
+    <div style="font-size:.75rem;color:#6A1B9A;font-weight:700;">
+      🔑 Using ${_loadKeyList().length} API key${_loadKeyList().length !== 1 ? 's' : ''} (smart rotation)
+    </div>`}
+
+    <!-- Solve mode -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.8rem;font-weight:700;color:#4A148C;">
+        <input type="radio" name="adminSolveMode" value="unanswered"
+          ${adminSolveMode === 'unanswered' ? 'checked' : ''}
+          onchange="adminSolveMode='unanswered'" />
+        Only unanswered questions
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.8rem;font-weight:700;color:#4A148C;">
+        <input type="radio" name="adminSolveMode" value="all"
+          ${adminSolveMode === 'all' ? 'checked' : ''}
+          onchange="adminSolveMode='all'" />
+        Re-solve all questions
+      </label>
+    </div>
+
+    <!-- Source text -->
+    <div>
+      <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+        📄 Reference Source Text (optional) — paste lecture notes or textbook excerpt
+      </div>
+      <textarea id="adminSolveSourceText" rows="3"
+        style="width:100%;border:1.5px solid #CE93D8;border-radius:8px;padding:8px 10px;font-family:var(--font);font-size:.82rem;resize:vertical;background:#FAF0FF;"
+        placeholder="Paste lecture notes, textbook excerpt, or reference material here…"
+        oninput="adminSolveSourceText=this.value">${escapeHtml(adminSolveSourceText)}</textarea>
+    </div>
+
+    <!-- Source files -->
+    <div>
+      <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+        🖼️ Source Images / PDFs (optional) — upload diagrams, slides, or lecture PDFs
+      </div>
+      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+        background:#EDE7F6;border:1.5px dashed #CE93D8;border-radius:8px;padding:7px 14px;
+        font-size:.78rem;font-weight:700;color:#6A1B9A;transition:all .15s;"
+        onmouseover="this.style.background='#E1BEE7'" onmouseout="this.style.background='#EDE7F6'">
+        ➕ Add Image or PDF
+        <input type="file" accept="image/*,application/pdf" multiple style="display:none;"
+          onchange="adminHandleSolveSourceFiles(event)" />
+      </label>
+      ${adminSolveSourceFiles.length > 0 ? `
+      <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:6px;">
+        ${adminSolveSourceFiles.map((f, fi) => `
+          <div style="display:flex;align-items:center;gap:5px;background:#EDE7F6;
+            border:1px solid #CE93D8;border-radius:20px;padding:3px 10px;font-size:.73rem;color:#4A148C;">
+            <span>${f.mimeType.startsWith('image/') ? '🖼️' : '📄'} ${escapeHtml(f.name)}</span>
+            <button onclick="adminRemoveSolveSourceFile(${fi})" type="button"
+              style="background:none;border:none;cursor:pointer;color:#9C27B0;font-size:.85rem;padding:0 2px;line-height:1;">✕</button>
+          </div>`).join('')}
+      </div>` : ''}
+    </div>
+
+    <!-- Status -->
+    <div id="adminSolveStatus"></div>
+
+    <!-- Run button -->
+    <button onclick="adminAiSolveQuestions()" type="button"
+      ${adminSolveBusy || _loadKeyList().length === 0 ? 'disabled' : ''}
+      style="align-self:flex-start;background:#7B1FA2;color:#fff;border:none;border-radius:8px;
+        padding:9px 20px;font-family:var(--font);font-size:.85rem;font-weight:800;cursor:pointer;
+        transition:filter .15s;opacity:${adminSolveBusy || _loadKeyList().length === 0 ? '.5' : '1'};"
+      onmouseover="if(!this.disabled)this.style.filter='brightness(1.15)'"
+      onmouseout="this.style.filter=''">
+      ${adminSolveBusy ? '⏳ Solving…' : '🚀 Run AI Solver'}
+    </button>
+  </div>` : ''}
+
   <div class="admin-status" id="adminEditStatus"></div>`;
 
   area.innerHTML = html;
@@ -7446,6 +7946,99 @@ function adminEditReplaceImage(idx, event) {
   reader.readAsDataURL(file);
 }
 
+/* ══════════════════════════════════════════════════════════
+   ADMIN AI SOLVE — uses the shared cqAiSolveQuestions engine
+   Allows admin to fill in answers for questions while editing
+   a lecture, guided by optional source files / text.
+══════════════════════════════════════════════════════════ */
+
+function adminToggleSolvePanel() {
+  adminSolvePanelOpen = !adminSolvePanelOpen;
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea_' + adminEditingPublishedId : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+}
+
+async function adminHandleSolveSourceFiles(event) {
+  const files = Array.from(event.target.files || []);
+  for (const file of files) {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload  = () => res(r.result.split(',')[1]);
+      r.onerror = () => rej(new Error('Read failed'));
+      r.readAsDataURL(file);
+    });
+    const mimeType = file.type ||
+      (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    adminSolveSourceFiles.push({ base64, mimeType, name: file.name });
+  }
+  event.target.value = '';
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea_' + adminEditingPublishedId : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+}
+
+function adminRemoveSolveSourceFile(idx) {
+  adminSolveSourceFiles.splice(idx, 1);
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea_' + adminEditingPublishedId : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+}
+
+async function adminAiSolveQuestions() {
+  if (!adminEditQuestions || !adminEditQuestions.length) return;
+  if (adminSolveBusy) return;
+
+  const keys = _loadKeyList();
+  if (!keys.length) {
+    const s = document.getElementById('adminSolveStatus');
+    if (s) s.innerHTML = `<div class="cq-status error">⚠️ No Gemini API keys configured. Add a key in the Custom Quizzes panel first.</div>`;
+    return;
+  }
+
+  // Determine which questions to target
+  let targetIdxs;
+  if (adminSolveMode === 'all') {
+    targetIdxs = adminEditQuestions.map((_, i) => i);
+  } else {
+    // Unanswered = no answer set, or answer key doesn't exist in options
+    targetIdxs = adminEditQuestions
+      .map((q, i) => ({ q, i }))
+      .filter(({ q }) => !q.answer || !q.options || !q.options[q.answer])
+      .map(({ i }) => i);
+  }
+
+  if (!targetIdxs.length) {
+    const s = document.getElementById('adminSolveStatus');
+    if (s) s.innerHTML = `<div class="cq-status ok">✅ All questions already have answers. Switch to "Re-solve all" to override them.</div>`;
+    return;
+  }
+
+  adminSolveBusy = true;
+  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea_' + adminEditingPublishedId : 'adminEditorArea';
+  renderAdminQuestionEditor(containerId);
+
+  // Use a live statusEl inside the panel
+  const statusEl = document.getElementById('adminSolveStatus');
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Solving ${targetIdxs.length} question${targetIdxs.length !== 1 ? 's' : ''}…</div>`;
+
+  try {
+    await cqAiSolveQuestions(
+      adminEditQuestions,
+      targetIdxs,
+      adminSolveSourceText.trim(),
+      adminSolveSourceFiles,
+      statusEl
+    );
+    if (statusEl) {
+      const solved = targetIdxs.filter(i => adminEditQuestions[i] && adminEditQuestions[i].answer).length;
+      statusEl.innerHTML = `<div class="cq-status ok">✅ Done — ${solved} of ${targetIdxs.length} question${targetIdxs.length !== 1 ? 's' : ''} answered. Review and save when ready.</div>`;
+    }
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(e.message || String(e))}</div>`;
+  } finally {
+    adminSolveBusy = false;
+    renderAdminQuestionEditor(containerId);
+  }
+}
+
 async function renderAdminAssignedList() {
   const sec = document.getElementById('adminAssignedSection');
   if (!sec) return;
@@ -7519,6 +8112,8 @@ function adminCancelEditPublished() {
   adminEditQuestions = null;
   adminEditingPublishedId = null;
   adminEditingPublishedName = '';
+  adminSolvePanelOpen = false;
+  adminSolveBusy = false;
   if (id) {
     const el = document.getElementById('adminPublishedEditorArea_' + id);
     if (el) el.innerHTML = '';
