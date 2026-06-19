@@ -723,88 +723,6 @@
 .cq-help-box ol { margin: 6px 0 0 20px; }
 .cq-help-box a { color: var(--accent); font-weight: 700; text-decoration: none; }
 .cq-help-box a:hover { text-decoration: underline; }
-/* ── KEY MANAGER ── */
-.km-panel {
-  background: #F7FBFF;
-  border: 1.5px solid #B0D4F0;
-  border-radius: 12px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-}
-.km-title {
-  font-size: .82rem; font-weight: 800; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: .7px;
-  margin-bottom: 10px;
-  display: flex; align-items: center; gap: 6px;
-}
-.km-key-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }
-.km-key-row {
-  display: flex; align-items: center; gap: 6px;
-  background: #fff; border: 1.5px solid #D0E8F8;
-  border-radius: 8px; padding: 7px 10px;
-  transition: border-color .15s;
-}
-.km-key-row.ok   { border-left: 4px solid #43A047; }
-.km-key-row.rate_limited { border-left: 4px solid #FB8C00; }
-.km-key-row.invalid      { border-left: 4px solid #E53935; opacity: .75; }
-.km-key-label {
-  flex: 1; font-size: .82rem; font-weight: 700;
-  color: var(--text-main); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; max-width: 90px;
-  cursor: pointer;
-}
-.km-key-val {
-  flex: 3; font-size: .75rem; font-family: monospace;
-  color: var(--text-muted); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
-}
-.km-badge {
-  font-size: .68rem; font-weight: 800; border-radius: 20px;
-  padding: 2px 8px; white-space: nowrap; flex-shrink: 0;
-}
-.km-badge.ok           { background: #E8F5E9; color: #2E7D32; }
-.km-badge.rate_limited { background: #FFF3E0; color: #E65100; }
-.km-badge.invalid      { background: #FFEBEE; color: #C62828; }
-.km-badge.active       { background: #E3F2FD; color: #1565C0; }
-.km-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
-.km-icon-btn {
-  background: none; border: none; cursor: pointer; font-size: .95rem;
-  padding: 2px 4px; border-radius: 5px; line-height: 1;
-  transition: background .12s;
-}
-.km-icon-btn:hover { background: #EEF7FF; }
-.km-add-row {
-  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
-}
-.km-add-input {
-  flex: 1; min-width: 160px;
-  padding: 9px 12px;
-  border: 1.5px solid #B0D4F0; border-radius: 8px;
-  font-family: var(--font); font-size: .88rem;
-  color: var(--text-main); background: #fff;
-  outline: none; transition: border-color .2s, box-shadow .2s;
-}
-.km-add-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.15); }
-.km-label-input {
-  width: 90px;
-  padding: 9px 10px;
-  border: 1.5px solid #B0D4F0; border-radius: 8px;
-  font-family: var(--font); font-size: .82rem;
-  color: var(--text-main); background: #fff;
-  outline: none; transition: border-color .2s;
-}
-.km-label-input:focus { border-color: var(--accent); }
-.km-status-summary {
-  font-size: .78rem; color: var(--text-muted);
-  margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-}
-.km-no-keys {
-  text-align: center; padding: 12px 8px;
-  font-size: .83rem; color: var(--text-muted);
-  border: 1.5px dashed #B0D4F0; border-radius: 8px;
-  background: #fff;
-}
-
 .cq-input-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .cq-input-row input[type="password"],
 .cq-input-row input[type="text"] {
@@ -3279,9 +3197,12 @@ async function _getExplainFromPool(questionText) {
   } catch(e) { return null; }
 }
 
-/* Explain key now reuses the multi-key pool */
-function getExplainKey() { return getGeminiKey(); }
-function setExplainKey(key) { setGeminiKey(key); }
+function getExplainKey() {
+  try { return localStorage.getItem(AI_EXPLAIN_KEY_STORE) || ''; } catch(e) { return ''; }
+}
+function setExplainKey(key) {
+  try { localStorage.setItem(AI_EXPLAIN_KEY_STORE, (key || '').trim()); } catch(e) {} 
+}
 
 /* ── Build Gemini prompt for one question ── */
 function buildExplainPrompt(q, userAnswer) {
@@ -3354,7 +3275,9 @@ function handleExplainKeySave() {
   const key = (inp ? inp.value : '').trim();
   if (!key) { if(inp) inp.style.borderColor='#C62828'; return; }
   setExplainKey(key);
-  _refreshKmPanel();
+  // Also sync with the custom quiz key input if it's open
+  const cqInp = document.getElementById('cqApiKeyInput');
+  if (cqInp) cqInp.value = key;
   if (window._explainKeySaveCallback) {
     const cb = window._explainKeySaveCallback;
     window._explainKeySaveCallback = null;
@@ -3510,7 +3433,7 @@ async function explainQuestion(i, forceRegenerate = false) {
     const p = document.getElementById(`explainPanel_${i}`);
     if (p) {
       if (isKeyErr) {
-        _refreshKmPanel();
+        setExplainKey('');
         renderExplainKeyPrompt(p, (key) => {
           p.innerHTML = '';
           explainQuestion(i);
@@ -3825,7 +3748,7 @@ function renderChatPanel(i) {
       <div class="ai-chat-messages" id="chatMessages_${i}">${msgsHTML}</div>
       ${attachHTML}
       <div class="ai-chat-input-row">
-        <input type="file" id="chatFileInput_${i}" multiple accept="image/*,.pdf,.txt,.csv,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none" onchange="handleChatFileSelect(${i}, this)" />
+        <input type="file" id="chatFileInput_${i}" multiple accept="image/*,.pdf,.txt,.csv" style="display:none" onchange="handleChatFileSelect(${i}, this)" />
         <button class="ai-chat-attach-btn" type="button" title="Attach file" onclick="document.getElementById('chatFileInput_${i}').click()" ${busy ? 'disabled' : ''}>📎</button>
         <input type="text" class="ai-chat-text-input" id="chatTextInput_${i}" placeholder="Ask a question…" ${busy ? 'disabled' : ''} onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage(${i});}" />
         <button class="ai-chat-send-btn" type="button" title="Send" onclick="sendChatMessage(${i})" ${busy ? 'disabled' : ''}>➤</button>
@@ -3837,33 +3760,20 @@ function renderChatPanel(i) {
 }
 
 /* ── Handle attaching files via the file picker ── */
-async function handleChatFileSelect(i, inputEl) {
+function handleChatFileSelect(i, inputEl) {
   const files = Array.from((inputEl && inputEl.files) || []);
   if (!files.length) return;
   if (!_chatPending[i]) _chatPending[i] = [];
-  inputEl.value = '';
 
-  for (let file of files) {
+  files.forEach(file => {
     if (file.size > CHAT_MAX_ATTACHMENT_BYTES) {
       alert(`"${file.name}" is too large (max 10MB).`);
-      continue;
+      return;
     }
-    if (isPptxFile(file)) {
-      try {
-        file = await convertIfPptx(file, null);
-      } catch (e) {
-        alert(`Couldn't convert "${file.name}" from PowerPoint: ${e.message || 'unknown error'}`);
-        continue;
-      }
-    }
-    try {
-      const dataUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('read failed'));
-        reader.readAsDataURL(file);
-      });
-      const base64 = String(dataUrl).split(',')[1] || '';
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const base64  = String(dataUrl).split(',')[1] || '';
       _chatPending[i].push({
         name: file.name,
         mimeType: file.type || 'application/octet-stream',
@@ -3871,10 +3781,12 @@ async function handleChatFileSelect(i, inputEl) {
         base64
       });
       renderChatPanel(i);
-    } catch (e) {
-      alert(`Failed to read "${file.name}".`);
-    }
-  }
+    };
+    reader.onerror = () => alert(`Failed to read "${file.name}".`);
+    reader.readAsDataURL(file);
+  });
+
+  inputEl.value = '';
 }
 
 /* ── Remove a staged (not-yet-sent) attachment ── */
@@ -4004,7 +3916,7 @@ async function runChatRequest(i) {
 
     const isKeyErr = err._keyError || /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
-      _refreshKmPanel();
+      setExplainKey('');
       const panel = document.getElementById(`chatPanel_${i}`);
       if (panel) renderExplainKeyPrompt(panel, () => runChatRequest(i));
       return;
@@ -4022,8 +3934,7 @@ const CQ_KEY           = 'anu_msp_custom_quizzes_v1';
 const CQ_API_KEY_STORE = 'anu_msp_gemini_api_key';
 const CQ_MODEL         = 'gemini-2.5-flash';
 
-let cqSelectedFiles     = [];   // multiple MCQ source files
-let cqFilterFiles       = [];   // lecture files used to filter extracted MCQs by relevance
+let cqSelectedFile      = null;
 let cqGeneratedQuestions = null;
 let cqGeneratedTitle    = '';
 let cqBusy              = false;
@@ -4214,271 +4125,15 @@ async function saveCustomQuizzesList(arr) {
     try { localStorage.setItem(CQ_KEY, JSON.stringify(arr)); } catch (e) {}
   }
 }
-/* ══════════════════════════════════════════════════════════
-   MULTI-KEY POOL MANAGER
-   Keys are stored as an array of objects:
-     { key: string, label: string, status: 'ok'|'rate_limited'|'invalid', rateLimitedUntil: number }
-   Smart routing:
-   - Round-robin across all 'ok' keys
-   - If a key gets 429 → mark rate_limited for 65s, skip it and try next
-   - If a key gets 401/403 → mark invalid permanently
-   - If ALL keys are rate_limited → wait for the earliest one to recover
-   - Falls back to the old single-key store for backward compatibility
-══════════════════════════════════════════════════════════ */
-const CQ_KEY_POOL_STORE = 'anu_msp_gemini_key_pool';
-
-function _loadKeyPool() {
-  try {
-    const raw = localStorage.getItem(CQ_KEY_POOL_STORE);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  // Migrate legacy single key
-  try {
-    const legacy = localStorage.getItem(CQ_API_KEY_STORE);
-    if (legacy) return [{ key: legacy, label: 'Key 1', status: 'ok', rateLimitedUntil: 0 }];
-  } catch (e) {}
-  return [];
-}
-
-function _saveKeyPool(pool) {
-  try { localStorage.setItem(CQ_KEY_POOL_STORE, JSON.stringify(pool)); } catch (e) {}
-}
-
-// Internal pointer for round-robin
-let _keyPoolIndex = 0;
-
-/* Returns the best available key string, or '' if none */
 function getGeminiKey() {
-  const pool = _loadKeyPool();
-  if (!pool.length) return '';
-  const now = Date.now();
-  // Recover any rate-limited keys whose window has passed
-  pool.forEach(k => { if (k.status === 'rate_limited' && now >= (k.rateLimitedUntil || 0)) k.status = 'ok'; });
-  _saveKeyPool(pool);
-  // Find next available key via round-robin
-  const okKeys = pool.filter(k => k.status === 'ok');
-  if (!okKeys.length) {
-    // All rate-limited — return the one whose cooldown expires soonest
-    const soonest = pool.filter(k => k.status === 'rate_limited').sort((a,b) => (a.rateLimitedUntil||0) - (b.rateLimitedUntil||0))[0];
-    return soonest ? soonest.key : '';
-  }
-  _keyPoolIndex = _keyPoolIndex % okKeys.length;
-  return okKeys[_keyPoolIndex].key;
+  try { return localStorage.getItem(CQ_API_KEY_STORE) || ''; } catch (e) { return ''; }
 }
-
-/* Called after a successful request to advance the round-robin pointer */
-function _advanceKeyPool() {
-  const pool = _loadKeyPool();
-  const okCount = pool.filter(k => k.status === 'ok').length;
-  if (okCount > 1) _keyPoolIndex = (_keyPoolIndex + 1) % okCount;
-}
-
-/* Called on 429 — mark the key as rate-limited for 65 seconds */
-function _markKeyRateLimited(key) {
-  const pool = _loadKeyPool();
-  const entry = pool.find(k => k.key === key);
-  if (entry) {
-    entry.status = 'rate_limited';
-    entry.rateLimitedUntil = Date.now() + 65000;
-    _saveKeyPool(pool);
-  }
-  // Reset round-robin so next call picks a fresh ok key
-  _keyPoolIndex = 0;
-}
-
-/* Called on 401/403 — mark the key as permanently invalid */
-function _markKeyInvalid(key) {
-  const pool = _loadKeyPool();
-  const entry = pool.find(k => k.key === key);
-  if (entry) { entry.status = 'invalid'; _saveKeyPool(pool); }
-  _keyPoolIndex = 0;
-}
-
-/* Compatibility shim — sets or adds a single key (used by legacy code paths) */
 function setGeminiKey(key) {
-  const k = (key || '').trim();
-  if (!k) return;
-  const pool = _loadKeyPool();
-  if (!pool.find(e => e.key === k)) {
-    pool.push({ key: k, label: `Key ${pool.length + 1}`, status: 'ok', rateLimitedUntil: 0 });
-    _saveKeyPool(pool);
-  }
-  try { localStorage.setItem(CQ_API_KEY_STORE, k); } catch(e) {}
-}
-
-/* Add a new key to the pool */
-function addGeminiKey(key, label) {
-  const k = (key || '').trim();
-  if (!k) return false;
-  const pool = _loadKeyPool();
-  if (pool.find(e => e.key === k)) return false; // duplicate
-  pool.push({ key: k, label: label || `Key ${pool.length + 1}`, status: 'ok', rateLimitedUntil: 0 });
-  _saveKeyPool(pool);
-  return true;
-}
-
-/* Remove a key from the pool by index */
-function removeGeminiKey(idx) {
-  const pool = _loadKeyPool();
-  pool.splice(idx, 1);
-  _saveKeyPool(pool);
-  _keyPoolIndex = 0;
-}
-
-/* Rename a key label */
-function renameGeminiKey(idx, label) {
-  const pool = _loadKeyPool();
-  if (pool[idx]) { pool[idx].label = label || pool[idx].label; _saveKeyPool(pool); }
-}
-
-/* Retry a rate-limited or invalid key (reset to ok) */
-function retryGeminiKey(idx) {
-  const pool = _loadKeyPool();
-  if (pool[idx]) { pool[idx].status = 'ok'; pool[idx].rateLimitedUntil = 0; _saveKeyPool(pool); }
-  renderCustomQuizModal && renderCustomQuizModal();
-}
-
-/* Returns how many keys are currently usable */
-function _countOkKeys() {
-  const pool = _loadKeyPool();
-  const now = Date.now();
-  return pool.filter(k => k.status === 'ok' || (k.status === 'rate_limited' && now >= (k.rateLimitedUntil||0))).length;
-}
-
-/* ══════════════════════════════════════════════════════════
-   KEY MANAGER — UI renderer and helpers
-══════════════════════════════════════════════════════════ */
-function renderKeyManagerHTML() {
-  const pool    = _loadKeyPool();
-  const activeK = getGeminiKey();
-  const now     = Date.now();
-
-  let rows = '';
-  if (!pool.length) {
-    rows = '<div class="km-no-keys">🔑 No API keys added yet — add your first key below.</div>';
-  } else {
-    pool.forEach((entry, idx) => {
-      const status = (entry.status === 'rate_limited' && now >= (entry.rateLimitedUntil || 0))
-        ? 'ok' : entry.status;
-      const isActive = entry.key === activeK && status === 'ok';
-      const maskedKey = entry.key.length > 8
-        ? entry.key.slice(0, 4) + '••••••••' + entry.key.slice(-4)
-        : '••••••••';
-      const badgeLabel = status === 'ok' ? '✅ OK' : status === 'rate_limited' ? '⏳ Rate Limited' : '❌ Invalid';
-      const timeLeft = status === 'rate_limited'
-        ? Math.max(0, Math.ceil(((entry.rateLimitedUntil || 0) - now) / 1000)) + 's'
-        : '';
-      rows += `<div class="km-key-row ${status}" title="${escapeHtml(entry.key)}">
-        <span class="km-key-label" onclick="kmRenameKey(${idx})" title="Click to rename">${escapeHtml(entry.label || `Key ${idx+1}`)}</span>
-        <span class="km-key-val">${maskedKey}</span>
-        <span class="km-badge ${status}">${badgeLabel}${timeLeft ? ' · ' + timeLeft : ''}</span>
-        ${isActive ? '<span class="km-badge active">▶ Active</span>' : ''}
-        <div class="km-row-actions">
-          ${status !== 'ok' ? `<button class="km-icon-btn" onclick="kmRetryKey(${idx})" title="Retry this key">🔄</button>` : ''}
-          <button class="km-icon-btn" onclick="kmCopyKey(${idx})" title="Copy key">📋</button>
-          <button class="km-icon-btn" onclick="kmRemoveKey(${idx})" title="Remove key" style="color:#E53935;">🗑️</button>
-        </div>
-      </div>`;
-    });
-  }
-
-  const okCount  = pool.filter(k => k.status === 'ok' || (k.status === 'rate_limited' && now >= (k.rateLimitedUntil||0))).length;
-  const rlCount  = pool.filter(k => k.status === 'rate_limited' && now < (k.rateLimitedUntil||0)).length;
-  const badCount = pool.filter(k => k.status === 'invalid').length;
-  const summary  = pool.length
-    ? `<span>🔑 ${pool.length} key${pool.length !== 1 ? 's' : ''} total</span>` +
-      (okCount  ? ` <span>✅ ${okCount} ready</span>` : '') +
-      (rlCount  ? ` <span>⏳ ${rlCount} rate-limited</span>` : '') +
-      (badCount ? ` <span>❌ ${badCount} invalid</span>` : '')
-    : '<span>Add at least one key to use AI features.</span>';
-
-  return `
-    <div class="km-title">🔑 Gemini API Key Pool
-      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
-         style="font-size:.72rem;font-weight:600;color:var(--accent);text-decoration:none;margin-left:auto;"
-         title="Get a free key">Get free key ↗</a>
-    </div>
-    <div class="km-key-list">${rows}</div>
-    <div class="km-add-row">
-      <input class="km-add-input" type="password" id="kmNewKeyInput"
-             placeholder="Paste a Gemini API key…"
-             onkeydown="if(event.key==='Enter')kmAddKey()" />
-      <input class="km-label-input" type="text" id="kmNewKeyLabel"
-             placeholder="Label (opt.)"
-             onkeydown="if(event.key==='Enter')kmAddKey()" />
-      <button class="cq-btn" onclick="kmAddKey()" style="padding:9px 16px;font-size:.85rem;">➕ Add Key</button>
-      <button class="km-icon-btn" onclick="kmToggleNewKeyVis()" title="Show/hide" style="font-size:1.1rem;">👁</button>
-    </div>
-    <div class="km-status-summary">${summary}</div>
-    <div style="font-size:.7rem;color:var(--text-muted);margin-top:6px;line-height:1.5;">
-      Keys stored only in this browser, sent directly to Google. Multiple keys rotate automatically — if one hits a rate limit the next is used instantly.
-    </div>`;
-}
-
-function _refreshKmPanel() {
-  const panel = document.getElementById('kmPanel');
-  if (panel) panel.innerHTML = renderKeyManagerHTML();
-}
-
-function kmAddKey() {
-  const inp   = document.getElementById('kmNewKeyInput');
-  const lblEl = document.getElementById('kmNewKeyLabel');
-  if (!inp) return;
-  const key   = inp.value.trim();
-  const label = lblEl ? lblEl.value.trim() : '';
-  if (!key) { inp.focus(); return; }
-  const added = addGeminiKey(key, label || undefined);
-  if (!added) {
-    inp.style.borderColor = '#E53935';
-    setTimeout(() => { inp.style.borderColor = ''; }, 2000);
-    return;
-  }
-  inp.value = '';
-  if (lblEl) lblEl.value = '';
-  _refreshKmPanel();
-}
-
-function kmRemoveKey(idx) {
-  if (!confirm('Remove this API key from the pool?')) return;
-  removeGeminiKey(idx);
-  _refreshKmPanel();
-}
-
-function kmRetryKey(idx) {
-  retryGeminiKey(idx);
-  _refreshKmPanel();
-}
-
-function kmCopyKey(idx) {
-  const pool = _loadKeyPool();
-  if (!pool[idx]) return;
-  navigator.clipboard.writeText(pool[idx].key).catch(() => {});
-  const rows = document.querySelectorAll('#kmPanel .km-key-row');
-  if (rows[idx]) {
-    const orig = rows[idx].style.background;
-    rows[idx].style.background = '#E8F5E9';
-    setTimeout(() => { rows[idx].style.background = orig; }, 600);
-  }
-}
-
-function kmRenameKey(idx) {
-  const pool = _loadKeyPool();
-  if (!pool[idx]) return;
-  const newLabel = prompt('Rename this key:', pool[idx].label || `Key ${idx + 1}`);
-  if (newLabel !== null && newLabel.trim()) {
-    renameGeminiKey(idx, newLabel.trim());
-    _refreshKmPanel();
-  }
-}
-
-function kmToggleNewKeyVis() {
-  const inp = document.getElementById('kmNewKeyInput');
-  if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+  try { localStorage.setItem(CQ_API_KEY_STORE, (key || '').trim()); } catch (e) {}
 }
 
 function openCustomQuizzes() {
-  cqSelectedFiles = [];
-  cqFilterFiles = [];
+  cqSelectedFile = null;
   cqGeneratedQuestions = null;
   cqGeneratedTitle = '';
   cqBusy = false;
@@ -4493,8 +4148,11 @@ function closeCustomQuizzes() {
 }
 
 function toggleCQKeyVisibility() {
-  const inp = document.getElementById('kmNewKeyInput');
-  if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+  const input = document.getElementById('cqApiKeyInput');
+  const btn   = document.getElementById('cqToggleKeyBtn');
+  if (!input) return;
+  if (input.type === 'password') { input.type = 'text';     btn.textContent = '🙈'; }
+  else                            { input.type = 'password'; btn.textContent = '👁'; }
 }
 
 function renderCustomQuizModal() {
@@ -4540,9 +4198,21 @@ function renderCustomQuizModal() {
   html += `<div class="cq-section">
     <div class="cq-section-title">✨ Create a New Quiz with AI (Gemini)</div>
 
-    <!-- API Key Manager -->
-    <div class="km-panel" id="kmPanel">
-      ${renderKeyManagerHTML()}
+    <!-- API Key -->
+    <div class="cq-help-box">
+      <strong>How to get a free Gemini API key:</strong>
+      <ol>
+        <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
+        <li>Sign in with your Google account</li>
+        <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
+        <li>Copy the generated key and paste it into the box below</li>
+      </ol>
+      Your key is saved only in this browser and is sent directly to Google's API — it never passes through any other server.
+    </div>
+    <div class="cq-input-row">
+      <input type="password" id="cqApiKeyInput" placeholder="Paste your Gemini API key here"
+             value="${escapeHtml(savedKey)}" oninput="setGeminiKey(this.value)" />
+      <button class="cq-btn cq-btn-secondary" id="cqToggleKeyBtn" onclick="toggleCQKeyVisibility()" type="button">👁</button>
     </div>
 
     <!-- Mode tabs -->
@@ -4553,57 +4223,13 @@ function renderCustomQuizModal() {
 
     <!-- TAB: Extract from MCQs (original flow) -->
     <div id="cqTabExtract" ${cqMode !== 'extract' ? 'style="display:none"' : ''}>
-      <div class="cq-field-hint">Upload one or more images or PDFs that contain MCQ questions — the AI will extract them all and merge the results.</div>
-
-      <!-- MCQ source files dropzone (multi) -->
+      <div class="cq-field-hint">Upload an image or PDF that already contains MCQ questions — the AI will extract them exactly as written.</div>
       <div class="cq-dropzone" id="cqDropzone" onclick="document.getElementById('cqFileInput').click()">
         <div class="cq-dz-icon">📄🖼️</div>
-        <div class="cq-dz-text">Click to upload, or drag &amp; drop — images or PDFs of your quiz questions (multiple allowed)</div>
-        ${cqSelectedFiles.length ? `
-          <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">
-            ${cqSelectedFiles.map((f, fi) => `
-              <div style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.85);
-                border:1px solid var(--accent);border-radius:20px;padding:3px 10px;font-size:.73rem;color:var(--accent);font-weight:700;">
-                ${f.type.startsWith('image/') ? '🖼️' : '📄'} ${escapeHtml(f.name)}
-                <button onclick="event.stopPropagation();cqRemoveMcqFile(${fi})" type="button"
-                  style="background:none;border:none;cursor:pointer;color:#888;font-size:.8rem;padding:0 0 0 3px;line-height:1;">✕</button>
-              </div>`).join('')}
-          </div>` : ''}
+        <div class="cq-dz-text">Click to upload, or drag &amp; drop — an image or PDF of your quiz questions</div>
+        ${cqSelectedFile ? `<div class="cq-dz-file">✅ ${escapeHtml(cqSelectedFile.name)}</div>` : ''}
       </div>
-      <input type="file" id="cqFileInput" accept="image/*,application/pdf" multiple style="display:none;" onchange="handleCQFileSelect(event)" />
-
-      <!-- Lecture filter section -->
-      <div style="margin:10px 0 4px;padding:12px 14px;background:${cqFilterFiles.length ? '#E3F2FD' : 'var(--card)'};border:1.5px ${cqFilterFiles.length ? 'solid #1565C0' : 'dashed var(--border)'};border-radius:10px;transition:all .2s;">
-        <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:180px;">
-            <div style="font-size:.82rem;font-weight:800;color:${cqFilterFiles.length ? '#0D47A1' : 'var(--text)'};letter-spacing:.2px;">
-              🎯 Lecture Filter <span style="font-weight:400;font-size:.75rem;color:var(--text-muted);">(optional)</span>
-            </div>
-            <div style="font-size:.73rem;color:var(--text-muted);margin-top:3px;line-height:1.4;">
-              Upload your lecture files — only MCQs related to these lectures will be kept. Useful when the uploaded quiz file mixes in questions from other curricula.
-            </div>
-          </div>
-          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
-            background:${cqFilterFiles.length ? '#BBDEFB' : '#f0f4ff'};border:1.5px dashed ${cqFilterFiles.length ? '#1565C0' : '#90CAF9'};
-            border-radius:8px;padding:7px 14px;font-size:.78rem;font-weight:700;
-            color:${cqFilterFiles.length ? '#0D47A1' : '#1976D2'};white-space:nowrap;transition:all .15s;flex-shrink:0;"
-            onmouseover="this.style.background='#BBDEFB'" onmouseout="this.style.background='${cqFilterFiles.length ? '#BBDEFB' : '#f0f4ff'}'">
-            ➕ Add Lecture File
-            <input type="file" accept="image/*,application/pdf,text/plain,.txt" multiple style="display:none;"
-              onchange="handleCQFilterFileSelect(event)" />
-          </label>
-        </div>
-        ${cqFilterFiles.length ? `
-        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">
-          ${cqFilterFiles.map((f, fi) => `
-            <div style="display:flex;align-items:center;gap:5px;background:#BBDEFB;
-              border:1px solid #1565C0;border-radius:20px;padding:3px 10px;font-size:.73rem;color:#0D47A1;font-weight:700;">
-              ${f.type && f.type.startsWith('image/') ? '🖼️' : (f.type === 'text/plain' || f.name.toLowerCase().endsWith('.txt')) ? '📝' : '📄'} ${escapeHtml(f.name)}
-              <button onclick="cqRemoveFilterFile(${fi})" type="button"
-                style="background:none;border:none;cursor:pointer;color:#1565C0;font-size:.85rem;padding:0 2px;line-height:1;">✕</button>
-            </div>`).join('')}
-        </div>` : ''}
-      </div>
+      <input type="file" id="cqFileInput" accept="image/*,application/pdf" style="display:none;" onchange="handleCQFileSelect(event)" />
 
       <!-- AI Answer Mode toggle -->
       <div style="margin:10px 0 4px;padding:12px 14px;background:${cqAiAnswerToggle ? '#EDE7F6' : 'var(--card)'};border:1.5px solid ${cqAiAnswerToggle ? '#9C27B0' : 'var(--border)'};border-radius:10px;transition:all .2s;">
@@ -4752,8 +4378,8 @@ function setupCQDropzone() {
     e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag-over');
   }));
   dz.addEventListener('drop', e => {
-    const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
-    files.forEach(f => acceptCQFile(f));
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) acceptCQFile(file);
   });
 }
 
@@ -4773,56 +4399,8 @@ function setupLectureDropzone() {
 }
 
 function handleCQFileSelect(event) {
-  const files = event.target.files ? Array.from(event.target.files) : [];
-  files.forEach(f => acceptCQFile(f));
-  event.target.value = ''; // allow re-selecting the same file(s) later
-}
-
-function handleCQFilterFileSelect(event) {
-  const files = event.target.files ? Array.from(event.target.files) : [];
-  files.forEach(f => acceptCQFilterFile(f));
-  event.target.value = '';
-}
-
-function cqRemoveMcqFile(idx) {
-  cqSelectedFiles.splice(idx, 1);
-  renderCustomQuizModal();
-}
-
-function cqRemoveFilterFile(idx) {
-  cqFilterFiles.splice(idx, 1);
-  renderCustomQuizModal();
-}
-
-async function acceptCQFilterFile(file) {
-  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  const isImage = file.type.startsWith('image/');
-  const isTxt   = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
-  const isPptx  = isPptxFile(file);
-  const statusEl = document.getElementById('cqStatus');
-
-  if (!isPdf && !isImage && !isTxt && !isPptx) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Lecture filter files must be PDF, image (JPG/PNG/WEBP), PowerPoint (.pptx), or .txt.</div>`;
-    return;
-  }
-  if (file.size > 19 * 1024 * 1024) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File too large (max ~19MB): ${escapeHtml(file.name)}</div>`;
-    return;
-  }
-  if (cqFilterFiles.some(f => f.name === file.name && f.size === file.size)) return; // dedupe
-
-  let useFile = file;
-  if (isPptx) {
-    try {
-      useFile = await convertIfPptx(file, statusEl);
-    } catch (e) {
-      return;
-    }
-  }
-
-  cqFilterFiles.push(useFile);
-  if (statusEl) statusEl.innerHTML = '';
-  renderCustomQuizModal();
+  const file = event.target.files && event.target.files[0];
+  if (file) acceptCQFile(file);
 }
 
 function handleLectureFileSelect(event) {
@@ -4830,15 +4408,14 @@ function handleLectureFileSelect(event) {
   if (file) acceptLectureFile(file);
 }
 
-async function acceptLectureFile(file) {
+function acceptLectureFile(file) {
   const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   const isImage = file.type.startsWith('image/');
   const isTxt   = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
-  const isPptx  = isPptxFile(file);
   const statusEl = document.getElementById('cqStatus');
 
-  if (!isPdf && !isImage && !isTxt && !isPptx) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload a PDF, image (JPG/PNG/WEBP), PowerPoint (.pptx), or .txt file.</div>`;
+  if (!isPdf && !isImage && !isTxt) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload a PDF, image (JPG/PNG/WEBP), or .txt file.</div>`;
     return;
   }
   if (file.size > 19 * 1024 * 1024) {
@@ -4846,50 +4423,29 @@ async function acceptLectureFile(file) {
     return;
   }
 
-  let useFile = file;
-  if (isPptx) {
-    try {
-      useFile = await convertIfPptx(file, statusEl);
-    } catch (e) {
-      return;
-    }
-  }
-
-  cqLectureFile = useFile;
+  cqLectureFile = file;
   if (statusEl) statusEl.innerHTML = '';
   renderCustomQuizModal();
 }
 
-async function acceptCQFile(file) {
+function acceptCQFile(file) {
   const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   const isImage = file.type.startsWith('image/');
-  const isPptx  = isPptxFile(file);
   const statusEl = document.getElementById('cqStatus');
 
-  if (!isPdf && !isImage && !isPptx) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload images (JPG/PNG/WEBP), PDF, or PowerPoint (.pptx) files.</div>`;
+  if (!isPdf && !isImage) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload an image (JPG/PNG/WEBP) or a PDF file.</div>`;
     return;
   }
   if (file.size > 19 * 1024 * 1024) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File too large (max ~19MB): ${escapeHtml(file.name)}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File is too large (max ~19MB).</div>`;
     return;
   }
-  if (cqSelectedFiles.some(f => f.name === file.name && f.size === file.size)) return; // dedupe
 
-  let useFile = file;
-  if (isPptx) {
-    try {
-      useFile = await convertIfPptx(file, statusEl);
-    } catch (e) {
-      return;
-    }
-  }
-
-  cqSelectedFiles.push(useFile);
+  cqSelectedFile = file;
   if (statusEl) statusEl.innerHTML = '';
   renderCustomQuizModal();
 }
-
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -4898,323 +4454,6 @@ function fileToBase64(file) {
     reader.onerror = () => reject(new Error('Failed to read the file.'));
     reader.readAsDataURL(file);
   });
-}
-
-/* ════════════════════════════════════════════════════════════════
-   PPTX → PDF client-side conversion
-   PowerPoint files are converted into a real PDF in the browser
-   (one page per slide, with all embedded images and slide text laid
-   out on the page) so they can flow through the exact same PDF
-   pipeline used everywhere else — meaning image extraction, visual
-   question matching, and lecture analysis all work for .pptx files
-   exactly as they do for PDFs, with no separate code path.
-   ════════════════════════════════════════════════════════════════ */
-
-const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-
-function isPptxFile(file) {
-  if (!file) return false;
-  return file.type === PPTX_MIME || file.name.toLowerCase().endsWith('.pptx');
-}
-
-let _jszipLoadPromise = null;
-function loadJSZip() {
-  if (window.JSZip) return Promise.resolve(window.JSZip);
-  if (_jszipLoadPromise) return _jszipLoadPromise;
-  _jszipLoadPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-    script.onload  = () => resolve(window.JSZip);
-    script.onerror = () => reject(new Error('Failed to load JSZip from CDN.'));
-    document.head.appendChild(script);
-  });
-  return _jszipLoadPromise;
-}
-
-let _jspdfLoadPromise = null;
-function loadJSPDF() {
-  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
-  if (_jspdfLoadPromise) return _jspdfLoadPromise;
-  _jspdfLoadPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/3.0.3/jspdf.umd.min.js';
-    script.onload  = () => resolve(window.jspdf.jsPDF);
-    script.onerror = () => reject(new Error('Failed to load jsPDF from CDN.'));
-    document.head.appendChild(script);
-  });
-  return _jspdfLoadPromise;
-}
-
-/* Pull plain text out of a slide's XML, in document order, paragraph by paragraph. */
-function extractSlideText(slideXmlDoc) {
-  const paragraphs = Array.from(slideXmlDoc.getElementsByTagName('a:p'));
-  const lines = [];
-  paragraphs.forEach(p => {
-    const runs = Array.from(p.getElementsByTagName('a:t'));
-    const text = runs.map(r => r.textContent || '').join('').trim();
-    if (text) lines.push(text);
-  });
-  return lines;
-}
-
-/* Map each slide's r:embed / r:id image references to actual media filenames via its .rels file. */
-function buildRelMap(relsXmlDoc) {
-  const map = {};
-  if (!relsXmlDoc) return map;
-  Array.from(relsXmlDoc.getElementsByTagName('Relationship')).forEach(rel => {
-    const id     = rel.getAttribute('Id');
-    const target = rel.getAttribute('Target') || '';
-    const type    = rel.getAttribute('Type')  || '';
-    if (id && type.indexOf('/image') !== -1) {
-      map[id] = target.replace(/^\.\.\//, '');
-    }
-  });
-  return map;
-}
-
-/* Find every image relationship id referenced anywhere inside a slide's XML (a:blip r:embed=...). */
-function extractSlideImageRelIds(slideXmlDoc) {
-  const ids = [];
-  Array.from(slideXmlDoc.getElementsByTagName('a:blip')).forEach(blip => {
-    const embed = blip.getAttribute('r:embed') || blip.getAttribute('r:link');
-    if (embed) ids.push(embed);
-  });
-  return ids;
-}
-
-function guessImageMime(filename) {
-  const ext = (filename.split('.').pop() || '').toLowerCase();
-  if (ext === 'png') return 'image/png';
-  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-  if (ext === 'gif') return 'image/gif';
-  if (ext === 'bmp') return 'image/bmp';
-  if (ext === 'webp') return 'image/webp';
-  if (ext === 'emf') return 'image/emf';   // not browser-decodable — handled explicitly below
-  if (ext === 'wmf') return 'image/wmf';   // not browser-decodable — handled explicitly below
-  if (ext === 'tif' || ext === 'tiff') return 'image/tiff'; // not browser-decodable either
-  return 'image/png';
-}
-
-/* Formats the browser's <img>/canvas pipeline cannot decode at all. */
-function isUndecodableImageMime(mime) {
-  return mime === 'image/emf' || mime === 'image/wmf' || mime === 'image/tiff';
-}
-
-/*
- * Convert a .pptx File into a .pdf File: one PDF page per slide, with the
- * slide's text at the top and every embedded image (the actual photos,
- * diagrams, charts, scans, etc. — not a recreation of the slide layout)
- * laid out below it so vision models can see exactly what's on the slide.
- */
-async function convertPptxToPdfFile(file, onProgress) {
-  const [JSZip, jsPDF] = await Promise.all([loadJSZip(), loadJSPDF()]);
-  const arrayBuffer = await file.arrayBuffer();
-  const zip = await JSZip.loadAsync(arrayBuffer);
-  const totalSkippedImages = [];
-
-  // Determine slide order from presentation.xml + presentation.xml.rels
-  const presXml = await zip.file('ppt/presentation.xml').async('string');
-  const presRelsXml = await zip.file('ppt/_rels/presentation.xml.rels').async('string');
-  const parser = new DOMParser();
-  const presDoc = parser.parseFromString(presXml, 'application/xml');
-  const presRelsDoc = parser.parseFromString(presRelsXml, 'application/xml');
-
-  const presRelMap = {};
-  Array.from(presRelsDoc.getElementsByTagName('Relationship')).forEach(rel => {
-    presRelMap[rel.getAttribute('Id')] = rel.getAttribute('Target');
-  });
-
-  const slideIdEntries = Array.from(presDoc.getElementsByTagName('p:sldId'));
-  let slidePaths = slideIdEntries
-    .map(node => {
-      const rEmbed = node.getAttribute('r:id');
-      const target = presRelMap[rEmbed];
-      return target ? ('ppt/' + target.replace(/^\.\.\//, '').replace(/^\//, '')) : null;
-    })
-    .filter(Boolean);
-
-  // Fallback: if presentation.xml parsing didn't yield slides, sort by filename number
-  if (!slidePaths.length) {
-    slidePaths = Object.keys(zip.files)
-      .filter(p => /^ppt\/slides\/slide\d+\.xml$/.test(p))
-      .sort((a, b) => {
-        const na = parseInt(a.match(/slide(\d+)\.xml/)[1], 10);
-        const nb = parseInt(b.match(/slide(\d+)\.xml/)[1], 10);
-        return na - nb;
-      });
-  }
-
-  if (!slidePaths.length) throw new Error('No slides found in this PowerPoint file.');
-
-  const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const margin = 36;
-  const usableW = pageW - margin * 2;
-
-  for (let s = 0; s < slidePaths.length; s++) {
-    if (onProgress) onProgress(s + 1, slidePaths.length);
-    const slidePath = slidePaths[s];
-    const slideFile = zip.file(slidePath);
-    if (!slideFile) continue;
-    const slideXml = await slideFile.async('string');
-    const slideDoc = parser.parseFromString(slideXml, 'application/xml');
-
-    // Relationships for this slide (to resolve images)
-    const slideName = slidePath.split('/').pop();
-    const relsPath = `ppt/slides/_rels/${slideName}.rels`;
-    let relMap = {};
-    const relsFile = zip.file(relsPath);
-    if (relsFile) {
-      const relsXml = await relsFile.async('string');
-      relMap = buildRelMap(parser.parseFromString(relsXml, 'application/xml'));
-    }
-
-    const textLines = extractSlideText(slideDoc);
-    const imageRelIds = extractSlideImageRelIds(slideDoc);
-
-    if (s > 0) pdf.addPage();
-    let cursorY = margin;
-
-    // Slide number / title header
-    pdf.setFontSize(10);
-    pdf.setTextColor(120, 120, 120);
-    pdf.text(`Slide ${s + 1}`, margin, cursorY);
-    cursorY += 16;
-
-    // Render text lines (first line styled as a title)
-    pdf.setTextColor(20, 20, 20);
-    textLines.forEach((line, li) => {
-      pdf.setFontSize(li === 0 ? 16 : 11);
-      pdf.setFont(undefined, li === 0 ? 'bold' : 'normal');
-      const wrapped = pdf.splitTextToSize(line, usableW);
-      wrapped.forEach(wline => {
-        if (cursorY > pageH - margin) { pdf.addPage(); cursorY = margin; }
-        pdf.text(wline, margin, cursorY);
-        cursorY += li === 0 ? 20 : 15;
-      });
-      cursorY += 4;
-    });
-
-    cursorY += 6;
-
-    // Render every embedded image on the slide at a readable size
-    let skippedImages = [];
-    for (const relId of imageRelIds) {
-      const target = relMap[relId];
-      if (!target) continue;
-      const mediaPath = `ppt/media/${target.split('/').pop()}`;
-      const mediaFile = zip.file(mediaPath);
-      if (!mediaFile) continue;
-      const mime = guessImageMime(mediaPath);
-
-      // EMF/WMF/TIFF can't be decoded by the browser's Image/canvas APIs at all.
-      // Rather than silently dropping them, leave a visible note on the slide
-      // so nothing disappears without a trace.
-      if (isUndecodableImageMime(mime)) {
-        skippedImages.push(mediaPath.split('/').pop());
-        continue;
-      }
-
-      try {
-        const base64 = await mediaFile.async('base64');
-        const rawDataUrl = `data:${mime};base64,${base64}`;
-
-        const img = await new Promise((resolve, reject) => {
-          const im = new Image();
-          im.onload = () => resolve(im);
-          im.onerror = reject;
-          im.src = rawDataUrl;
-        });
-
-        // jsPDF's addImage only reliably accepts PNG/JPEG data URLs. GIF, BMP,
-        // and WEBP decode fine in <img> but aren't accepted directly, so route
-        // everything through a canvas and re-encode as PNG before drawing.
-        let drawDataUrl = rawDataUrl;
-        let drawFormat = 'PNG';
-        if (mime !== 'image/png' && mime !== 'image/jpeg') {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth || img.width;
-          canvas.height = img.naturalHeight || img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          drawDataUrl = canvas.toDataURL('image/png');
-        } else {
-          drawFormat = mime === 'image/png' ? 'PNG' : 'JPEG';
-        }
-
-        const dims = { w: img.naturalWidth || img.width, h: img.naturalHeight || img.height };
-        let drawW = usableW;
-        let drawH = drawW * (dims.h / dims.w);
-        const maxH = pageH - margin * 2;
-        if (drawH > maxH) { drawH = maxH; drawW = drawH * (dims.w / dims.h); }
-        if (cursorY + drawH > pageH - margin) { pdf.addPage(); cursorY = margin; }
-        pdf.addImage(drawDataUrl, drawFormat, margin, cursorY, drawW, drawH);
-        cursorY += drawH + 12;
-      } catch (e) {
-        // Decode genuinely failed (corrupt file, unsupported variant, etc.) —
-        // still surface it instead of disappearing silently.
-        skippedImages.push(mediaPath.split('/').pop());
-      }
-    }
-
-    if (skippedImages.length) {
-      totalSkippedImages.push({ slide: s + 1, files: skippedImages });
-      if (cursorY > pageH - margin - 14) { pdf.addPage(); cursorY = margin; }
-      pdf.setFontSize(9);
-      pdf.setFont(undefined, 'italic');
-      pdf.setTextColor(170, 60, 60);
-      const note = `⚠ ${skippedImages.length} image${skippedImages.length > 1 ? 's' : ''} on this slide could not be converted (${skippedImages.join(', ')}) and may be missing.`;
-      pdf.splitTextToSize(note, usableW).forEach(wline => {
-        if (cursorY > pageH - margin) { pdf.addPage(); cursorY = margin; }
-        pdf.text(wline, margin, cursorY);
-        cursorY += 12;
-      });
-    }
-  }
-
-  const pdfBlob = pdf.output('blob');
-  const pdfFile = new File(
-    [pdfBlob],
-    file.name.replace(/\.pptx$/i, '') + '.pdf',
-    { type: 'application/pdf' }
-  );
-  pdfFile._pptxSkippedImages = totalSkippedImages; // non-enumerable info for the UI layer
-  return pdfFile;
-}
-
-/*
- * Drop-in helper: if the given file is a .pptx, converts it to a PDF File
- * and returns that; otherwise returns the original file unchanged.
- * statusEl (optional) gets a progress message while converting.
- */
-async function convertIfPptx(file, statusEl) {
-  if (!isPptxFile(file)) return file;
-  if (statusEl) {
-    statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📊 Converting "${escapeHtml(file.name)}" from PowerPoint to PDF…</div>`;
-  }
-  try {
-    const pdfFile = await convertPptxToPdfFile(file, (cur, total) => {
-      if (statusEl) {
-        statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📊 Converting "${escapeHtml(file.name)}" — slide ${cur} of ${total}…</div>`;
-      }
-    });
-    const skipped = pdfFile._pptxSkippedImages || [];
-    if (statusEl) {
-      if (skipped.length) {
-        const slideList = skipped.map(s => `slide ${s.slide}`).join(', ');
-        statusEl.innerHTML = `<div class="cq-status error">⚠️ "${escapeHtml(file.name)}" converted, but some images (on ${escapeHtml(slideList)}) use a format (EMF/WMF/TIFF) that can't be read in-browser and were noted as missing on those slides instead. Everything else converted normally.</div>`;
-      } else {
-        statusEl.innerHTML = '';
-      }
-    }
-    return pdfFile;
-  } catch (e) {
-    if (statusEl) {
-      statusEl.innerHTML = `<div class="cq-status error">⚠️ Couldn't convert "${escapeHtml(file.name)}" (${escapeHtml(e.message || 'unknown error')}).</div>`;
-    }
-    throw e;
-  }
 }
 
 const CQ_EXTRACTION_PROMPT = `You are extracting multiple-choice quiz questions from an uploaded document (image or PDF).
@@ -5261,32 +4500,10 @@ const CQ_RESPONSE_SCHEMA = {
   }
 };
 
-/* ── Global call-spacing gate: ensures consecutive Gemini calls never fire
-   closer together than MIN_GEMINI_CALL_GAP_MS, regardless of how many
-   files/batches are queued up. This prevents bursts of calls (one per file,
-   one per filter batch, etc.) from tripping the per-minute quota in the
-   first place, rather than just reacting to 429s after the fact. ──────── */
-const MIN_GEMINI_CALL_GAP_MS = 4000;
-let _lastGeminiCallAt = 0;
-async function _waitForGeminiSlot(cancelToken) {
-  const now = Date.now();
-  const elapsed = now - _lastGeminiCallAt;
-  if (elapsed < MIN_GEMINI_CALL_GAP_MS) {
-    await cancellableSleep(MIN_GEMINI_CALL_GAP_MS - elapsed, cancelToken);
-  }
-  _lastGeminiCallAt = Date.now();
-}
-
-/* ── Retry helper: retries indefinitely and silently — no error is ever
-   surfaced to the UI from here, no matter how many attempts it takes.
-   Rate-limit responses (429) and transient server errors (5xx) back off
-   more patiently than other errors, since those are quota-window issues
-   that need real wall-clock time to clear rather than a quick retry.
-   Only key errors (401/403/invalid key) are surfaced immediately, since no
-   amount of retrying fixes a bad key. ──────── */
-async function callGeminiWithRetry(urlParam, bodyObj, { onRetry, cancelToken } = {}) {
-  let url = urlParam; // make mutable for key rotation
-  let usedKey = getGeminiKey(); // track which key is in use
+/* ── Retry helper: retries indefinitely with exponential back-off (2s, 4s, 8s… capped at 30s).
+   Only surfaces an error immediately if it's API-key-related
+   (HTTP 400 with API_KEY_INVALID / 401 / 403). ──────── */
+async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken } = {}) {
   const KEY_ERRORS = ['API_KEY_INVALID', 'API_KEY_NOT_VALID', 'INVALID_API_KEY',
                       'PERMISSION_DENIED', 'API key not valid'];
 
@@ -5298,29 +4515,6 @@ async function callGeminiWithRetry(urlParam, bodyObj, { onRetry, cancelToken } =
     return false;
   }
 
-  // Parses a Retry-After header (seconds, or an HTTP date) into milliseconds.
-  function retryAfterMs(resp) {
-    if (!resp || !resp.headers || typeof resp.headers.get !== 'function') return null;
-    const ra = resp.headers.get('Retry-After');
-    if (!ra) return null;
-    const secs = Number(ra);
-    if (!isNaN(secs)) return Math.max(0, secs * 1000);
-    const dateMs = Date.parse(ra);
-    if (!isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
-    return null;
-  }
-
-  // Backoff schedule: rate-limit/server errors get longer, more patient waits
-  // (quota windows are typically per-minute, so short backoffs just keep
-  // hitting the same closed window). Other transient errors use a shorter
-  // schedule. Both retry forever — this function never gives up and never
-  // throws for these cases, by design.
-  function backoffMs(attempt, isRateLimited, serverHintMs) {
-    if (serverHintMs != null) return Math.min(serverHintMs + 500, 90000);
-    if (isRateLimited) return Math.min(8000 * Math.pow(1.6, attempt - 1), 75000);
-    return Math.min(2000 * Math.pow(2, attempt - 1), 30000);
-  }
-
   let attempt = 0;
   while (true) {
     // Check for cancellation before every attempt (including between retries)
@@ -5329,69 +4523,23 @@ async function callGeminiWithRetry(urlParam, bodyObj, { onRetry, cancelToken } =
     }
     attempt++;
     try {
-      // Space out calls so we don't burst past the per-minute quota.
-      await _waitForGeminiSlot(cancelToken);
-      if (cancelToken && cancelToken.cancelled) {
-        const e = new Error('cancelled'); e._cancelled = true; throw e;
-      }
-
       const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyObj)
       });
-      const data = await resp.json().catch(() => ({}));
+      const data = await resp.json();
 
       if (!resp.ok) {
         const msg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
         const err = new Error(msg);
         err._httpStatus = resp.status;
         err._apiData    = data;
-
-        // Key errors: mark the key as invalid, then try the next key in the pool
-        if (isKeyError(resp.status, data)) {
-          _markKeyInvalid(usedKey);
-          const nextKey = getGeminiKey();
-          if (nextKey && nextKey !== usedKey) {
-            // Rebuild the URL with the new key
-            usedKey = nextKey;
-            url = url.replace(/key=[^&]+/, `key=${encodeURIComponent(nextKey)}`);
-            if (onRetry) onRetry(attempt);
-            continue; // retry immediately with new key
-          }
-          throw Object.assign(err, { _keyError: true }); // no more keys
-        }
-
-        // Rate limit: mark current key, rotate to next key immediately
-        if (resp.status === 429) {
-          _markKeyRateLimited(usedKey);
-          const nextKey = getGeminiKey();
-          if (nextKey && nextKey !== usedKey) {
-            usedKey = nextKey;
-            url = url.replace(/key=[^&]+/, `key=${encodeURIComponent(nextKey)}`);
-            if (onRetry) onRetry(attempt);
-            await cancellableSleep(300, cancelToken); // tiny pause before switching
-            continue; // retry with new key, no long wait
-          }
-          // All keys exhausted — fall back to timed backoff on the current key
-          const serverHintMs = retryAfterMs(resp);
-          if (onRetry) onRetry(attempt);
-          _lastGeminiCallAt = Date.now() + backoffMs(attempt, true, serverHintMs) - MIN_GEMINI_CALL_GAP_MS;
-          await cancellableSleep(backoffMs(attempt, true, serverHintMs), cancelToken);
-          // After wait, reset all rate-limited keys so they can be tried again
-          const pool = _loadKeyPool();
-          pool.forEach(k => { if (k.status === 'rate_limited') { k.status = 'ok'; k.rateLimitedUntil = 0; } });
-          _saveKeyPool(pool);
-          usedKey = getGeminiKey();
-          url = url.replace(/key=[^&]+/, `key=${encodeURIComponent(usedKey)}`);
-          continue;
-        }
-
-        const isRateLimited = resp.status === 503;
-        const serverHintMs  = retryAfterMs(resp);
+        // Always surface key errors immediately — no point retrying
+        if (isKeyError(resp.status, data)) throw Object.assign(err, { _keyError: true });
         if (onRetry) onRetry(attempt);
-        _lastGeminiCallAt = Date.now() + backoffMs(attempt, isRateLimited, serverHintMs) - MIN_GEMINI_CALL_GAP_MS;
-        await cancellableSleep(backoffMs(attempt, isRateLimited, serverHintMs), cancelToken);
+        // Cancellable sleep between retries
+        await cancellableSleep(Math.min(2000 * Math.pow(2, attempt - 1), 30000), cancelToken);
         continue;
       }
 
@@ -5400,7 +4548,6 @@ async function callGeminiWithRetry(urlParam, bodyObj, { onRetry, cancelToken } =
         const e = new Error('cancelled'); e._cancelled = true; throw e;
       }
 
-      _advanceKeyPool(); // rotate for next call
       return data; // success
     } catch (err) {
       if (err._keyError || err._cancelled) throw err; // propagate immediately
@@ -5618,15 +4765,7 @@ async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType
 // Source file helpers for AI Answer Mode
 async function handleCqAiSourceFiles(event) {
   const files = Array.from(event.target.files || []);
-  const statusEl = document.getElementById('cqStatus');
-  for (let file of files) {
-    if (isPptxFile(file)) {
-      try {
-        file = await convertIfPptx(file, statusEl);
-      } catch (e) {
-        continue;
-      }
-    }
+  for (const file of files) {
     const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
     const base64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -5649,51 +4788,6 @@ function cqRemoveSourceFile(idx) {
 // sourceText: optional reference text
 // sourceFiles: optional array of {base64, mimeType, name}
 // onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
-// Upload a file to the Gemini File API and wait until it is ACTIVE.
-// Returns the file URI on success, or null on failure (caller falls back to inline).
-// For text/plain the file is active immediately; for PDF/image we poll up to ~30 s.
-async function uploadToFileApi(blob, mimeType, displayName, apiKey) {
-  try {
-    const meta     = JSON.stringify({ file: { display_name: displayName } });
-    const formData = new FormData();
-    formData.append('metadata', new Blob([meta], { type: 'application/json' }));
-    formData.append('file', blob, displayName);
-    const uploadResp = await fetch(
-      `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`,
-      { method: 'POST', body: formData }
-    );
-    if (!uploadResp.ok) {
-      console.warn('[fileapi] upload HTTP error:', uploadResp.status, await uploadResp.text());
-      return null;
-    }
-    const uploadData = await uploadResp.json();
-    const fileUri    = uploadData && uploadData.file && uploadData.file.uri;
-    const fileName   = uploadData && uploadData.file && uploadData.file.name; // e.g. "files/abc123"
-    if (!fileUri) { console.warn('[fileapi] no URI in upload response', uploadData); return null; }
-
-    // Text files are active instantly; binary files need processing time.
-    if (mimeType === 'text/plain') return fileUri;
-
-    // Poll until ACTIVE (or FAILED), max ~30 s
-    const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${encodeURIComponent(apiKey)}`;
-    for (let attempt = 0; attempt < 15; attempt++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const pollResp = await fetch(pollUrl);
-      if (!pollResp.ok) break;
-      const pollData = await pollResp.json();
-      const state    = pollData && pollData.state;
-      if (state === 'ACTIVE') { console.log('[fileapi] file ACTIVE:', fileUri); return fileUri; }
-      if (state === 'FAILED') { console.warn('[fileapi] file processing FAILED:', pollData); return null; }
-      console.log('[fileapi] still processing, state:', state, '— retrying…');
-    }
-    console.warn('[fileapi] timed out waiting for file to become ACTIVE');
-    return null;
-  } catch (err) {
-    console.warn('[fileapi] upload/poll error:', err);
-    return null;
-  }
-}
-
 async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl) {
   if (!targetIdxs || !targetIdxs.length) return;
 
@@ -5703,123 +4797,77 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
   const hasSource = (sourceText && sourceText.trim()) || (sourceFiles && sourceFiles.length > 0);
 
   const systemInstruction = hasSource
-    ? 'You are a medical/academic expert. Reference source material is provided (text and/or images/PDFs). ' +
-      'For each question, answer based on the source. ' +
-      'If the answer is clearly found in the source, set found_in_source to true; otherwise set it to false and use your own knowledge. ' +
-      'Some questions may include an image — analyse it carefully. ' +
-      'Respond ONLY with a JSON array.'
+    ? 'You are a medical/academic expert helping a student study from their own course material. ' +
+      'Reference source material has been provided (text and/or images/PDFs). ' +
+      'CRITICAL RULE: You MUST answer every question using ONLY the provided source material. ' +
+      'Read the entire source carefully and thoroughly before answering. ' +
+      'The source is the student\'s lecture or textbook — the correct answers are defined by what the source says, NOT by general medical consensus. ' +
+      'Even if you personally know the answer differently, always defer to the source. ' +
+      'Search the source exhaustively — look for keywords, synonyms, related concepts, and context clues. ' +
+      'Only if a question\'s topic is genuinely absent from the source entirely may you fall back to your general knowledge, and in that case set found_in_source to false. ' +
+      'Some questions may include an image — analyse it carefully alongside the source. ' +
+      'Respond ONLY with a JSON array. No explanation, no preamble.'
     : 'You are a medical/academic expert. Answer each question using your expert knowledge. ' +
-      'Since no source is provided, set found_in_source to false for all. ' +
       'Some questions may include an image — analyse it carefully. ' +
-      'Respond ONLY with a JSON array.';
+      'Since no source is provided, set found_in_source to false for all. ' +
+      'Respond ONLY with a JSON array. No explanation, no preamble.';
 
-  // ── Upload source material to File API once so it is not re-sent every batch.
-  //    Per-question images (q.image) are small and stay inline — never uploaded.
-  //    Falls back to inline_data automatically if any upload fails. ──
+  // Build source parts (shared across all chunks)
   const sourceParts = [];
-
   if (sourceText && sourceText.trim()) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📤 Uploading source text once…</div>`;
-    const txtBlob = new Blob([sourceText.trim()], { type: 'text/plain' });
-    const txtUri  = await uploadToFileApi(txtBlob, 'text/plain', 'source_text.txt', apiKey);
-    if (txtUri) {
-      sourceParts.push({ text: '## Reference Source Material (Text):' });
-      sourceParts.push({ file_data: { mime_type: 'text/plain', file_uri: txtUri } });
-      sourceParts.push({ text: '---' });
-      console.log('[solve] sourceText uploaded via File API');
-    } else {
-      // Fallback: inline
-      sourceParts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
-      console.warn('[solve] sourceText falling back to inline');
-    }
+    sourceParts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
   }
-
   if (sourceFiles && sourceFiles.length > 0) {
     sourceParts.push({ text: '## Reference Source Material (Images/PDFs):' });
-    for (let sfi = 0; sfi < sourceFiles.length; sfi++) {
-      const sf = sourceFiles[sfi];
-      if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📤 Uploading source file ${sfi + 1}/${sourceFiles.length} (${sf.name}) — waiting for image processing…</div>`;
-      // Convert base64 back to blob for upload
-      const byteChars = atob(sf.base64);
-      const byteArr   = new Uint8Array(byteChars.length);
-      for (let b = 0; b < byteChars.length; b++) byteArr[b] = byteChars.charCodeAt(b);
-      const fileBlob  = new Blob([byteArr], { type: sf.mimeType });
-      const fileUri   = await uploadToFileApi(fileBlob, sf.mimeType, sf.name, apiKey);
+    sourceFiles.forEach((sf, sfi) => {
       sourceParts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
-      if (fileUri) {
-        // file_data: Gemini reads the full file including all images inside PDFs
-        sourceParts.push({ file_data: { mime_type: sf.mimeType, file_uri: fileUri } });
-        console.log('[solve] source file uploaded via File API:', sf.name);
-      } else {
-        // Fallback: inline_data — identical vision quality, just re-sent every batch
-        sourceParts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
-        console.warn('[solve] source file falling back to inline:', sf.name);
-      }
-    }
+      sourceParts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
+    });
     sourceParts.push({ text: '---' });
   }
 
   const instructionPart = {
-    text: 'For each question below, determine the correct answer letter. ' +
-          'Respond ONLY with a JSON array (one object per question, same order) with keys:\n' +
-          '  "index": the number inside [index:N]\n' +
-          '  "answer": the correct option letter (e.g. "A")\n' +
-          '  "found_in_source": true if the answer was clearly found in the provided source material, false if you used your own knowledge\n' +
-          'No explanation, no preamble, no markdown.'
+    text: (hasSource
+      ? 'Using the reference source material provided above, determine the correct answer for each question. ' +
+        'The source is authoritative — answers MUST match what the source states, even if general medical knowledge differs. ' +
+        'Read the entire source carefully and scan it for each question before deciding. '
+      : 'Using your expert medical/academic knowledge, determine the correct answer for each question. ') +
+      'Respond ONLY with a JSON array (one object per question, same order) with these exact keys:\n' +
+      '  "index": the number inside [index:N]\n' +
+      '  "answer": the correct option letter (e.g. "A")\n' +
+      '  "found_in_source": true if the answer was found in the provided source material, false if you relied on general knowledge\n' +
+      'No explanation, no preamble, no markdown fences. Output the JSON array only.'
   };
 
-  // Two chunk sizes: smaller when questions have images (token budget for inline_data)
-  const CHUNK_SIZE        = 20;
-  const CHUNK_SIZE_IMAGES =  8;
-
-  // Split into two ordered pools — text-only and image-bearing — preserving original indices
-  const textChunkItems  = targetIdxs.filter(qi => !questions[qi].image);
-  const imageChunkItems = targetIdxs.filter(qi =>  !!questions[qi].image);
-
-  // Build chunk lists for each pool
-  const allChunks = [];
-  for (let i = 0; i < textChunkItems.length;  i += CHUNK_SIZE)        allChunks.push({ idxs: textChunkItems.slice(i,  i + CHUNK_SIZE),        hasImages: false });
-  for (let i = 0; i < imageChunkItems.length; i += CHUNK_SIZE_IMAGES) allChunks.push({ idxs: imageChunkItems.slice(i, i + CHUNK_SIZE_IMAGES), hasImages: true  });
-
-  // Pre-build inline fallback sourceParts (used for image chunks to avoid file_data + inline_data conflict)
-  // This replaces any file_data entries with their inline equivalent using the original sourceFiles data
-  const sourceParts_inline = [];
-  if (sourceText && sourceText.trim()) {
-    sourceParts_inline.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
-  }
-  if (sourceFiles && sourceFiles.length > 0) {
-    sourceParts_inline.push({ text: '## Reference Source Material (Images/PDFs):' });
-    sourceFiles.forEach((sf, sfi) => {
-      sourceParts_inline.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
-      sourceParts_inline.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
-    });
-    sourceParts_inline.push({ text: '---' });
+  // Chunk into batches of 20 to stay well within token limits
+  const CHUNK_SIZE = 20;
+  const chunks = [];
+  for (let i = 0; i < targetIdxs.length; i += CHUNK_SIZE) {
+    chunks.push(targetIdxs.slice(i, i + CHUNK_SIZE));
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
   let totalSolved = 0;
   const errors = [];
 
-  for (let ci = 0; ci < allChunks.length; ci++) {
-    const { idxs: chunk, hasImages: chunkHasImages } = allChunks[ci];
+  for (let ci = 0; ci < chunks.length; ci++) {
+    const chunk = chunks[ci];
 
-    if (statusEl && allChunks.length > 1) {
-      const label = chunkHasImages ? '🖼️ image questions' : '📝 text questions';
-      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is solving ${label}… (batch ${ci + 1} of ${allChunks.length})</div>`;
+    if (statusEl && chunks.length > 1) {
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is solving questions… (batch ${ci + 1} of ${chunks.length})</div>`;
     }
 
-    // For image chunks: use inline source parts to avoid file_data + inline_data conflict
-    const activeParts = chunkHasImages ? [...sourceParts_inline, instructionPart] : [...sourceParts, instructionPart];
+    const parts = [...sourceParts, instructionPart];
 
     chunk.forEach((qi, serial) => {
       const q = questions[qi];
       const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
-      activeParts.push({ text: 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts });
+      parts.push({ text: 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n' + q.question + '\n' + opts });
       if (q.image) {
         const match = q.image.match(/^data:([^;]+);base64,(.+)$/);
         if (match) {
-          activeParts.push({ text: '(Image for question ' + (serial + 1) + ':)' });
-          activeParts.push({ inline_data: { mime_type: match[1], data: match[2] } });
+          parts.push({ text: '(Image for question ' + (serial + 1) + ':)' });
+          parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
         }
       }
     });
@@ -5827,11 +4875,8 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
     try {
       const data = await callGeminiWithRetry(url, {
         system_instruction: { parts: [{ text: systemInstruction }] },
-        contents: [{ role: 'user', parts: activeParts }],
-        // Drop responseMimeType for image chunks — vision + JSON mode is unreliable
-        generationConfig: chunkHasImages
-          ? { temperature: 0, maxOutputTokens: 8192 }
-          : { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
+        contents: [{ role: 'user', parts }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
       }, {});
 
       const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
@@ -5847,7 +4892,7 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
           try { answers = JSON.parse(cleanText.substring(0, lastBrace + 1) + ']'); } catch (_) {}
         }
         if (!answers) {
-          errors.push(`Batch ${ci + 1}/${allChunks.length}: Could not parse AI response (response may have been truncated).`);
+          errors.push(`Batch ${ci + 1}: Could not parse AI response (response may have been truncated).`);
           continue;
         }
       }
@@ -5864,11 +4909,11 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
           }
         });
       } else {
-        errors.push(`Batch ${ci + 1}/${allChunks.length}: AI returned unexpected format (not an array).`);
+        errors.push(`Batch ${ci + 1}: AI returned unexpected format (not an array).`);
       }
     } catch (e) {
       console.warn('cqAiSolveQuestions batch ' + (ci + 1) + ' failed:', e);
-      errors.push(`Batch ${ci + 1}/${allChunks.length}: ${e.message || String(e)}`);
+      errors.push(`Batch ${ci + 1}: ${e.message || String(e)}`);
     }
   }
 
@@ -5901,452 +4946,87 @@ async function cqAiSolveOne(i) {
 
 
 async function generateQuizFromAI() {
+  const apiKeyInput = document.getElementById('cqApiKeyInput');
   const titleInput  = document.getElementById('cqTitleInput');
   const statusEl    = document.getElementById('cqStatus');
   const genBtn      = document.getElementById('cqGenerateBtn');
 
-  const apiKey = getGeminiKey().trim();
+  const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
   const title  = (titleInput ? titleInput.value : cqGeneratedTitle).trim();
 
-  if (!apiKey)                { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please add at least one Gemini API key in the key manager above.</div>`; return; }
-  if (!cqSelectedFiles.length) { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload at least one image or PDF of your quiz.</div>`; return; }
-  if (!title)                  { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
+  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
+  if (!cqSelectedFile){ statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload an image or PDF of your quiz first.</div>`; return; }
+  if (!title)         { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
 
+  setGeminiKey(apiKey);
   cqGeneratedTitle = title;
   cqBusy = true;
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions… this can take a moment for longer documents.</div>`;
 
   try {
-    // ── Step 1: extract questions from every uploaded MCQ file, merge results ──
-    let cleaned = [];
-    let finishReason = null;
-    const firstFileRef = { base64Data: null, mimeType: null }; // kept for backward-compat re-extract flows
+    const base64Data = await fileToBase64(cqSelectedFile);
+    const mimeType = cqSelectedFile.type ||
+      (cqSelectedFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
 
-    for (let fi = 0; fi < cqSelectedFiles.length; fi++) {
-      const file = cqSelectedFiles[fi];
-      const fileLabel = cqSelectedFiles.length > 1 ? ` (file ${fi + 1} of ${cqSelectedFiles.length}: ${escapeHtml(file.name)})` : '';
-      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions${fileLabel}… this can take a moment for longer documents.</div>`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-      const base64Data = await fileToBase64(file);
-      const mimeType = file.type ||
-        (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-      if (fi === 0) { firstFileRef.base64Data = base64Data; firstFileRef.mimeType = mimeType; }
-
-      const data = await callGeminiWithRetry(url, {
-        contents: [{
-          parts: [
-            { inline_data: { mime_type: mimeType, data: base64Data } },
-            { text: CQ_EXTRACTION_PROMPT }
-          ]
-        }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0,
-          maxOutputTokens: 65536
-        }
-      }, {});
-
-      const candidate = data && data.candidates && data.candidates[0];
-      if (!candidate) throw new Error(`Gemini returned no result for "${file.name}". The file may be unsupported or blocked — try a clearer image or PDF.`);
-
-      if (candidate.finishReason === 'MAX_TOKENS') finishReason = 'MAX_TOKENS';
-      const textOut = (candidate.content && candidate.content.parts || [])
-        .map(p => p.text || '').join('');
-      if (!textOut.trim()) throw new Error(`Gemini returned an empty response for "${file.name}". Please try again.`);
-
-      let parsed;
-      try { const cleanOut = textOut.replace(/```json|```/g, '').trim(); parsed = JSON.parse(cleanOut); }
-      catch (e) { throw new Error(`Could not understand the AI response for "${file.name}". Please try again.`); }
-
-      if (!Array.isArray(parsed)) continue;
-
-      const fileCleaned = parsed.map(q => {
-        if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
-        const opts = {};
-        Object.entries(q.options)
-          .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
-          .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
-          .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
-        if (!Object.keys(opts).length) return null;
-        const rawAnswer = (typeof q.answer === 'string') ? q.answer.trim() : '';
-        const noKey = rawAnswer === '__NO_KEY__';
-        let answer = noKey ? '' : rawAnswer.toUpperCase();
-        if (!noKey && !opts[answer]) answer = Object.keys(opts)[0];
-        const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
-        return {
-          question: q.question, options: opts, optionsOrder, answer,
-          has_image: !!q.has_image, no_answer_key: noKey,
-          _srcBase64: base64Data, _srcMime: mimeType, _srcName: file.name
-        };
-      }).filter(Boolean);
-
-      // Extract embedded images for questions that have them, per source file
-      const imageQuestions = fileCleaned.filter(q => q.has_image);
-      if (imageQuestions.length > 0) {
-        statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting images${fileLabel} for ${imageQuestions.length} question${imageQuestions.length !== 1 ? 's' : ''}… please wait.</div>`;
-        await extractImagesForQuestions(fileCleaned, base64Data, mimeType, apiKey);
+    const data = await callGeminiWithRetry(url, {
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: mimeType, data: base64Data } },
+          { text: CQ_EXTRACTION_PROMPT }
+        ]
+      }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0,
+        maxOutputTokens: 65536
       }
+    }, {});
 
-      cleaned = cleaned.concat(fileCleaned);
+    const candidate = data && data.candidates && data.candidates[0];
+    if (!candidate) throw new Error('Gemini returned no result. The file may be unsupported or blocked — try a clearer image or PDF.');
+
+    const finishReason = candidate.finishReason;
+    const textOut = (candidate.content && candidate.content.parts || [])
+      .map(p => p.text || '').join('');
+    if (!textOut.trim()) throw new Error('Gemini returned an empty response. Please try again.');
+
+    let parsed;
+    try { const cleanOut = textOut.replace(/```json|```/g, '').trim(); parsed = JSON.parse(cleanOut); }
+    catch (e) { throw new Error('Could not understand the AI response. Please try again.'); }
+
+    if (!Array.isArray(parsed) || !parsed.length) {
+      throw new Error('No questions could be detected in the uploaded file.');
     }
 
-    if (!cleaned.length) throw new Error('No questions could be detected in the uploaded file(s).');
+    const cleaned = parsed.map(q => {
+      if (!q || typeof q.question !== 'string' || !q.options || typeof q.options !== 'object') return null;
+      const opts = {};
+      Object.entries(q.options)
+        .filter(([k, v]) => typeof v === 'string' && v.trim() !== '')
+        .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
+        .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
+      if (!Object.keys(opts).length) return null;
+      const rawAnswer = (typeof q.answer === 'string') ? q.answer.trim() : '';
+      const noKey = rawAnswer === '__NO_KEY__';
+      let answer = noKey ? '' : rawAnswer.toUpperCase();
+      if (!noKey && !opts[answer]) answer = Object.keys(opts)[0];
+      const optionsOrder = Object.entries(opts).map(([key, value]) => ({ key, value }));
+      return { question: q.question, options: opts, optionsOrder, answer, has_image: !!q.has_image, no_answer_key: noKey };
+    }).filter(Boolean);
 
-    // ── Step 2: optional lecture filter — keep only MCQs relevant to the uploaded lectures ──
-    let filteredOutCount = 0;
-    if (cqFilterFiles.length > 0) {
-      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📖 Reading your lecture file${cqFilterFiles.length !== 1 ? 's' : ''}…</div>`;
+    if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
 
-      // ── Step 2a: extract lecture content as plain text ONCE, up front.
-      // .txt files are read directly. Binary lecture files (PDF/image/pptx) are
-      // sent to Gemini a single time to be transcribed into text. This means the
-      // filtering calls below only ever send plain text — never binary
-      // inline_data — which was conflicting with responseMimeType:'application/json'
-      // and producing unparseable/garbage responses. It also means large lecture
-      // files are uploaded once instead of being re-sent on every filter batch.
-      let lectureText = '';
-      for (const lf of cqFilterFiles) {
-        const isTxt = lf.type === 'text/plain' || lf.name.toLowerCase().endsWith('.txt');
-        if (isTxt) {
-          const txt = await fileToText(lf);
-          lectureText += `--- LECTURE FILE: ${lf.name} ---\n${txt}\n--- END LECTURE FILE ---\n\n`;
-        } else {
-          const lb64 = await fileToBase64(lf);
-          const lmime = lf.type || (lf.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-          let extractedTxt = '';
-          try {
-            const extractData = await callGeminiWithRetry(url, {
-              contents: [{
-                parts: [
-                  { inline_data: { mime_type: lmime, data: lb64 } },
-                  { text: 'Transcribe the full content of this lecture document as plain text. Cover every topic, heading, and concept it discusses. Output plain text only — no commentary, no markdown formatting, no code fences.' }
-                ]
-              }],
-              generationConfig: { temperature: 0, maxOutputTokens: 8192 }
-            }, {});
-            const ecandidate = extractData && extractData.candidates && extractData.candidates[0];
-            extractedTxt = ecandidate ? (ecandidate.content && ecandidate.content.parts || []).map(p => p.text || '').join('') : '';
-          } catch (extractErr) {
-            console.warn(`Lecture extraction failed for ${lf.name}:`, extractErr);
-          }
-          lectureText += `--- LECTURE FILE: ${lf.name} ---\n${extractedTxt || '(no text could be extracted from this file)'}\n--- END LECTURE FILE ---\n\n`;
-        }
-      }
-
-      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''} against your ${cqFilterFiles.length} lecture file${cqFilterFiles.length !== 1 ? 's' : ''}…</div>`;
-      console.log(`[lecture-filter] combined lectureText length: ${lectureText.length} chars (~${Math.round(lectureText.length / 4)} tokens) across ${cqFilterFiles.length} file(s)`);
-
-      // ── Step 2b-pre: Extract a structured topic index from the lecture ONCE.
-      //    This converts the raw lecture text into a clean, numbered list of
-      //    specific topics, concepts, and headings. Filtering against this index
-      //    is faster and more precise than matching against raw lecture prose —
-      //    it avoids false negatives caused by phrasing differences (e.g. the
-      //    lecture says "stroke volume × HR" but the question says "cardiac output").
-      //    Falls back to raw lectureText if the extraction call fails.
-      let lectureTopicIndex = '';
-      try {
-        statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📚 Building topic index from lecture…</div>`;
-        const topicData = await callGeminiWithRetry(url, {
-          contents: [{ parts: [{ text: `You are a curriculum analyst. Read the following lecture content and extract a comprehensive, structured index of every specific topic, concept, term, mechanism, disease, drug, procedure, or heading it covers.
-
-Rules:
-- Each entry must be a concrete, specific concept (e.g. "Frank-Starling mechanism", "beta-1 receptor antagonists", "myocardial infarction ECG changes") — not vague categories
-- Include synonyms and alternative phrasings where relevant (e.g. "cardiac output (stroke volume × heart rate)")
-- One concept per line, numbered
-- No explanations, no prose, no markdown — just the numbered list
-
-LECTURE CONTENT:
-${lectureText}
-
-Output the numbered topic index now:` }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 4096 }
-        }, {});
-        const topicCandidate = topicData && topicData.candidates && topicData.candidates[0];
-        const topicOut = topicCandidate ? (topicCandidate.content && topicCandidate.content.parts || []).map(p => p.text || '').join('') : '';
-        if (topicOut.trim().length > 100) {
-          lectureTopicIndex = topicOut.trim();
-          console.log(`[lecture-filter] topic index built: ${lectureTopicIndex.length} chars, ~${Math.round(lectureTopicIndex.length/4)} tokens`);
-        } else {
-          console.warn('[lecture-filter] topic index too short, falling back to raw lectureText');
-          lectureTopicIndex = lectureText;
-        }
-      } catch (topicErr) {
-        console.warn('[lecture-filter] topic index extraction failed, using raw lectureText:', topicErr);
-        lectureTopicIndex = lectureText;
-      }
-
-      // ── Step 2b-pre2: upload the topic index to File API ──
-      // File API files are scoped to the uploading key's project.
-      // We track which key was used so we can re-upload if the active key rotates.
-      let lectureFileUri    = null;
-      let lectureFileApiKey = null; // which key owns the current URI
-
-      async function ensureLectureFileUri() {
-        const currentKey = getGeminiKey();
-        // Re-upload if we have no URI yet, or if the active key changed
-        if (lectureFileUri && lectureFileApiKey === currentKey) return lectureFileUri;
-        try {
-          const lectureBlob = new Blob([lectureTopicIndex], { type: 'text/plain' });
-          const uploadMeta  = JSON.stringify({ file: { display_name: 'lecture_topic_index.txt' } });
-          const formData    = new FormData();
-          formData.append('metadata', new Blob([uploadMeta], { type: 'application/json' }));
-          formData.append('file', lectureBlob, 'lecture_topic_index.txt');
-          const uploadResp  = await fetch(
-            `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(currentKey)}`,
-            { method: 'POST', body: formData }
-          );
-          if (uploadResp.ok) {
-            const uploadData  = await uploadResp.json();
-            lectureFileUri    = uploadData && uploadData.file && uploadData.file.uri;
-            lectureFileApiKey = currentKey;
-            console.log('[lecture-filter] topic index uploaded, uri:', lectureFileUri, 'key:', currentKey.slice(0,8) + '…');
-          } else {
-            console.warn('[lecture-filter] File API upload HTTP error:', uploadResp.status);
-            lectureFileUri = null;
-          }
-        } catch (uploadErr) {
-          console.warn('[lecture-filter] File API upload failed, falling back to inline text:', uploadErr);
-          lectureFileUri = null;
-        }
-        return lectureFileUri;
-      }
-
-      // Initial upload
-      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 📤 Uploading lecture topic index…</div>`;
-      await ensureLectureFileUri();
-
-      // ── Step 2b: two-phase filtering ──
-      //
-      // PHASE 1 — text-only pass over ALL questions (batches of 25).
-      //   Every question is evaluated using only its text + answer options.
-      //   Uses the File API URI for the lecture index — cheap and fast.
-      //   Scores: 1 = keep, 0 = drop, 2 = uncertain (needs more info).
-      //
-      // PHASE 2 — visual pass over uncertain image-bearing questions only.
-      //   Questions that scored 2 AND have an embedded image are re-evaluated
-      //   with their image attached (batches of 8, inline text for lecture index).
-      //   Uncertain questions WITHOUT an image fall back to the existing
-      //   text-only individual re-evaluation.
-      //
-      // This means images are sent to Gemini only when the text alone was
-      // insufficient — minimising cost and API calls.
-
-      const FILTER_CHUNK_SIZE        = 25; // phase 1 text batches
-      const FILTER_CHUNK_SIZE_IMAGES =  8; // phase 2 image batches
-
-      // allFlags[i] holds the final 0/1 result for cleaned[i]
-      const allFlags = new Array(cleaned.length).fill(null);
-      let filterBatchFailed = false;
-
-      // ── Helper: run one text-only batch, returns array of 0/1/2 flags ──
-      async function runTextBatch(batchQs, batchLabel) {
-        const questionListText = batchQs.map((q, i) => {
-          const optLines = Object.entries(q.options || {}).map(([k, v]) => `   ${k}. ${v}`).join('\n');
-          const hasImgNote = q.image ? ' [has associated image — text only in this pass]' : '';
-          return `${i + 1}. ${q.question}${hasImgNote}\n${optLines}`;
-        }).join('\n\n');
-
-        const taskText = `
-TOPIC INDEX (all specific topics covered in the lecture):`;
-        const taskText2 = `
-
-TASK: For each numbered question, decide if its core subject is covered by the lecture topics above.
-
-Scoring rules:
-- 1 = YES: the question's topic (or a clear synonym/related term) appears in the topic index
-- 0 = NO: the topic is genuinely absent from the lecture — not just phrased differently
-- 2 = UNSURE: you cannot confidently decide from the question text alone (e.g. the question says "What does the image show?" with no other context)
-
-Important:
-- Match on MEANING not exact words. "Cardiac output" and "stroke volume × heart rate" are the same concept → match.
-- If the question tests a sub-topic of something in the index, that counts as a match → 1.
-- Only score 0 when confident the topic is absent. Only score 2 when the text is genuinely ambiguous.
-
-Return ONLY a JSON array with exactly ${batchQs.length} elements (0, 1, or 2), one per question, same order. No other text.
-Example for 4 questions: [1,0,2,1]
-
-QUESTIONS TO EVALUATE:
-${questionListText}`;
-
-        // Re-upload if the active key has rotated since last upload
-        const currentUri = await ensureLectureFileUri();
-        let parts;
-        if (currentUri) {
-          parts = [
-            { text: 'You are a precise academic relevance filter.' + taskText },
-            { file_data: { mime_type: 'text/plain', file_uri: currentUri } },
-            { text: taskText2 }
-          ];
-        } else {
-          parts = [{ text: `You are a precise academic relevance filter.${taskText}\n${lectureTopicIndex}${taskText2}` }];
-        }
-
-        try {
-          const data = await callGeminiWithRetry(url, {
-            contents: [{ parts }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 1024 }
-          }, {});
-          const candidate = data && data.candidates && data.candidates[0];
-          if (!candidate) return null;
-          const textOut = (candidate.content && candidate.content.parts || []).map(p => p.text || '').join('');
-          console.log(`[lecture-filter] ${batchLabel} raw:`, textOut);
-          let cj = textOut.replace(/```json|```/g, '').trim();
-          if (cj.startsWith('[') && !cj.endsWith(']')) cj = cj.replace(/[,\s]+$/, '') + ']';
-          const parsed = JSON.parse(cj);
-          if (Array.isArray(parsed) && parsed.length >= batchQs.length) return parsed.slice(0, batchQs.length);
-          if (Array.isArray(parsed) && parsed.length > 0) return batchQs.map((_, i) => parsed[i] !== undefined ? parsed[i] : 2);
-          return null;
-        } catch (e) {
-          console.warn(`[lecture-filter] ${batchLabel} failed:`, e);
-          return null;
-        }
-      }
-
-      // ── PHASE 1: text-only pass over all questions ──
-      const p1Total = Math.ceil(cleaned.length / FILTER_CHUNK_SIZE);
-      for (let bi = 0; bi < p1Total; bi++) {
-        const start   = bi * FILTER_CHUNK_SIZE;
-        const batchQs = cleaned.slice(start, Math.min(start + FILTER_CHUNK_SIZE, cleaned.length));
-        if (p1Total > 1) {
-          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🎯 Filtering questions against lecture… (${bi + 1}/${p1Total})</div>`;
-        }
-        const flags = await runTextBatch(batchQs, `phase-1 batch ${bi + 1}/${p1Total}`);
-        if (flags === null) {
-          filterBatchFailed = true;
-          batchQs.forEach((_, i) => { allFlags[start + i] = 2; }); // treat failure as uncertain
-        } else {
-          flags.forEach((f, i) => { allFlags[start + i] = f; });
-        }
-      }
-
-      // ── PHASE 2: visual re-evaluation for uncertain image-bearing questions ──
-      // Collect all uncertain questions that have an image
-      const visualReaskPool = cleaned
-        .map((q, i) => ({ q, origIdx: i }))
-        .filter(({ q, origIdx }) => allFlags[origIdx] === 2 && !!q.image);
-
-      if (visualReaskPool.length > 0) {
-        console.log(`[lecture-filter] phase-2: ${visualReaskPool.length} uncertain image question(s) will be re-evaluated visually`);
-        const p2Total = Math.ceil(visualReaskPool.length / FILTER_CHUNK_SIZE_IMAGES);
-        for (let bi = 0; bi < p2Total; bi++) {
-          const batchItems = visualReaskPool.slice(bi * FILTER_CHUNK_SIZE_IMAGES, (bi + 1) * FILTER_CHUNK_SIZE_IMAGES);
-          const batchQs    = batchItems.map(({ q }) => q);
-          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🖼️ Re-evaluating ${visualReaskPool.length} borderline image question${visualReaskPool.length !== 1 ? 's' : ''} visually… (${bi + 1}/${p2Total})</div>`;
-
-          // Build parts: inline lecture index + interleaved question images
-          const introText = `You are a precise academic relevance filter.
-TOPIC INDEX (all specific topics covered in the lecture):
-${lectureTopicIndex}
-
-TASK: For each numbered question, decide if its core subject is covered by the lecture topics above.
-These questions were ambiguous from text alone — use the attached image for each to identify the topic.
-
-Scoring rules:
-- 1 = YES: the topic (or synonym/sub-topic) is covered in the index
-- 0 = NO: the topic is genuinely absent
-
-Important:
-- Each question's image follows its text inline.
-- Use the image content (e.g. ECG → cardiac electrophysiology, histology slide → relevant organ/pathology).
-- Match on meaning, not exact words.
-
-Return ONLY a JSON array with exactly ${batchQs.length} elements (1 or 0), one per question, same order. No other text.
-Example for 3 questions: [1,0,1]
-
-QUESTIONS TO EVALUATE (image follows each question):`;
-
-          const parts = [{ text: introText }];
-          batchQs.forEach((q, i) => {
-            const optLines = Object.entries(q.options || {}).map(([k, v]) => `   ${k}. ${v}`).join('\n');
-            parts.push({ text: `\n${i + 1}. ${q.question}\n${optLines}` });
-            const b64  = q.image.split(',')[1] || '';
-            const mime = q.image.match(/^data:([^;]+)/)?.[1] || 'image/jpeg';
-            parts.push({ inline_data: { mime_type: mime, data: b64 } });
-          });
-
-          try {
-            const data = await callGeminiWithRetry(url, {
-              contents: [{ parts }],
-              generationConfig: { temperature: 0, maxOutputTokens: 256 } // no responseMimeType with images
-            }, {});
-            const candidate = data && data.candidates && data.candidates[0];
-            const textOut   = candidate ? (candidate.content && candidate.content.parts || []).map(p => p.text || '').join('') : '';
-            console.log(`[lecture-filter] phase-2 batch ${bi + 1} raw:`, textOut);
-            let cj = textOut.replace(/```json|```/g, '').trim();
-            if (cj.startsWith('[') && !cj.endsWith(']')) cj = cj.replace(/[,\s]+$/, '') + ']';
-            const parsed = JSON.parse(cj);
-            if (Array.isArray(parsed)) {
-              batchItems.forEach(({ origIdx }, i) => {
-                const val = parsed[i];
-                allFlags[origIdx] = (val === 0 || val === 1) ? val : 1; // default keep if unclear
-              });
-            } else {
-              batchItems.forEach(({ origIdx }) => { allFlags[origIdx] = 1; }); // keep on parse failure
-            }
-          } catch (e) {
-            console.warn(`[lecture-filter] phase-2 batch ${bi + 1} failed, keeping:`, e);
-            batchItems.forEach(({ origIdx }) => { allFlags[origIdx] = 1; });
-            filterBatchFailed = true;
-          }
-        }
-      }
-
-      // ── Text-only re-evaluation for remaining uncertain questions (no image) ──
-      // Reuses runTextBatch so all uncertain questions are sent in batches of 25
-      // (one API call per batch) instead of one call per question.
-      const textReaskPool = cleaned
-        .map((q, i) => ({ q, origIdx: i }))
-        .filter(({ origIdx }) => allFlags[origIdx] === 2);
-
-      if (textReaskPool.length > 0) {
-        console.log(`[lecture-filter] text re-evaluation: ${textReaskPool.length} uncertain question(s) without image`);
-        const p3Total = Math.ceil(textReaskPool.length / FILTER_CHUNK_SIZE);
-        for (let bi = 0; bi < p3Total; bi++) {
-          const batchItems = textReaskPool.slice(bi * FILTER_CHUNK_SIZE, (bi + 1) * FILTER_CHUNK_SIZE);
-          const batchQs    = batchItems.map(({ q }) => q);
-          statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🔍 Double-checking ${textReaskPool.length} borderline question${textReaskPool.length !== 1 ? 's' : ''}…${p3Total > 1 ? ` (batch ${bi + 1}/${p3Total})` : ''}</div>`;
-          const flags = await runTextBatch(batchQs, `text re-eval batch ${bi + 1}`);
-          if (flags) {
-            batchItems.forEach(({ origIdx }, i) => {
-              const val = flags[i];
-              // Phase-3 re-eval: collapse 2 (unsure) -> keep (1)
-              allFlags[origIdx] = (val === 0) ? 0 : 1;
-              console.log(`[lecture-filter] text re-eval Q${origIdx + 1} -> ${allFlags[origIdx]}`);
-            });
-          } else {
-            // Batch failed entirely -- keep all questions in this batch
-            batchItems.forEach(({ origIdx }) => { allFlags[origIdx] = 1; });
-            filterBatchFailed = true;
-          }
-        }
-      }
-
-      // Fallback: any slot still null defaults to keep
-      for (let i = 0; i < allFlags.length; i++) if (allFlags[i] === null) allFlags[i] = 1;
-
-      const kept = allFlags.filter(f => f === 1).length;
-      console.log(`[lecture-filter] final: keeping ${kept}/${cleaned.length} questions`);
-
-      if (allFlags.length === cleaned.length) {
-        const before = cleaned.length;
-        cleaned = cleaned.filter((_, i) => allFlags[i] === 1);
-        filteredOutCount = before - cleaned.length;
-        if (!cleaned.length) {
-          throw new Error('No questions remained after filtering against the uploaded lecture(s) — the MCQ file(s) may not overlap with this curriculum. Try different files, or remove the lecture filter to keep all questions.');
-        }
-        if (filterBatchFailed) {
-          statusEl.insertAdjacentHTML('beforeend',
-            `<div class="cq-status warning" style="margin-top:6px;">⚠️ One or more filter batches encountered an error — those questions were kept to avoid data loss.</div>`);
-        }
-      } else {
-        statusEl.insertAdjacentHTML('beforeend',
-          `<div class="cq-status warning" style="margin-top:6px;">⚠️ Lecture filter could not be fully applied (unexpected AI response) — all extracted questions were kept.</div>`);
-      }
+    // Extract embedded images for questions that have them
+    const imageQuestions = cleaned.filter(q => q.has_image);
+    if (imageQuestions.length > 0) {
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting images for ${imageQuestions.length} question${imageQuestions.length !== 1 ? 's' : ''}… please wait.</div>`;
+      await extractImagesForQuestions(cleaned, base64Data, mimeType, apiKey);
     }
 
-        cqGeneratedQuestions = cleaned;
+    cqGeneratedQuestions = cleaned;
 
     // Handle questions without answer keys
     const noKeyQs = cleaned.filter(q => q.no_answer_key);
@@ -6363,7 +5043,7 @@ QUESTIONS TO EVALUATE (image follows each question):`;
 
     let warn = '';
     if (finishReason === 'MAX_TOKENS') {
-      warn = ` ⚠️ The response may have been cut off because a document was very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
+      warn = ` ⚠️ The response may have been cut off because the document is very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
     }
 
     const imgCount    = cleaned.filter(q => q.image).length;
@@ -6371,13 +5051,12 @@ QUESTIONS TO EVALUATE (image follows each question):`;
     const noKeyCount  = noKeyQs.length;
     const aiCount     = cleaned.filter(q => q.ai_answered).length;
     const guessCount  = cleaned.filter(q => q.ai_guessed).length;
-    const filterNote  = filteredOutCount > 0 ? ` · 🎯 ${filteredOutCount} unrelated question${filteredOutCount !== 1 ? 's' : ''} filtered out` : '';
     const solveNote   = cqAiSolveAllToggle && aiCount > 0
       ? ` · 🤖 ${aiCount} AI-solved${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
       : noKeyCount > 0 && cqAiAnswerToggle && aiCount > 0
       ? ` · 🤖 ${aiCount} AI-answered${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
       : noKeyCount > 0 ? ` · ⚠️ ${noKeyCount} without key` : '';
-    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}${filterNote}${solveNote}. Review below, then save.${warn}</div>`;
+    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${imgNote}${solveNote}. Review below, then save.${warn}</div>`;
     if (noKeyCount > 0 && !cqAiAnswerToggle && !cqAiSolveAllToggle) {
       statusEl.insertAdjacentHTML('beforeend',
         `<div class="cq-status warning" style="margin-top:6px;">⚠️ ${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong>⚠️ No Key</strong> badge. You can set the correct answer manually, or enable <strong>🤖 AI Answer Mode</strong> before extracting to let AI answer them automatically.</div>`
@@ -6395,10 +5074,13 @@ QUESTIONS TO EVALUATE (image follows each question):`;
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
-        <strong>The bad key has been flagged. Add a new key in the key manager above and try again.</strong><br>
+        <strong>Please enter a new Gemini API key above and try again.</strong><br>
         <small>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">aistudio.google.com/apikey</a></small>
       </div>`;
-      _refreshKmPanel();
+      // Clear the stored bad key and focus the input
+      setGeminiKey('');
+      const inp = document.getElementById('cqApiKeyInput');
+      if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
     } else {
       statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
     }
@@ -6460,21 +5142,23 @@ function fileToText(file) {
 }
 
 async function generateQuizFromLecture() {
+  const apiKeyInput   = document.getElementById('cqApiKeyInput');
   const titleInput    = document.getElementById('cqLectureTitleInput');
   const qCountInput   = document.getElementById('cqQCountInput');
   const promptInput   = document.getElementById('cqCustomPromptInput');
   const statusEl      = document.getElementById('cqStatus');
   const genBtn        = document.getElementById('cqLectureGenBtn');
 
-  const apiKey = getGeminiKey().trim();
+  const apiKey = (apiKeyInput ? apiKeyInput.value : getGeminiKey()).trim();
   const title  = (titleInput  ? titleInput.value  : cqGeneratedTitle).trim();
   const qCount = (qCountInput ? qCountInput.value : cqQuestionCount).trim();
   const prompt = (promptInput ? promptInput.value : cqCustomPrompt).trim();
 
-  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please add at least one Gemini API key in the key manager above.</div>`; return; }
+  if (!apiKey)        { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please enter your Gemini API key first.</div>`; return; }
   if (!cqLectureFile) { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload a lecture file first.</div>`; return; }
   if (!title)         { statusEl.innerHTML = `<div class="cq-status error">⚠️ Please give this quiz a title.</div>`; return; }
 
+  setGeminiKey(apiKey);
   cqGeneratedTitle = title;
   cqCustomPrompt   = prompt;
   cqQuestionCount  = qCount;
@@ -6581,10 +5265,13 @@ async function generateQuizFromLecture() {
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
-        <strong>The bad key has been flagged. Add a new key in the key manager above and try again.</strong><br>
+        <strong>Please enter a new Gemini API key above and try again.</strong><br>
         <small>Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">aistudio.google.com/apikey</a></small>
       </div>`;
-      _refreshKmPanel();
+      // Clear the stored bad key and focus the input
+      setGeminiKey('');
+      const inp = document.getElementById('cqApiKeyInput');
+      if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
     } else {
       statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
     }
@@ -6664,7 +5351,7 @@ function renderCQPreview() {
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
           <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqRemoveImage(${i})" type="button">🗑️ Remove Image</button>
-          ${(cqSelectedFiles.length || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
+          ${(cqSelectedFile || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
             style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
         </div>
       </div>`;
@@ -6679,7 +5366,7 @@ function renderCQPreview() {
             📎 Upload Image Manually
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
-          ${(cqSelectedFiles.length || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
+          ${(cqSelectedFile || cqLectureFile) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
             style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
         </div>
       </div>`;
@@ -6889,7 +5576,7 @@ async function cqReExtractImage(idx) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
   const apiKey = getGeminiKey();
   if (!apiKey) { alert('Please enter your Gemini API key first.'); return; }
-  const sourceFile = (cqSelectedFiles && cqSelectedFiles[0]) || cqLectureFile;
+  const sourceFile = cqSelectedFile || cqLectureFile;
   if (!sourceFile) { alert('The original source file is no longer available. Please re-upload the file first.'); return; }
 
   const statusEl = document.getElementById(`cqReaskStatus_${idx}`);
@@ -6925,7 +5612,7 @@ async function cqReaskQuestion(idx) {
     alert('Please enter your Gemini API key first.');
     return;
   }
-  if (!cqSelectedFiles.length && !cqLectureFile) {
+  if (!cqSelectedFile && !cqLectureFile) {
     alert('The original source file is no longer available. Please re-upload the file first.');
     return;
   }
@@ -6946,7 +5633,7 @@ Return ONLY a JSON array with ONE object in the same format:
 [{"question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A","has_image":false}]`;
 
   try {
-    const sourceFile = (cqSelectedFiles && cqSelectedFiles[0]) || cqLectureFile;
+    const sourceFile = cqSelectedFile || cqLectureFile;
     const base64Data = await fileToBase64(sourceFile);
     const mimeType   = sourceFile.type ||
       (sourceFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
@@ -7037,7 +5724,7 @@ async function saveGeneratedCustomQuiz() {
   await saveCustomQuizzesList(quizzes);
 
   cqGeneratedQuestions = null;
-  cqSelectedFiles = [];
+  cqSelectedFile = null;
   cqLectureFile = null;
   cqGeneratedTitle = '';
 
@@ -7466,7 +6153,7 @@ async function executeSplitQuiz() {
   // If preview context, also clear preview state
   if (cqSplitState.context === 'preview') {
     cqGeneratedQuestions = null;
-    cqSelectedFiles = [];
+    cqSelectedFile = null;
     cqLectureFile = null;
     cqGeneratedTitle = '';
   }
