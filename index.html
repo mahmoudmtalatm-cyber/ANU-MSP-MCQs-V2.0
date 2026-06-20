@@ -1565,181 +1565,188 @@
 .curr-tag.mod { background: #F3E5F5; border-color: #CE93D8; color: #4A148C; }
 .curr-tag.subj { background: #E8F5E9; border-color: #A5D6A7; color: #1B5E20; }
 
-/* ── EXAM VIEW — Moodle one-question-per-page ── */
+/* ── EXAM VIEW — Moodle 4.x scrollable quiz (Reed / Alex Med style) ── */
+
 /* Quiz mode chooser on home */
-.mode-chooser { display: flex; gap: 8px; margin-bottom: 0; }
+.mode-chooser { display:flex; gap:8px; margin-bottom:0; }
 .mode-btn {
-  flex: 1; padding: 10px 8px;
-  border: 2px solid #B0D4F0; border-radius: 9px;
-  background: #F7FBFF; font-family: var(--font);
-  font-size: .82rem; font-weight: 700; color: var(--text-muted);
-  cursor: pointer; text-align: center; transition: all .15s;
+  flex:1; padding:10px 8px; border:2px solid #B0D4F0; border-radius:9px;
+  background:#F7FBFF; font-family:var(--font); font-size:.82rem; font-weight:700;
+  color:var(--text-muted); cursor:pointer; text-align:center; transition:all .15s;
 }
-.mode-btn:hover { border-color: var(--accent); color: var(--accent); background: #EEF7FF; }
-.mode-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+.mode-btn:hover { border-color:var(--accent); color:var(--accent); background:#EEF7FF; }
+.mode-btn.active { border-color:var(--accent); background:var(--accent); color:#fff; }
 
-/* Outer shell */
-#examView { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f1f1f1; }
+/* ── Outer shell ── */
+#examView { flex:1; display:flex; flex-direction:column; overflow:hidden; background:#f2f2f2; }
 
-/* Top nav bar (Moodle-style white bar) */
+/* ── Moodle top breadcrumb/nav bar ── */
 .ev-topbar {
-  background: #fff; border-bottom: 1px solid #dee2e6;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; min-height: 52px; flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  background:#fff; border-bottom:1px solid #ddd;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 20px; min-height:48px; flex-shrink:0;
+  box-shadow:0 1px 2px rgba(0,0,0,.06);
 }
-.ev-topbar-left { display: flex; align-items: center; gap: 10px; }
-.ev-quiz-title { font-size: 1rem; font-weight: 700; color: #333; }
-.ev-topbar-right { display: flex; align-items: center; gap: 12px; }
+.ev-quiz-title { font-size:.95rem; font-weight:700; color:#333; }
+.ev-topbar-right { display:flex; align-items:center; gap:10px; }
 
-/* Timer in top bar */
-.ev-timer-box {
-  background: var(--accent); color: #fff; border-radius: 6px;
-  padding: 5px 14px; display: flex; align-items: center; gap: 8px;
-  font-size: .9rem; font-weight: 700;
+/* ── Body: left scrollable area + right fixed sidebar ── */
+.ev-body { flex:1; display:flex; overflow:hidden; }
+
+/* ── Left: all questions, scrollable ── */
+.ev-content {
+  flex:1; overflow-y:auto;
+  padding:18px 20px 32px 20px;
+  display:flex; flex-direction:column; gap:14px;
 }
-.ev-timer-label { font-size: .72rem; opacity: .85; font-weight: 600; letter-spacing: .5px; }
-.ev-timer-val { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 1.5px; }
-.ev-timer-val.urgent { animation: pulse 1s ease-in-out infinite; }
 
-/* Main 2-col layout */
-.ev-body { flex: 1; display: flex; flex-direction: row; overflow: hidden; }
+/* "Finish attempt" bar at very bottom of question list */
+.ev-finish-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 2px 2px; margin-top:4px;
+}
+.ev-finish-bar-info { font-size:.83rem; color:#666; }
+.ev-finish-btn {
+  background:#fff; border:1px solid #999; border-radius:4px;
+  padding:7px 18px; font-family:var(--font); font-size:.86rem; font-weight:700;
+  color:#333; cursor:pointer; transition:background .12s;
+}
+.ev-finish-btn:hover { background:#f0f0f0; }
 
-/* Left: question content */
-.ev-content { flex: 1; overflow-y: auto; padding: 24px 28px 40px; display: flex; flex-direction: column; }
+/* ── Individual question block (Moodle .que) ── */
+.ev-que-card {
+  background:#fff; border:1px solid #ccc; border-radius:3px;
+  overflow:hidden; scroll-margin-top:14px;
+}
 
-/* White question card */
-.ev-que-card { background: #fff; border: 1px solid #dee2e6; border-radius: 4px; overflow: hidden; }
-
-/* Question header (light blue Moodle strip) */
+/* Question header strip — light grey, like Moodle 4.x */
 .ev-que-header {
-  background: #d9edf7; border-bottom: 1px solid #bce8f1;
-  padding: 10px 16px; display: flex; align-items: center;
-  justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  background:#f8f8f8; border-bottom:1px solid #e0e0e0;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:7px 14px; flex-wrap:wrap; gap:6px;
 }
-.ev-que-info { display: flex; align-items: center; gap: 10px; }
-.ev-que-num-badge {
-  background: #31708f; color: #fff; border-radius: 3px;
-  padding: 3px 10px; font-size: .82rem; font-weight: 800; white-space: nowrap;
-}
-.ev-que-status { font-size: .8rem; color: #31708f; font-weight: 600; }
+.ev-que-info { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.ev-que-num { font-size:.84rem; font-weight:800; color:#444; }
+.ev-que-pts { font-size:.76rem; color:#888; }
+.ev-que-status { font-size:.76rem; color:#777; font-style:italic; }
+
+/* Flag button — top-right of header, matches Moodle bookmark icon */
 .ev-flag-btn {
-  background: none; border: 1px solid #bce8f1; border-radius: 3px;
-  padding: 4px 9px; cursor: pointer; font-size: .78rem; font-weight: 700;
-  color: #31708f; font-family: var(--font);
-  display: flex; align-items: center; gap: 5px; transition: all .15s; white-space: nowrap;
+  background:none; border:1px solid #ccc; border-radius:3px;
+  padding:3px 9px; cursor:pointer; font-size:.76rem; font-weight:700;
+  color:#555; font-family:var(--font);
+  display:flex; align-items:center; gap:5px; transition:all .13s; white-space:nowrap;
 }
-.ev-flag-btn:hover { background: #bce8f1; }
-.ev-flag-btn.flagged { background: #E53935; color: #fff; border-color: #C62828; }
-.ev-flag-icon { font-size: .9rem; }
+.ev-flag-btn:hover { background:#eee; border-color:#aaa; }
+.ev-flag-btn.flagged { background:#c62828; color:#fff; border-color:#b71c1c; }
 
 /* Question body */
-.ev-que-body { padding: 20px 22px 18px; }
-.ev-que-text { font-size: 1rem; line-height: 1.6; color: #333; margin-bottom: 18px; font-weight: 500; }
+.ev-que-body { padding:16px 18px 14px; }
+.ev-que-text {
+  font-size:.96rem; line-height:1.65; color:#222;
+  margin-bottom:14px; font-weight:500;
+}
 .ev-que-image-wrap {
-  margin-bottom: 16px; border: 1px solid #dee2e6; border-radius: 4px;
-  background: #f8f9fa; display: inline-flex; max-width: 100%;
+  margin-bottom:14px; border:1px solid #ddd; border-radius:3px;
+  background:#fafafa; display:inline-flex; max-width:100%;
 }
-.ev-que-image-wrap img { max-width: 100%; max-height: 280px; object-fit: contain; display: block; }
+.ev-que-image-wrap img { max-width:100%; max-height:260px; object-fit:contain; display:block; }
 
-/* Radio options */
-.ev-options-list { display: flex; flex-direction: column; gap: 0; }
+/* Answer options — Moodle radio style */
+.ev-options-list { display:flex; flex-direction:column; gap:0; }
 .ev-option-row {
-  display: flex; align-items: flex-start; gap: 0;
-  padding: 8px 6px; border-radius: 3px; cursor: pointer;
-  transition: background .12s; border: 1px solid transparent;
+  display:flex; align-items:flex-start;
+  padding:7px 10px; border-radius:3px; cursor:pointer;
+  transition:background .1s; border:1px solid transparent; margin-bottom:1px;
 }
-.ev-option-row:hover { background: #f0f7ff; border-color: #b8d4ec; }
-.ev-option-row.selected { background: #ddeeff; border-color: #9ac0e0; }
+.ev-option-row:hover { background:#eef5fb; border-color:#b3d1ea; }
+.ev-option-row.selected { background:#ddeeff; border-color:#7ab8e0; }
 .ev-option-row input[type="radio"] {
-  margin: 3px 10px 0 4px; flex-shrink: 0;
-  accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer;
+  margin:3px 10px 0 2px; flex-shrink:0;
+  accent-color:#1B8AC4; width:15px; height:15px; cursor:pointer;
 }
-.ev-option-text { font-size: .96rem; line-height: 1.5; color: #333; }
+.ev-option-text { font-size:.94rem; line-height:1.5; color:#222; }
 
-/* Prev / Next navigation bar */
-.ev-nav-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: 22px; gap: 10px; flex-wrap: wrap;
-}
-.ev-nav-btn {
-  background: #6c757d; color: #fff; border: none; border-radius: 4px;
-  padding: 8px 20px; font-family: var(--font); font-size: .88rem; font-weight: 700;
-  cursor: pointer; display: flex; align-items: center; gap: 6px; transition: filter .15s;
-}
-.ev-nav-btn:hover:not(:disabled) { filter: brightness(1.15); }
-.ev-nav-btn:disabled { opacity: .45; cursor: not-allowed; }
-.ev-nav-btn.primary { background: var(--accent); }
-.ev-finish-link {
-  color: #c62828; text-decoration: underline; font-size: .88rem; font-weight: 700;
-  background: none; border: none; cursor: pointer; font-family: var(--font); padding: 0;
-}
-.ev-finish-link:hover { color: #a00; }
-
-/* Right sidebar (Moodle quiz navigation block) */
+/* ── Right sidebar: Quiz Navigation block ── */
 .ev-sidebar {
-  width: 210px; flex-shrink: 0; overflow-y: auto;
-  background: #fff; border-left: 1px solid #dee2e6;
-  display: flex; flex-direction: column;
+  width:185px; flex-shrink:0;
+  border-left:1px solid #ddd; background:#fff;
+  display:flex; flex-direction:column; overflow:hidden;
 }
-.ev-block-header {
-  background: #6c757d; color: #fff; padding: 8px 14px;
-  font-size: .82rem; font-weight: 800; letter-spacing: .3px;
-  text-transform: uppercase; flex-shrink: 0;
-}
-.ev-block-body { padding: 12px 14px; flex: 1; overflow-y: auto; }
-.ev-nav-section-title {
-  font-size: .72rem; font-weight: 700; color: #6c757d;
-  text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px;
-}
-.ev-progress-row { font-size: .73rem; color: #6c757d; margin-bottom: 10px; line-height: 1.5; }
 
-/* Nav squares */
-.ev-nav-grid { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+/* Sidebar header — Moodle 4.x uses a blue-ish dark header */
+.ev-block-header {
+  background:#3d5a7a; color:#fff;
+  padding:9px 13px; font-size:.79rem; font-weight:800;
+  letter-spacing:.2px; flex-shrink:0; text-transform:uppercase;
+}
+
+/* Scrollable nav body */
+.ev-block-body { flex:1; overflow-y:auto; padding:11px 12px; }
+.ev-nav-label { font-size:.69rem; font-weight:700; color:#777; text-transform:uppercase; letter-spacing:.6px; margin-bottom:8px; }
+
+/* Navigation squares — exact Moodle 4 look */
+.ev-nav-grid { display:flex; flex-wrap:wrap; gap:3px; margin-bottom:12px; }
 .ev-nav-sq {
-  position: relative; width: 30px; height: 30px;
-  background: #fff; border: 1px solid #6c757d; border-radius: 3px;
-  font-family: var(--font); font-size: .76rem; font-weight: 700;
-  color: #333; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .1s, border-color .1s;
+  position:relative; width:30px; height:30px;
+  background:#fff; border:1px solid #999; border-radius:3px;
+  font-family:var(--font); font-size:.74rem; font-weight:700;
+  color:#444; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .1s, border-color .1s;
 }
-.ev-nav-sq:hover { background: #e9ecef; }
-.ev-nav-sq.ev-current { border: 2px solid #31708f; background: #d9edf7; color: #31708f; font-weight: 900; }
-.ev-nav-sq.ev-answered { background: #d9edf7; border-color: #31708f; color: #31708f; }
-.ev-nav-sq .ev-flag-triangle {
-  position: absolute; top: 0; right: 0; width: 0; height: 0; border-style: solid;
-  border-width: 0 9px 9px 0; border-color: transparent #E53935 transparent transparent; display: none;
+.ev-nav-sq:hover { background:#e8e8e8; border-color:#777; }
+/* Answered: light blue, matching Moodle */
+.ev-nav-sq.ev-answered { background:#b8d9f0; border-color:#4a90c4; color:#1a4f72; }
+/* Flagged triangle in top-right corner */
+.ev-nav-sq .ev-flag-tri {
+  position:absolute; top:0; right:0; width:0; height:0;
+  border-style:solid; border-width:0 8px 8px 0;
+  border-color:transparent #c62828 transparent transparent; display:none;
 }
-.ev-nav-sq.ev-flagged .ev-flag-triangle { display: block; }
+.ev-nav-sq.ev-flagged .ev-flag-tri { display:block; }
 
 /* Legend */
-.ev-legend { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
-.ev-legend-row { display: flex; align-items: center; gap: 8px; font-size: .73rem; color: #555; }
+.ev-legend { display:flex; flex-direction:column; gap:5px; margin-bottom:10px; }
+.ev-legend-row { display:flex; align-items:center; gap:7px; font-size:.71rem; color:#555; }
 .ev-legend-sq {
-  width: 18px; height: 18px; border-radius: 3px; flex-shrink: 0;
-  border: 1px solid #6c757d; background: #fff;
+  width:16px; height:16px; border-radius:3px; flex-shrink:0;
+  border:1px solid #999; background:#fff;
 }
-.ev-legend-sq.answered { background: #d9edf7; border-color: #31708f; }
-.ev-legend-sq.flagged-eg { position: relative; background: #fff; overflow: hidden; }
-.ev-legend-sq.flagged-eg::after {
-  content: ''; position: absolute; top: 0; right: 0; width: 0; height: 0;
-  border-style: solid; border-width: 0 8px 8px 0;
-  border-color: transparent #E53935 transparent transparent;
+.ev-legend-sq.l-answered { background:#b8d9f0; border-color:#4a90c4; }
+.ev-legend-sq.l-flagged { position:relative; overflow:hidden; }
+.ev-legend-sq.l-flagged::after {
+  content:''; position:absolute; top:0; right:0;
+  border-style:solid; border-width:0 7px 7px 0;
+  border-color:transparent #c62828 transparent transparent;
 }
 
-/* Finish button in sidebar */
-.ev-sidebar-finish { padding: 12px 14px; border-top: 1px solid #dee2e6; flex-shrink: 0; }
+/* ── Timer — bottom of sidebar ── */
+.ev-timer-wrap {
+  flex-shrink:0; border-top:1px solid #ddd; padding:10px 12px;
+  background:#fff; display:flex; flex-direction:column; gap:2px;
+}
+.ev-timer-label { font-size:.67rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:.5px; }
+.ev-timer-val {
+  font-size:1.25rem; font-weight:900; color:#1B8AC4;
+  font-variant-numeric:tabular-nums; letter-spacing:1.5px;
+}
+.ev-timer-val.urgent { color:#c62828; animation:pulse 1s ease-in-out infinite; }
+
+/* Finish attempt button at very bottom of sidebar */
+.ev-sidebar-finish { padding:10px 12px; border-top:1px solid #e0e0e0; flex-shrink:0; }
 .ev-sidebar-finish-btn {
-  width: 100%; background: #fff; color: #333; border: 1px solid #6c757d;
-  border-radius: 4px; padding: 9px 12px; font-family: var(--font);
-  font-size: .82rem; font-weight: 700; cursor: pointer; text-align: center; transition: background .15s;
+  width:100%; background:#fff; color:#333; border:1px solid #999;
+  border-radius:4px; padding:8px 10px; font-family:var(--font);
+  font-size:.79rem; font-weight:700; cursor:pointer; text-align:center;
+  transition:background .13s;
 }
-.ev-sidebar-finish-btn:hover { background: #f8f9fa; }
+.ev-sidebar-finish-btn:hover { background:#f0f0f0; }
 
-@media (max-width: 700px) {
-  .ev-sidebar { width: 150px; }
-  .ev-content { padding: 16px 14px 40px; }
+@media (max-width:700px) {
+  .ev-sidebar { width:140px; }
+  .ev-content { padding:12px 10px 28px; }
+  .ev-nav-sq { width:26px; height:26px; font-size:.7rem; }
 }
 
 /* API key prompt for explanations */
@@ -2024,60 +2031,48 @@
   </div>
 
   <!-- ══════════════════════════════════════════════
-       EXAM VIEW SCREEN  (Moodle one-question-per-page)
+       EXAM VIEW — Moodle scrollable all-questions layout
   ══════════════════════════════════════════════ -->
   <div id="examView" class="hidden">
 
-    <!-- Top navigation bar -->
+    <!-- Moodle-style top bar (breadcrumb / title row) -->
     <div class="ev-topbar">
-      <div class="ev-topbar-left">
-        <div class="ev-quiz-title">🎓&nbsp; ANU MSP — Exam</div>
-      </div>
+      <span class="ev-quiz-title">🎓&nbsp; ANU MSP — Exam Mode</span>
       <div class="ev-topbar-right">
         <div id="authAreaExam" style="display:flex;align-items:center;gap:8px;"></div>
-        <div class="ev-timer-box">
-          <span class="ev-timer-label">TIME LEFT</span>
-          <span class="ev-timer-val" id="examTimerVal">00:00</span>
-        </div>
       </div>
     </div>
 
-    <!-- Body: question area + sidebar -->
+    <!-- Two-column body -->
     <div class="ev-body">
 
-      <!-- Left: single question content -->
+      <!-- Left: all questions, scrollable -->
       <div class="ev-content" id="evContent">
-        <!-- Question card, rendered by JS -->
-        <div class="ev-que-card" id="evQueCard"></div>
+        <div id="evQuestionsCol"></div>
 
-        <!-- Prev / Next nav bar -->
-        <div class="ev-nav-bar">
-          <button class="ev-nav-btn" id="evPrevBtn" onclick="examGoTo(examCurrentIdx - 1)">◀ Previous</button>
-          <button class="ev-finish-link" onclick="confirmExamFinish()">Finish attempt…</button>
-          <button class="ev-nav-btn primary" id="evNextBtn" onclick="examGoTo(examCurrentIdx + 1)">Next ▶</button>
+        <!-- Finish bar at bottom of questions -->
+        <div class="ev-finish-bar">
+          <span class="ev-finish-bar-info" id="evAnsweredCount"></span>
+          <button class="ev-finish-btn" onclick="confirmExamFinish()">Finish attempt…</button>
         </div>
       </div>
 
-      <!-- Right: Moodle-style quiz navigation block -->
+      <!-- Right: Quiz Navigation block -->
       <div class="ev-sidebar">
         <div class="ev-block-header">Quiz Navigation</div>
         <div class="ev-block-body">
-          <div class="ev-progress-row" id="evProgressRow">0 / 0 answered</div>
-          <div class="ev-nav-section-title">Questions</div>
+          <div class="ev-nav-label">Questions</div>
           <div class="ev-nav-grid" id="examNavGrid"></div>
-
-          <!-- Legend -->
           <div class="ev-legend">
-            <div class="ev-legend-row">
-              <div class="ev-legend-sq"></div> Not answered
-            </div>
-            <div class="ev-legend-row">
-              <div class="ev-legend-sq answered"></div> Answered
-            </div>
-            <div class="ev-legend-row">
-              <div class="ev-legend-sq flagged-eg"></div> Flagged
-            </div>
+            <div class="ev-legend-row"><div class="ev-legend-sq"></div>Not answered</div>
+            <div class="ev-legend-row"><div class="ev-legend-sq l-answered"></div>Answered</div>
+            <div class="ev-legend-row"><div class="ev-legend-sq l-flagged"></div>Flagged</div>
           </div>
+        </div>
+        <!-- Timer — bottom-right corner, exactly like Alexandria exams -->
+        <div class="ev-timer-wrap">
+          <div class="ev-timer-label">Time Remaining</div>
+          <div class="ev-timer-val" id="examTimerVal">00:00</div>
         </div>
         <div class="ev-sidebar-finish">
           <button class="ev-sidebar-finish-btn" onclick="confirmExamFinish()">Finish attempt</button>
@@ -2466,7 +2461,7 @@ let examFlagged  = new Set();
 let examTimerInt = null;
 let examTimeLeft = 0;
 
-/* ── Exam current page index ── */
+/* ── Exam state ── */
 let examCurrentIdx = 0;
 
 function startExamView() {
@@ -2494,93 +2489,103 @@ function startExamView() {
     }
   }
 
-  selectedSubject  = involvedSubjects.length === 1 ? involvedSubjects[0] : involvedSubjects.join(' + ');
-  currentLecture   = totalLecCount === 1
+  selectedSubject   = involvedSubjects.length === 1 ? involvedSubjects[0] : involvedSubjects.join(' + ');
+  currentLecture    = totalLecCount === 1
     ? [...selectedLectures[involvedSubjects[0]]][0]
     : `${totalLecCount} lectures (${involvedSubjects.join(', ')})`;
-  currentQuestions = combined;
+  currentQuestions  = combined;
   currentQuizSource = 'curriculum';
-  examAnswers  = {};
-  examFlagged  = new Set();
-  examTimeLeft = mins * 60;
-  examCurrentIdx = 0;
-  correctToWrong = 0;
-  wrongToCorrect = 0;
-  changeLog = [];
-  questionTimes = {};
+  examAnswers       = {};
+  examFlagged       = new Set();
+  examTimeLeft      = mins * 60;
+  examCurrentIdx    = 0;
+  correctToWrong    = 0;
+  wrongToCorrect    = 0;
+  changeLog         = [];
+  questionTimes     = {};
 
   showScreen('examView');
-  examRenderQuestion(0);
+  buildExamQuestions();
   buildExamNav();
   startExamTimer();
-
-  // sync auth area
   updateAuthUI(window._currentUser || null);
 }
 
-/* Render a single question into the card */
-function examRenderQuestion(idx) {
-  examCurrentIdx = idx;
-  const q     = currentQuestions[idx];
-  const total = currentQuestions.length;
-  const card  = document.getElementById('evQueCard');
-  if (!card || !q) return;
+/* Build all question cards at once (scrollable) */
+function buildExamQuestions() {
+  const col = document.getElementById('evQuestionsCol');
+  col.innerHTML = '';
 
-  const isFlagged  = examFlagged.has(idx);
-  const answered   = examAnswers[idx] || null;
-  const statusText = answered ? 'Answer saved' : 'Not yet answered';
-  const imgHTML    = q.image
-    ? `<div class="ev-que-image-wrap"><img src="${q.image}" alt="Question image" /></div>`
-    : '';
+  currentQuestions.forEach((q, i) => {
+    const card = document.createElement('div');
+    card.className = 'ev-que-card';
+    card.id = 'ev-q-' + i;
 
-  card.innerHTML = `
-    <div class="ev-que-header">
-      <div class="ev-que-info">
-        <span class="ev-que-num-badge">Question ${idx + 1} of ${total}</span>
-        <span class="ev-que-status">${statusText}</span>
+    const imgHTML = q.image
+      ? `<div class="ev-que-image-wrap"><img src="${q.image}" alt="Question image"></div>`
+      : '';
+
+    const isFlagged = examFlagged.has(i);
+    const answered  = examAnswers[i] || null;
+    const statusTxt = answered ? 'Answer saved' : 'Not yet answered';
+
+    card.innerHTML = `
+      <div class="ev-que-header">
+        <div class="ev-que-info">
+          <span class="ev-que-num">Question ${i + 1}</span>
+          <span class="ev-que-status">${statusTxt}</span>
+        </div>
+        <button class="ev-flag-btn${isFlagged ? ' flagged' : ''}" id="examFlagBtn-${i}"
+                onclick="examToggleFlag(${i})">
+          ${isFlagged ? '🚩 Flagged' : '⚑ Flag'}
+        </button>
       </div>
-      <button class="ev-flag-btn${isFlagged ? ' flagged' : ''}" id="examFlagBtn-${idx}"
-              onclick="examToggleFlag(${idx})" title="Flag this question for review">
-        <span class="ev-flag-icon">${isFlagged ? '🚩' : '⚑'}</span>
-        ${isFlagged ? 'Flagged' : 'Flag question'}
-      </button>
-    </div>
-    <div class="ev-que-body">
-      <div class="ev-que-text">${escapeHtml(q.question)}</div>
-      ${imgHTML}
-      <div class="ev-options-list" id="evOptsList"></div>
-    </div>
-  `;
+      <div class="ev-que-body">
+        <div class="ev-que-text">${escapeHtml(q.question)}</div>
+        ${imgHTML}
+        <div class="ev-options-list" id="evOpts-${i}"></div>
+      </div>`;
 
-  const optsList = card.querySelector('#evOptsList');
-  getOptionEntries(q).forEach(([key, val]) => {
-    const row = document.createElement('label');
-    row.className = 'ev-option-row' + (answered === key ? ' selected' : '');
-    row.innerHTML = `
-      <input type="radio" name="evq${idx}" value="${key}"${answered === key ? ' checked' : ''} />
-      <span class="ev-option-text"><strong>${key}.</strong>&nbsp;${escapeHtml(val)}</span>
-    `;
-    row.addEventListener('click', () => examSelectAnswer(idx, key));
-    optsList.appendChild(row);
+    const optsList = card.querySelector(`#evOpts-${i}`);
+    getOptionEntries(q).forEach(([key, val]) => {
+      const row = document.createElement('label');
+      row.className = 'ev-option-row' + (answered === key ? ' selected' : '');
+      row.innerHTML = `
+        <input type="radio" name="evq${i}" value="${key}"${answered === key ? ' checked' : ''}>
+        <span class="ev-option-text"><strong>${key}.</strong>&nbsp;${escapeHtml(val)}</span>`;
+      row.addEventListener('click', () => examSelectAnswer(i, key));
+      optsList.appendChild(row);
+    });
+
+    col.appendChild(card);
   });
 
-  // Update Prev/Next buttons
-  const prevBtn = document.getElementById('evPrevBtn');
-  const nextBtn = document.getElementById('evNextBtn');
-  if (prevBtn) prevBtn.disabled = idx === 0;
-  if (nextBtn) nextBtn.disabled = idx === total - 1;
-
-  // Scroll content to top
-  const content = document.getElementById('evContent');
-  if (content) content.scrollTop = 0;
-
-  buildExamNav();
+  updateEvAnsweredCount();
 }
 
-/* Navigate to a question by index */
-function examGoTo(idx) {
-  if (idx < 0 || idx >= currentQuestions.length) return;
-  examRenderQuestion(idx);
+/* Refresh one question card in-place (after answer/flag change) */
+function examRefreshCard(i) {
+  const card = document.getElementById('ev-q-' + i);
+  if (!card) return;
+  const q        = currentQuestions[i];
+  const answered = examAnswers[i] || null;
+  const isFlagged = examFlagged.has(i);
+
+  // Update header status + flag button
+  card.querySelector('.ev-que-status').textContent = answered ? 'Answer saved' : 'Not yet answered';
+  const flagBtn = card.querySelector('.ev-flag-btn');
+  if (flagBtn) {
+    flagBtn.className = 'ev-flag-btn' + (isFlagged ? ' flagged' : '');
+    flagBtn.textContent = isFlagged ? '🚩 Flagged' : '⚑ Flag';
+  }
+
+  // Update option highlight
+  card.querySelectorAll('.ev-option-row').forEach(row => {
+    const radio = row.querySelector('input[type="radio"]');
+    const isSelected = radio && radio.value === answered;
+    row.classList.toggle('selected', isSelected);
+    if (radio) radio.checked = isSelected;
+  });
 }
 
 function escapeHtml(str) {
@@ -2599,39 +2604,42 @@ function examSelectAnswer(qIndex, key) {
     changeLog.push({ qIndex, fromKey: prev, fromText: _q.options[prev], toKey: key, toText: _q.options[key], type: _type });
   }
   examAnswers[qIndex] = key;
-
-  // Refresh current question display so status + selection update
-  examRenderQuestion(qIndex);
+  examRefreshCard(qIndex);
+  buildExamNav();
+  updateEvAnsweredCount();
 }
 
 function examToggleFlag(i) {
   if (examFlagged.has(i)) examFlagged.delete(i);
   else examFlagged.add(i);
-  examRenderQuestion(i);
+  examRefreshCard(i);
+  buildExamNav();
 }
 
 function buildExamNav() {
   const grid = document.getElementById('examNavGrid');
   if (!grid) return;
   grid.innerHTML = '';
-  const total    = currentQuestions.length;
-  const answered = Object.keys(examAnswers).length;
-
-  // Update progress row
-  const pr = document.getElementById('evProgressRow');
-  if (pr) pr.textContent = `${answered} / ${total} answered`;
-
   currentQuestions.forEach((_, i) => {
     const sq = document.createElement('button');
     sq.className = 'ev-nav-sq';
-    if (i === examCurrentIdx)   sq.classList.add('ev-current');
-    if (examAnswers[i])         sq.classList.add('ev-answered');
-    if (examFlagged.has(i))     sq.classList.add('ev-flagged');
-    sq.innerHTML = `${i + 1}<span class="ev-flag-triangle"></span>`;
-    sq.title = `Question ${i + 1}`;
-    sq.onclick = () => examGoTo(i);
+    if (examAnswers[i])     sq.classList.add('ev-answered');
+    if (examFlagged.has(i)) sq.classList.add('ev-flagged');
+    sq.innerHTML = `${i + 1}<span class="ev-flag-tri"></span>`;
+    sq.title = `Jump to Question ${i + 1}`;
+    sq.onclick = () => {
+      const card = document.getElementById('ev-q-' + i);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
     grid.appendChild(sq);
   });
+}
+
+function updateEvAnsweredCount() {
+  const total    = currentQuestions.length;
+  const answered = Object.keys(examAnswers).length;
+  const el = document.getElementById('evAnsweredCount');
+  if (el) el.textContent = `${answered} of ${total} answered`;
 }
 
 /* ── Exam Timer ── */
@@ -2672,7 +2680,6 @@ function confirmExamFinish() {
   }
   submitExamQuiz();
 }
-
 function submitExamQuiz() {
   stopExamTimer();
   // Copy exam state into the standard quiz state for shared results screen
