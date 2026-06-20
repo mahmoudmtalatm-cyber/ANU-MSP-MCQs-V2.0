@@ -1581,7 +1581,7 @@
 /* ══════════════════════════════════════════════════════════
    EXAM VIEW — EXACT MOODLE "MOUNT ORANGE" REPLICA
 ══════════════════════════════════════════════════════════ */
-#examView { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #e8622c; }
+#examView { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #e8622c; z-index: 50; }
 
 /* ── TOP NAVBAR ── */
 .ev-topbar {
@@ -1737,6 +1737,88 @@
   font-size: .8rem; font-weight: 600; cursor: pointer; text-align: center; transition: background .15s;
 }
 .ev-sidebar-finish-btn:hover { background: #f0f0f0; }
+
+/* ── BOTTOM PAGE NAV BAR (Previous page / Finish attempt / Next page) ── */
+.ev-pagenav { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 4px; gap: 10px; flex-shrink: 0; }
+.ev-pagenav-btn {
+  background: #6c757d; color: #fff; border: none; border-radius: 4px;
+  padding: 8px 20px; font-family: var(--font); font-size: .85rem; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; gap: 6px; transition: filter .15s;
+}
+.ev-pagenav-btn:hover:not(:disabled) { filter: brightness(1.12); }
+.ev-pagenav-btn:disabled { opacity: 0; visibility: hidden; }
+.ev-pagenav-finish {
+  color: #c62828; text-decoration: underline; font-size: .85rem; font-weight: 600;
+  background: none; border: none; cursor: pointer; font-family: var(--font); padding: 0;
+}
+.ev-pagenav-finish:hover { color: #900; }
+
+/* ── SUMMARY OF ATTEMPT PAGE ── */
+.ev-summary-wrap { flex: 1; overflow-y: auto; background: #fff; padding: 24px 28px 40px; }
+.ev-summary-heading { font-size: 1.3rem; font-weight: 600; color: #333; margin-bottom: 16px; }
+.ev-summary-table { width: 100%; max-width: 640px; border-collapse: collapse; margin-bottom: 22px; }
+.ev-summary-table th, .ev-summary-table td {
+  border: 1px solid #dee2e6; padding: 8px 14px; font-size: .88rem; text-align: left; color: #333;
+}
+.ev-summary-table th { background: #f5f5f5; font-weight: 700; }
+.ev-summary-table td a { color: #205081; text-decoration: underline; cursor: pointer; }
+.ev-summary-status-notanswered { color: #c62828; }
+.ev-summary-status-answered { color: #2e7d32; }
+.ev-summary-warning {
+  background: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b;
+  padding: 10px 14px; font-size: .85rem; margin-bottom: 18px; max-width: 640px;
+}
+.ev-summary-actions { display: flex; gap: 10px; }
+.ev-summary-btn {
+  border: none; border-radius: 4px; padding: 9px 20px; font-family: var(--font);
+  font-size: .88rem; font-weight: 700; cursor: pointer; transition: filter .15s;
+}
+.ev-summary-btn:hover { filter: brightness(1.1); }
+.ev-summary-btn.secondary { background: #6c757d; color: #fff; }
+.ev-summary-btn.primary { background: #c62828; color: #fff; }
+
+/* ── REVIEW ATTEMPT PAGE ── */
+#reviewView { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: #f5f5f5; z-index: 50; }
+.ev-review-header {
+  background: #fff; border-bottom: 1px solid #dee2e6; padding: 16px 24px; flex-shrink: 0;
+}
+.ev-review-title { font-size: 1.2rem; font-weight: 700; color: #333; margin-bottom: 10px; }
+.ev-review-gradebanner {
+  display: inline-block; background: #e9ecef; border-radius: 4px;
+  padding: 8px 16px; font-size: .95rem; font-weight: 600; color: #333;
+}
+.ev-review-gradebanner.pass { background: #dff0d8; color: #2e7d32; }
+.ev-review-gradebanner.fail { background: #f2dede; color: #c62828; }
+.ev-review-body { flex: 1; overflow-y: auto; padding: 20px 24px 50px; }
+.ev-review-que-row { background: #fff; border: 1px solid #dee2e6; max-width: 760px; margin: 0 auto 20px; }
+.ev-review-que-row.correct { border-left: 4px solid #2e7d32; }
+.ev-review-que-row.incorrect { border-left: 4px solid #c62828; }
+.ev-review-que-row.partial { border-left: 4px solid #ec9c00; }
+.ev-review-que-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 18px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: .85rem; color: #555;
+}
+.ev-review-que-num { font-weight: 700; color: #333; }
+.ev-review-que-mark { font-weight: 600; }
+.ev-review-que-mark.correct { color: #2e7d32; }
+.ev-review-que-mark.incorrect { color: #c62828; }
+.ev-review-que-body { padding: 18px 20px; }
+.ev-review-que-text { font-size: .97rem; line-height: 1.6; color: #333; margin-bottom: 14px; }
+.ev-review-options-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.ev-review-option-row { display: flex; align-items: center; gap: 8px; padding: 4px 2px; font-size: .92rem; color: #333; }
+.ev-review-option-row.chosen-correct { background: #dff0d8; }
+.ev-review-option-row.chosen-incorrect { background: #f2dede; }
+.ev-review-option-row.correct-unchosen { background: #eef7ee; }
+.ev-review-icon { width: 18px; flex-shrink: 0; font-weight: 800; text-align: center; }
+.ev-review-icon.check { color: #2e7d32; }
+.ev-review-icon.cross { color: #c62828; }
+.ev-review-rightanswer { font-size: .85rem; color: #555; font-style: italic; margin-top: 6px; }
+.ev-review-footer { max-width: 760px; margin: 0 auto; padding: 10px 0 30px; }
+.ev-review-finish-btn {
+  background: #6c757d; color: #fff; border: none; border-radius: 4px;
+  padding: 9px 22px; font-family: var(--font); font-size: .88rem; font-weight: 700; cursor: pointer;
+}
+.ev-review-finish-btn:hover { filter: brightness(1.12); }
 
 @media (max-width: 700px) {
   .ev-sidebar { width: 130px; }
@@ -2057,9 +2139,16 @@
     <!-- ── BODY: scrollable questions + right sidebar ── -->
     <div class="ev-body">
 
-      <!-- Left+Main: all questions scroll vertically -->
-      <div class="ev-content" id="evContent">
-        <!-- Question rows injected by JS (each = info-panel + card) -->
+      <!-- Left+Main: page's questions scroll vertically, page-nav bar below -->
+      <div class="ev-main-col" style="flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden;">
+        <div class="ev-content" id="evContent">
+          <!-- Question rows injected by JS (each = info-panel + card) -->
+        </div>
+        <div class="ev-pagenav">
+          <button class="ev-pagenav-btn" id="evPrevPageBtn" onclick="examGoToPage(examCurrentPage-1)">◀&nbsp; Previous page</button>
+          <button class="ev-pagenav-finish" onclick="confirmExamFinish()">Finish attempt ...</button>
+          <button class="ev-pagenav-btn" id="evNextPageBtn" onclick="examGoToPage(examCurrentPage+1)">Next page&nbsp; ▶</button>
+        </div>
       </div>
 
       <!-- Right: Quiz Navigation block -->
@@ -2080,6 +2169,57 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       SUMMARY OF ATTEMPT (Moodle pre-submit review)
+  ══════════════════════════════════════════════ -->
+  <div id="summaryView" class="hidden" style="position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden; background:#fff; z-index:50;">
+    <div class="ev-topbar">
+      <div class="ev-topbar-left">
+        <div class="ev-hamburger"><span></span><span></span><span></span></div>
+        <div class="ev-site-name">Mount Orange</div>
+        <div class="ev-lang-selector">English (en) ▾</div>
+      </div>
+      <div class="ev-topbar-right">
+        <div class="ev-topbar-icons">
+          <span class="ev-topbar-icon">🔍</span>
+          <span class="ev-topbar-icon">🔔</span>
+          <span class="ev-topbar-icon">💬</span>
+        </div>
+        <div class="ev-user-area" id="authAreaSummary">
+          <span class="ev-user-name">Student User</span>
+          <div class="ev-user-avatar">👤</div>
+          <span class="ev-user-caret">▾</span>
+        </div>
+      </div>
+    </div>
+    <div class="ev-summary-wrap">
+      <div class="ev-summary-heading">Summary of attempt</div>
+      <div id="summaryWarning"></div>
+      <table class="ev-summary-table">
+        <thead><tr><th>Question</th><th>Status</th></tr></thead>
+        <tbody id="summaryTableBody"></tbody>
+      </table>
+      <div class="ev-summary-actions">
+        <button class="ev-summary-btn secondary" onclick="returnToAttempt()">Return to attempt</button>
+        <button class="ev-summary-btn primary" onclick="finalSubmitExam()">Submit all and finish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       REVIEW ATTEMPT (Moodle post-submit review)
+  ══════════════════════════════════════════════ -->
+  <div id="reviewView" class="hidden">
+    <div class="ev-review-header">
+      <div class="ev-review-title">Review: Exam attempt</div>
+      <div class="ev-review-gradebanner" id="reviewGradeBanner"></div>
+    </div>
+    <div class="ev-review-body" id="reviewBody"></div>
+    <div class="ev-review-footer">
+      <button class="ev-review-finish-btn" onclick="finishReview()">Finish review</button>
     </div>
   </div>
 
@@ -2106,6 +2246,7 @@ function updateAuthUI(user) {
   const homeArea = document.getElementById('authAreaHome');
   const quizArea = document.getElementById('authAreaQuiz');
   const examArea = document.getElementById('authAreaExam');
+  const summaryArea = document.getElementById('authAreaSummary');
   const adminBtn = document.getElementById('adminOpenBtn');
   if (adminBtn) adminBtn.classList.toggle('hidden', !isAdminUser(user));
 
@@ -2128,14 +2269,16 @@ function updateAuthUI(user) {
       </div>`;
     if (homeArea) homeArea.innerHTML = loggedInHTML;
     if (quizArea) quizArea.innerHTML = loggedInHTML;
-    // Exam area: Moodle-style orange name + avatar
-    if (examArea) examArea.innerHTML = `
+    // Exam / Summary areas: Moodle-style orange name + avatar
+    const moodleUserHTML = `
       <span class="ev-user-name">${user.displayName || 'Student'}</span>
       <div class="ev-user-avatar" style="background:#ccc;overflow:hidden;">
         <img src="${user.photoURL}" style="width:100%;height:100%;object-fit:cover;"
              onerror="this.style.display='none'" />
       </div>
       <span class="ev-user-caret">▾</span>`;
+    if (examArea) examArea.innerHTML = moodleUserHTML;
+    if (summaryArea) summaryArea.innerHTML = moodleUserHTML;
   } else {
     // Logged-out state
     const signInHTML = `
@@ -2150,8 +2293,10 @@ function updateAuthUI(user) {
       </button>`;
     if (homeArea) homeArea.innerHTML = signInHTML;
     if (quizArea) quizArea.innerHTML = signInHTML;
-    if (examArea) examArea.innerHTML = `<span class="ev-user-name">Guest</span>
+    const moodleGuestHTML = `<span class="ev-user-name">Guest</span>
       <div class="ev-user-avatar">👤</div><span class="ev-user-caret">▾</span>`;
+    if (examArea) examArea.innerHTML = moodleGuestHTML;
+    if (summaryArea) summaryArea.innerHTML = moodleGuestHTML;
   }
 }
 
@@ -2441,7 +2586,7 @@ function clearAllLectures() {
    SCREEN SWITCHING
 ══════════════════════════════════════════════════════════ */
 function showScreen(id) {
-  ['home','quiz','results','examView'].forEach(s => {
+  ['home','quiz','results','examView','summaryView','reviewView'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s !== id);
   });
 }
@@ -2469,9 +2614,10 @@ let examAnswers  = {};   // { qIndex: key }
 let examFlagged  = new Set();
 let examTimerInt = null;
 let examTimeLeft = 0;
+const EXAM_QUESTIONS_PER_PAGE = 50;
+let examCurrentPage = 0;   // 0-based page index
 
-/* Track which question row is "current" (for sidebar highlight) */
-let examCurrentIdx = 0;
+/* Track which page is currently displayed (declared above as examCurrentPage) */
 
 function startExamView() {
   const mins    = parseInt(document.getElementById('timeInput').value, 10);
@@ -2507,14 +2653,14 @@ function startExamView() {
   examAnswers  = {};
   examFlagged  = new Set();
   examTimeLeft = mins * 60;
-  examCurrentIdx = 0;
+  examCurrentPage = 0;
   correctToWrong = 0;
   wrongToCorrect = 0;
   changeLog = [];
   questionTimes = {};
 
   showScreen('examView');
-  examRenderAllQuestions();
+  examRenderPage(0);
   buildExamNav();
   startExamTimer();
   // Scroll content to top
@@ -2525,20 +2671,65 @@ function startExamView() {
   updateAuthUI(window._currentUser || null);
 }
 
-/* ── Render ALL questions vertically (Moodle all-on-one-page style) ── */
-function examRenderAllQuestions() {
+/* ── Pagination helpers ── */
+function examTotalPages() {
+  return Math.max(1, Math.ceil(currentQuestions.length / EXAM_QUESTIONS_PER_PAGE));
+}
+function examPageOf(idx) {
+  return Math.floor(idx / EXAM_QUESTIONS_PER_PAGE);
+}
+function examPageRange(pageIdx) {
+  const start = pageIdx * EXAM_QUESTIONS_PER_PAGE;
+  const end   = Math.min(start + EXAM_QUESTIONS_PER_PAGE, currentQuestions.length);
+  return [start, end];
+}
+
+/* Free navigation: jump straight to any page (no sequential restriction) */
+function examGoToPage(pageIdx) {
+  const total = examTotalPages();
+  if (pageIdx < 0 || pageIdx >= total) return;
+  examCurrentPage = pageIdx;
+  examRenderPage(pageIdx);
+  buildExamNav();
+  const evContent = document.getElementById('evContent');
+  if (evContent) evContent.scrollTop = 0;
+}
+
+/* Free navigation: jump directly to the question's page and scroll to its row */
+function examGoToQuestion(idx) {
+  if (idx < 0 || idx >= currentQuestions.length) return;
+  const targetPage = examPageOf(idx);
+  if (targetPage !== examCurrentPage) {
+    examCurrentPage = targetPage;
+    examRenderPage(targetPage);
+    buildExamNav();
+  }
+  const row = document.getElementById(`ev-row-${idx}`);
+  if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ── Render only the questions belonging to the given page (Moodle "questions per page") ── */
+function examRenderPage(pageIdx) {
   const content = document.getElementById('evContent');
   if (!content) return;
 
   content.innerHTML = '';
+  const [start, end] = examPageRange(pageIdx);
 
-  currentQuestions.forEach((q, idx) => {
+  for (let idx = start; idx < end; idx++) {
     const row = document.createElement('div');
     row.className = 'ev-que-row';
     row.id = `ev-row-${idx}`;
-    row.innerHTML = examBuildQuestionRow(q, idx);
+    row.innerHTML = examBuildQuestionRow(currentQuestions[idx], idx);
     content.appendChild(row);
-  });
+  }
+
+  // Update bottom page-nav button states
+  const total = examTotalPages();
+  const prevBtn = document.getElementById('evPrevPageBtn');
+  const nextBtn = document.getElementById('evNextPageBtn');
+  if (prevBtn) prevBtn.disabled = (pageIdx <= 0);
+  if (nextBtn) nextBtn.disabled = (pageIdx >= total - 1);
 }
 
 /* Build HTML for one question row */
@@ -2613,31 +2804,6 @@ function examRefreshRow(idx) {
   }
 }
 
-/* Navigate prev/next by scrolling to that question row */
-function examScrollTo(idx) {
-  if (idx < 0 || idx >= currentQuestions.length) return;
-  examCurrentIdx = idx;
-  const row = document.getElementById(`ev-row-${idx}`);
-  if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  buildExamNav();
-  examUpdateNavBtns();
-}
-
-/* Keep old function name for any existing callers */
-function examGoTo(idx) { examScrollTo(idx); }
-
-/* Deprecated single-render function — now does partial refresh */
-function examRenderQuestion(idx) {
-  examCurrentIdx = idx;
-  examRefreshRow(idx);
-  buildExamNav();
-  examUpdateNavBtns();
-}
-
-function examUpdateNavBtns() {
-  // No-op: all questions shown on one page, no prev/next buttons needed
-}
-
 function examSelectAnswer(qIndex, key) {
   const prev    = examAnswers[qIndex] || '';
   const correct = currentQuestions[qIndex].answer;
@@ -2660,12 +2826,15 @@ function examToggleFlag(i) {
   buildExamNav();
 }
 
+/* Quiz Navigation block — free navigation: every square jumps straight
+   to its question regardless of order or page (Moodle "Free" navmethod) */
 function buildExamNav() {
   const grid = document.getElementById('examNavGrid');
   if (!grid) return;
   grid.innerHTML = '';
   const total    = currentQuestions.length;
   const answered = Object.keys(examAnswers).length;
+  const [pageStart, pageEnd] = examPageRange(examCurrentPage);
 
   const pr = document.getElementById('evProgressRow');
   if (pr) pr.textContent = `${answered} / ${total} answered`;
@@ -2673,12 +2842,12 @@ function buildExamNav() {
   currentQuestions.forEach((_, i) => {
     const sq = document.createElement('button');
     sq.className = 'ev-nav-sq';
-    if (i === examCurrentIdx)   sq.classList.add('ev-current');
+    if (i >= pageStart && i < pageEnd) sq.classList.add('ev-current'); // on-screen page
     if (examAnswers[i])         sq.classList.add('ev-answered');
     if (examFlagged.has(i))     sq.classList.add('ev-flagged');
     sq.innerHTML = `${i + 1}<span class="ev-flag-triangle"></span>`;
     sq.title = `Question ${i + 1}`;
-    sq.onclick = () => examScrollTo(i);
+    sq.onclick = () => examGoToQuestion(i);
     grid.appendChild(sq);
   });
 }
@@ -2713,27 +2882,80 @@ function updateExamTimerDisplay() {
   if (box) box.classList.toggle('urgent', examTimeLeft <= 300);
 }
 
+/* ── "Finish attempt ..." — shows the Summary of attempt page (Moodle behavior) ── */
 function confirmExamFinish() {
+  buildSummaryOfAttempt();
+  showScreen('summaryView');
+  updateAuthUI(window._currentUser || null);
+}
+
+/* Build the Moodle "Summary of attempt" table: Question | Status, with a
+   warning if any are unanswered, "Return to attempt" and "Submit all and finish" */
+function buildSummaryOfAttempt() {
+  const total = currentQuestions.length;
+  const tbody = document.getElementById('summaryTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  let unanswered = 0;
+  currentQuestions.forEach((q, i) => {
+    const isAnswered = !!examAnswers[i];
+    if (!isAnswered) unanswered++;
+    const statusClass = isAnswered ? 'ev-summary-status-answered' : 'ev-summary-status-notanswered';
+    const statusTxt   = isAnswered ? 'Answer saved' : 'Not yet answered';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><a onclick="jumpFromSummary(${i})">${i + 1}</a></td>
+      <td class="${statusClass}">${statusTxt}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  const warnEl = document.getElementById('summaryWarning');
+  if (warnEl) {
+    warnEl.innerHTML = unanswered > 0
+      ? `<div class="ev-summary-warning">You have ${unanswered} unanswered question${unanswered === 1 ? '' : 's'}</div>`
+      : '';
+  }
+}
+
+/* Clicking a question number in the summary table returns to that exact question */
+function jumpFromSummary(idx) {
+  showScreen('examView');
+  examGoToQuestion(idx);
+  buildExamNav();
+  updateAuthUI(window._currentUser || null);
+}
+
+/* "Return to attempt" button — go back to the exam at the last page viewed */
+function returnToAttempt() {
+  showScreen('examView');
+  examRenderPage(examCurrentPage);
+  buildExamNav();
+  updateAuthUI(window._currentUser || null);
+}
+
+/* "Submit all and finish" — real Moodle warning, then grades and shows the Review page */
+function finalSubmitExam() {
   const total      = currentQuestions.length;
   const answered   = Object.keys(examAnswers).length;
   const unanswered = total - answered;
-  if (unanswered > 0) {
-    if (!confirm(`You have ${unanswered} unanswered question(s). Finish attempt anyway?`)) return;
-  }
+  const warnMsg = unanswered > 0
+    ? `You have ${unanswered} unanswered question(s).\n\nOnce you submit, you will no longer be able to change your answers for this attempt.`
+    : `Once you submit, you will no longer be able to change your answers for this attempt.`;
+  if (!confirm(warnMsg)) return;
   submitExamQuiz();
 }
 
 function submitExamQuiz() {
   stopExamTimer();
-  // Copy exam state into the standard quiz state for shared results screen
+  // Copy exam state into the standard quiz state so existing stats/history code keeps working
   userAnswers = { ...examAnswers };
   markedSet   = new Set(examFlagged);
-  // Submit through standard path
+
   const total = currentQuestions.length;
   let score = 0;
   currentQuestions.forEach((q, i) => { if (userAnswers[i] === q.answer) score++; });
-  const pct   = Math.round(score / total * 100);
-  const emoji = pct === 100 ? '🏆' : pct >= 70 ? '🎉' : '📝';
+  const pct = Math.round(score / total * 100);
   if (pct === 100) launchConfetti();
 
   const eggStats = loadStats();
@@ -2747,20 +2969,74 @@ function submitExamQuiz() {
     launchWaterFlood();
   }
 
-  document.getElementById('resultsTitle').textContent = `${emoji}  Exam Results`;
-  const badge = document.getElementById('scoreBadge');
-  badge.textContent  = `${score} / ${total}  (${pct}%)`;
-  badge.style.background = pct >= 70 ? '#A5D6A7' : '#FFCDD2';
-
   const _wrong      = total - score - (total - Object.keys(userAnswers).length);
   const _unanswered = total - Object.keys(userAnswers).length;
   saveQuizStats(score, total, _wrong, _unanswered, 0, 0, correctToWrong, wrongToCorrect, selectedSubject, currentLecture);
 
-  buildResults();
-  showScreen('results');
+  buildReviewAttempt(score, total, pct);
+  showScreen('reviewView');
+}
 
-  const splitBtn = document.getElementById('resultsSplitBtn');
-  if (splitBtn) splitBtn.classList.add('hidden');
+/* ── Moodle "Review attempt" page: all questions on one page (even though the
+   attempt itself was paginated), each marked correct/incorrect with the right answer shown ── */
+function buildReviewAttempt(score, total, pct) {
+  const banner = document.getElementById('reviewGradeBanner');
+  if (banner) {
+    banner.textContent = `Grade: ${score.toFixed(2)} / ${total.toFixed(2)}  (${pct}%)`;
+    banner.className = 'ev-review-gradebanner ' + (pct >= 50 ? 'pass' : 'fail');
+  }
+
+  const body = document.getElementById('reviewBody');
+  if (!body) return;
+  body.innerHTML = '';
+
+  currentQuestions.forEach((q, idx) => {
+    const userKey   = userAnswers[idx] || null;
+    const isCorrect = userKey === q.answer;
+    const wasAnswered = !!userKey;
+
+    const rowClass = !wasAnswered ? 'incorrect' : (isCorrect ? 'correct' : 'incorrect');
+    const markTxt  = isCorrect ? 'Marks for this submission: 1.00/1.00' : 'Marks for this submission: 0.00/1.00';
+    const markClass = isCorrect ? 'correct' : 'incorrect';
+
+    let optionsHTML = '';
+    getOptionEntries(q).forEach(([key, val]) => {
+      const isChosen     = key === userKey;
+      const isRightOne   = key === q.answer;
+      let rowCls = '';
+      let icon   = '';
+      if (isChosen && isRightOne)        { rowCls = 'chosen-correct';   icon = '<span class="ev-review-icon check">✓</span>'; }
+      else if (isChosen && !isRightOne)  { rowCls = 'chosen-incorrect'; icon = '<span class="ev-review-icon cross">✗</span>'; }
+      else if (!isChosen && isRightOne)  { rowCls = 'correct-unchosen';icon = '<span class="ev-review-icon check">✓</span>'; }
+      else                                { icon = '<span class="ev-review-icon"></span>'; }
+      optionsHTML += `
+        <div class="ev-review-option-row ${rowCls}">
+          ${icon}
+          <span>${escapeHtml(val)}</span>
+        </div>`;
+    });
+
+    const rightAnswerText = escapeHtml(q.options[q.answer] || '');
+
+    const row = document.createElement('div');
+    row.className = `ev-review-que-row ${rowClass}`;
+    row.innerHTML = `
+      <div class="ev-review-que-head">
+        <span class="ev-review-que-num">Question ${idx + 1}</span>
+        <span class="ev-review-que-mark ${markClass}">${wasAnswered ? markTxt : 'Not yet answered'}</span>
+      </div>
+      <div class="ev-review-que-body">
+        <div class="ev-review-que-text">${escapeHtml(q.question)}</div>
+        <div class="ev-review-options-list">${optionsHTML}</div>
+        <div class="ev-review-rightanswer">The correct answer is: ${rightAnswerText}</div>
+      </div>`;
+    body.appendChild(row);
+  });
+}
+
+/* "Finish review" — back to course/home, same as real Moodle */
+function finishReview() {
+  goHome();
 }
 
 /* ══════════════════════════════════════════════════════════
