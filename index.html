@@ -1565,202 +1565,9 @@
 .curr-tag.mod { background: #F3E5F5; border-color: #CE93D8; color: #4A148C; }
 .curr-tag.subj { background: #E8F5E9; border-color: #A5D6A7; color: #1B5E20; }
 
-/* ── EXAM VIEW ── */
-#examView { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-/* Exam header — minimal, no timer here */
-.exam-header {
-  background: var(--accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  min-height: 56px;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(27,138,196,.3);
-}
-.exam-header-title { font-size: 1.05rem; font-weight: 800; letter-spacing: -.3px; }
-
-/* Exam body: sidebar on right, scrollable questions on left */
-.exam-body {
-  flex: 1;
-  display: flex;
-  flex-direction: row;
-  overflow: hidden;
-  gap: 0;
-}
-
-/* Left: scrollable questions list */
-.exam-questions-col {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 20px 120px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-/* Each exam question card */
-.exam-q-block {
-  background: var(--bg-card);
-  border: 1px solid #B0D4F0;
-  border-radius: 12px;
-  padding: 20px 24px 18px;
-  box-shadow: 0 2px 10px rgba(27,138,196,.07);
-  scroll-margin-top: 20px;
-}
-.exam-q-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.exam-q-num-label {
-  font-size: .82rem; font-weight: 800; color: var(--accent);
-  text-transform: uppercase; letter-spacing: 1px;
-  flex: 1;
-}
-/* Flag button next to question number */
-.exam-flag-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 5px;
-  font-size: 1.1rem;
-  line-height: 1;
-  transition: transform .15s;
-  color: #B0C4D4;
-}
-.exam-flag-btn:hover { transform: scale(1.2); color: #E53935; }
-.exam-flag-btn.flagged { color: #E53935; }
-.exam-q-text {
-  font-size: 1.02rem; font-weight: 600; line-height: 1.55;
-  color: var(--text-main); margin-bottom: 13px;
-}
-.exam-q-image-wrap {
-  margin-bottom: 14px; border-radius: 8px; overflow: hidden;
-  border: 1.5px solid #B0D4F0; background: #F0F8FF;
-  display: flex; align-items: center; justify-content: center;
-}
-.exam-q-image-wrap img { max-width: 100%; max-height: 260px; object-fit: contain; display: block; }
-.exam-options-list { display: flex; flex-direction: column; gap: 7px; }
-.exam-option-label {
-  display: flex; align-items: flex-start; gap: 11px;
-  padding: 11px 15px; border-radius: 8px;
-  border: 1.5px solid #D8EAF7;
-  cursor: pointer; transition: background .13s, border-color .13s;
-  font-size: .95rem; line-height: 1.45; font-weight: 500;
-  color: var(--text-main);
-}
-.exam-option-label:hover { background: #EEF7FF; border-color: var(--nav-answered); }
-.exam-option-label input[type="radio"] { display: none; }
-.exam-option-label.selected { background: #DDF0FF; border-color: var(--accent); }
-.exam-opt-key { font-weight: 800; color: var(--accent); min-width: 20px; padding-top: 1px; }
-
-/* Right sidebar: navigator + timer at bottom */
-.exam-sidebar {
-  width: 200px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid #D0E8F5;
-  background: var(--bg-card);
-  padding: 16px 14px 16px;
-  gap: 10px;
-  overflow-y: auto;
-}
-.exam-nav-label {
-  font-size: .72rem; font-weight: 800; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: .8px;
-  margin-bottom: 4px;
-}
-.exam-nav-grid {
-  display: flex; flex-wrap: wrap; gap: 5px;
-}
-/* Exam nav squares: white bg, black number, no colour coding except flag dot */
-.exam-nav-sq {
-  position: relative;
-  width: 32px; height: 32px;
-  background: #fff;
-  border: 1.5px solid #B0C4D0;
-  border-radius: 5px;
-  font-family: var(--font); font-size: .78rem; font-weight: 700;
-  color: #1A2A3A;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: border-color .12s, background .12s;
-}
-.exam-nav-sq:hover { border-color: var(--accent); background: #EEF7FF; }
-.exam-nav-sq.answered { border-color: var(--accent); background: #DDF0FF; }
-/* small red dot for flagged */
-.exam-nav-sq .flag-dot {
-  position: absolute;
-  top: 2px; right: 2px;
-  width: 7px; height: 7px;
-  background: #E53935;
-  border-radius: 50%;
-  display: none;
-}
-.exam-nav-sq.flagged .flag-dot { display: block; }
-
-/* Timer pill at bottom-right of sidebar */
-.exam-timer-wrap {
-  margin-top: auto;
-  background: var(--accent);
-  color: #fff;
-  border-radius: 10px;
-  padding: 10px 12px;
-  text-align: center;
-}
-.exam-timer-label {
-  font-size: .68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .8px; opacity: .8; margin-bottom: 3px;
-}
-.exam-timer-val {
-  font-size: 1.35rem; font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 2px;
-}
-.exam-timer-val.urgent { animation: pulse 1s ease-in-out infinite; }
-
-/* Finish attempt link at bottom of questions col */
-.exam-finish-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 200px; /* leave room for sidebar */
-  background: rgba(234,244,251,.92);
-  backdrop-filter: blur(6px);
-  border-top: 1px solid #C5DFF0;
-  padding: 14px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  z-index: 100;
-}
-.exam-finish-link {
-  color: var(--accent);
-  text-decoration: underline;
-  font-weight: 600;
-  font-size: .97rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font);
-  padding: 0;
-}
-.exam-finish-link:hover { color: var(--accent-dark); }
-.exam-answered-count {
-  font-size: .85rem; color: var(--text-muted); font-weight: 600;
-}
-
+/* ── EXAM VIEW — Moodle one-question-per-page ── */
 /* Quiz mode chooser on home */
-.mode-chooser {
-  display: flex; gap: 8px; margin-bottom: 0;
-}
+.mode-chooser { display: flex; gap: 8px; margin-bottom: 0; }
 .mode-btn {
   flex: 1; padding: 10px 8px;
   border: 2px solid #B0D4F0; border-radius: 9px;
@@ -1771,10 +1578,168 @@
 .mode-btn:hover { border-color: var(--accent); color: var(--accent); background: #EEF7FF; }
 .mode-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
 
-@media (max-width: 640px) {
-  .exam-sidebar { width: 140px; }
-  .exam-finish-bar { right: 140px; }
-  .exam-nav-sq { width: 28px; height: 28px; font-size: .72rem; }
+/* Outer shell */
+#examView { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f1f1f1; }
+
+/* Top nav bar (Moodle-style white bar) */
+.ev-topbar {
+  background: #fff; border-bottom: 1px solid #dee2e6;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; min-height: 52px; flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.ev-topbar-left { display: flex; align-items: center; gap: 10px; }
+.ev-quiz-title { font-size: 1rem; font-weight: 700; color: #333; }
+.ev-topbar-right { display: flex; align-items: center; gap: 12px; }
+
+/* Timer in top bar */
+.ev-timer-box {
+  background: var(--accent); color: #fff; border-radius: 6px;
+  padding: 5px 14px; display: flex; align-items: center; gap: 8px;
+  font-size: .9rem; font-weight: 700;
+}
+.ev-timer-label { font-size: .72rem; opacity: .85; font-weight: 600; letter-spacing: .5px; }
+.ev-timer-val { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 1.5px; }
+.ev-timer-val.urgent { animation: pulse 1s ease-in-out infinite; }
+
+/* Main 2-col layout */
+.ev-body { flex: 1; display: flex; flex-direction: row; overflow: hidden; }
+
+/* Left: question content */
+.ev-content { flex: 1; overflow-y: auto; padding: 24px 28px 40px; display: flex; flex-direction: column; }
+
+/* White question card */
+.ev-que-card { background: #fff; border: 1px solid #dee2e6; border-radius: 4px; overflow: hidden; }
+
+/* Question header (light blue Moodle strip) */
+.ev-que-header {
+  background: #d9edf7; border-bottom: 1px solid #bce8f1;
+  padding: 10px 16px; display: flex; align-items: center;
+  justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.ev-que-info { display: flex; align-items: center; gap: 10px; }
+.ev-que-num-badge {
+  background: #31708f; color: #fff; border-radius: 3px;
+  padding: 3px 10px; font-size: .82rem; font-weight: 800; white-space: nowrap;
+}
+.ev-que-status { font-size: .8rem; color: #31708f; font-weight: 600; }
+.ev-flag-btn {
+  background: none; border: 1px solid #bce8f1; border-radius: 3px;
+  padding: 4px 9px; cursor: pointer; font-size: .78rem; font-weight: 700;
+  color: #31708f; font-family: var(--font);
+  display: flex; align-items: center; gap: 5px; transition: all .15s; white-space: nowrap;
+}
+.ev-flag-btn:hover { background: #bce8f1; }
+.ev-flag-btn.flagged { background: #E53935; color: #fff; border-color: #C62828; }
+.ev-flag-icon { font-size: .9rem; }
+
+/* Question body */
+.ev-que-body { padding: 20px 22px 18px; }
+.ev-que-text { font-size: 1rem; line-height: 1.6; color: #333; margin-bottom: 18px; font-weight: 500; }
+.ev-que-image-wrap {
+  margin-bottom: 16px; border: 1px solid #dee2e6; border-radius: 4px;
+  background: #f8f9fa; display: inline-flex; max-width: 100%;
+}
+.ev-que-image-wrap img { max-width: 100%; max-height: 280px; object-fit: contain; display: block; }
+
+/* Radio options */
+.ev-options-list { display: flex; flex-direction: column; gap: 0; }
+.ev-option-row {
+  display: flex; align-items: flex-start; gap: 0;
+  padding: 8px 6px; border-radius: 3px; cursor: pointer;
+  transition: background .12s; border: 1px solid transparent;
+}
+.ev-option-row:hover { background: #f0f7ff; border-color: #b8d4ec; }
+.ev-option-row.selected { background: #ddeeff; border-color: #9ac0e0; }
+.ev-option-row input[type="radio"] {
+  margin: 3px 10px 0 4px; flex-shrink: 0;
+  accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer;
+}
+.ev-option-text { font-size: .96rem; line-height: 1.5; color: #333; }
+
+/* Prev / Next navigation bar */
+.ev-nav-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 22px; gap: 10px; flex-wrap: wrap;
+}
+.ev-nav-btn {
+  background: #6c757d; color: #fff; border: none; border-radius: 4px;
+  padding: 8px 20px; font-family: var(--font); font-size: .88rem; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; gap: 6px; transition: filter .15s;
+}
+.ev-nav-btn:hover:not(:disabled) { filter: brightness(1.15); }
+.ev-nav-btn:disabled { opacity: .45; cursor: not-allowed; }
+.ev-nav-btn.primary { background: var(--accent); }
+.ev-finish-link {
+  color: #c62828; text-decoration: underline; font-size: .88rem; font-weight: 700;
+  background: none; border: none; cursor: pointer; font-family: var(--font); padding: 0;
+}
+.ev-finish-link:hover { color: #a00; }
+
+/* Right sidebar (Moodle quiz navigation block) */
+.ev-sidebar {
+  width: 210px; flex-shrink: 0; overflow-y: auto;
+  background: #fff; border-left: 1px solid #dee2e6;
+  display: flex; flex-direction: column;
+}
+.ev-block-header {
+  background: #6c757d; color: #fff; padding: 8px 14px;
+  font-size: .82rem; font-weight: 800; letter-spacing: .3px;
+  text-transform: uppercase; flex-shrink: 0;
+}
+.ev-block-body { padding: 12px 14px; flex: 1; overflow-y: auto; }
+.ev-nav-section-title {
+  font-size: .72rem; font-weight: 700; color: #6c757d;
+  text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px;
+}
+.ev-progress-row { font-size: .73rem; color: #6c757d; margin-bottom: 10px; line-height: 1.5; }
+
+/* Nav squares */
+.ev-nav-grid { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+.ev-nav-sq {
+  position: relative; width: 30px; height: 30px;
+  background: #fff; border: 1px solid #6c757d; border-radius: 3px;
+  font-family: var(--font); font-size: .76rem; font-weight: 700;
+  color: #333; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .1s, border-color .1s;
+}
+.ev-nav-sq:hover { background: #e9ecef; }
+.ev-nav-sq.ev-current { border: 2px solid #31708f; background: #d9edf7; color: #31708f; font-weight: 900; }
+.ev-nav-sq.ev-answered { background: #d9edf7; border-color: #31708f; color: #31708f; }
+.ev-nav-sq .ev-flag-triangle {
+  position: absolute; top: 0; right: 0; width: 0; height: 0; border-style: solid;
+  border-width: 0 9px 9px 0; border-color: transparent #E53935 transparent transparent; display: none;
+}
+.ev-nav-sq.ev-flagged .ev-flag-triangle { display: block; }
+
+/* Legend */
+.ev-legend { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.ev-legend-row { display: flex; align-items: center; gap: 8px; font-size: .73rem; color: #555; }
+.ev-legend-sq {
+  width: 18px; height: 18px; border-radius: 3px; flex-shrink: 0;
+  border: 1px solid #6c757d; background: #fff;
+}
+.ev-legend-sq.answered { background: #d9edf7; border-color: #31708f; }
+.ev-legend-sq.flagged-eg { position: relative; background: #fff; overflow: hidden; }
+.ev-legend-sq.flagged-eg::after {
+  content: ''; position: absolute; top: 0; right: 0; width: 0; height: 0;
+  border-style: solid; border-width: 0 8px 8px 0;
+  border-color: transparent #E53935 transparent transparent;
+}
+
+/* Finish button in sidebar */
+.ev-sidebar-finish { padding: 12px 14px; border-top: 1px solid #dee2e6; flex-shrink: 0; }
+.ev-sidebar-finish-btn {
+  width: 100%; background: #fff; color: #333; border: 1px solid #6c757d;
+  border-radius: 4px; padding: 9px 12px; font-family: var(--font);
+  font-size: .82rem; font-weight: 700; cursor: pointer; text-align: center; transition: background .15s;
+}
+.ev-sidebar-finish-btn:hover { background: #f8f9fa; }
+
+@media (max-width: 700px) {
+  .ev-sidebar { width: 150px; }
+  .ev-content { padding: 16px 14px 40px; }
 }
 
 /* API key prompt for explanations */
@@ -2059,32 +2024,66 @@
   </div>
 
   <!-- ══════════════════════════════════════════════
-       EXAM VIEW SCREEN
+       EXAM VIEW SCREEN  (Moodle one-question-per-page)
   ══════════════════════════════════════════════ -->
   <div id="examView" class="hidden">
-    <div class="exam-header">
-      <div class="exam-header-title">🎓&nbsp; ANU MSP — Exam View</div>
-      <div id="authAreaExam" style="display:flex;align-items:center;gap:8px;"></div>
-    </div>
-    <div class="exam-body">
-      <!-- Left: scrollable all questions -->
-      <div class="exam-questions-col" id="examQuestionsCol"></div>
 
-      <!-- Right: navigator sidebar -->
-      <div class="exam-sidebar">
-        <div class="exam-nav-label">Questions</div>
-        <div class="exam-nav-grid" id="examNavGrid"></div>
-        <div class="exam-timer-wrap">
-          <div class="exam-timer-label">Time left</div>
-          <div class="exam-timer-val" id="examTimerVal">00:00</div>
+    <!-- Top navigation bar -->
+    <div class="ev-topbar">
+      <div class="ev-topbar-left">
+        <div class="ev-quiz-title">🎓&nbsp; ANU MSP — Exam</div>
+      </div>
+      <div class="ev-topbar-right">
+        <div id="authAreaExam" style="display:flex;align-items:center;gap:8px;"></div>
+        <div class="ev-timer-box">
+          <span class="ev-timer-label">TIME LEFT</span>
+          <span class="ev-timer-val" id="examTimerVal">00:00</span>
         </div>
       </div>
     </div>
 
-    <!-- Bottom finish bar -->
-    <div class="exam-finish-bar">
-      <span class="exam-answered-count" id="examAnsweredCount">0 / 0 answered</span>
-      <button class="exam-finish-link" onclick="confirmExamFinish()">Finish attempt</button>
+    <!-- Body: question area + sidebar -->
+    <div class="ev-body">
+
+      <!-- Left: single question content -->
+      <div class="ev-content" id="evContent">
+        <!-- Question card, rendered by JS -->
+        <div class="ev-que-card" id="evQueCard"></div>
+
+        <!-- Prev / Next nav bar -->
+        <div class="ev-nav-bar">
+          <button class="ev-nav-btn" id="evPrevBtn" onclick="examGoTo(examCurrentIdx - 1)">◀ Previous</button>
+          <button class="ev-finish-link" onclick="confirmExamFinish()">Finish attempt…</button>
+          <button class="ev-nav-btn primary" id="evNextBtn" onclick="examGoTo(examCurrentIdx + 1)">Next ▶</button>
+        </div>
+      </div>
+
+      <!-- Right: Moodle-style quiz navigation block -->
+      <div class="ev-sidebar">
+        <div class="ev-block-header">Quiz Navigation</div>
+        <div class="ev-block-body">
+          <div class="ev-progress-row" id="evProgressRow">0 / 0 answered</div>
+          <div class="ev-nav-section-title">Questions</div>
+          <div class="ev-nav-grid" id="examNavGrid"></div>
+
+          <!-- Legend -->
+          <div class="ev-legend">
+            <div class="ev-legend-row">
+              <div class="ev-legend-sq"></div> Not answered
+            </div>
+            <div class="ev-legend-row">
+              <div class="ev-legend-sq answered"></div> Answered
+            </div>
+            <div class="ev-legend-row">
+              <div class="ev-legend-sq flagged-eg"></div> Flagged
+            </div>
+          </div>
+        </div>
+        <div class="ev-sidebar-finish">
+          <button class="ev-sidebar-finish-btn" onclick="confirmExamFinish()">Finish attempt</button>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -2467,6 +2466,9 @@ let examFlagged  = new Set();
 let examTimerInt = null;
 let examTimeLeft = 0;
 
+/* ── Exam current page index ── */
+let examCurrentIdx = 0;
+
 function startExamView() {
   const mins    = parseInt(document.getElementById('timeInput').value, 10);
   const shuffle = document.getElementById('shuffleToggle').checked;
@@ -2501,60 +2503,84 @@ function startExamView() {
   examAnswers  = {};
   examFlagged  = new Set();
   examTimeLeft = mins * 60;
+  examCurrentIdx = 0;
   correctToWrong = 0;
   wrongToCorrect = 0;
   changeLog = [];
   questionTimes = {};
 
   showScreen('examView');
-  buildExamQuestions();
+  examRenderQuestion(0);
   buildExamNav();
   startExamTimer();
-  updateExamAnsweredCount();
 
   // sync auth area
   updateAuthUI(window._currentUser || null);
 }
 
-function buildExamQuestions() {
-  const col = document.getElementById('examQuestionsCol');
-  col.innerHTML = '';
+/* Render a single question into the card */
+function examRenderQuestion(idx) {
+  examCurrentIdx = idx;
+  const q     = currentQuestions[idx];
+  const total = currentQuestions.length;
+  const card  = document.getElementById('evQueCard');
+  if (!card || !q) return;
 
-  currentQuestions.forEach((q, i) => {
-    const block = document.createElement('div');
-    block.className = 'exam-q-block';
-    block.id = 'exam-q-' + i;
+  const isFlagged  = examFlagged.has(idx);
+  const answered   = examAnswers[idx] || null;
+  const statusText = answered ? 'Answer saved' : 'Not yet answered';
+  const imgHTML    = q.image
+    ? `<div class="ev-que-image-wrap"><img src="${q.image}" alt="Question image" /></div>`
+    : '';
 
-    // Image HTML
-    const imgHTML = q.image
-      ? `<div class="exam-q-image-wrap"><img src="${q.image}" alt="Question image" /></div>`
-      : '';
-
-    block.innerHTML = `
-      <div class="exam-q-header">
-        <div class="exam-q-num-label">Question ${i + 1} / ${currentQuestions.length}</div>
-        <button class="exam-flag-btn" id="examFlagBtn-${i}" onclick="examToggleFlag(${i})" title="Flag question">🚩</button>
+  card.innerHTML = `
+    <div class="ev-que-header">
+      <div class="ev-que-info">
+        <span class="ev-que-num-badge">Question ${idx + 1} of ${total}</span>
+        <span class="ev-que-status">${statusText}</span>
       </div>
-      <div class="exam-q-text">${escapeHtml(q.question)}</div>
+      <button class="ev-flag-btn${isFlagged ? ' flagged' : ''}" id="examFlagBtn-${idx}"
+              onclick="examToggleFlag(${idx})" title="Flag this question for review">
+        <span class="ev-flag-icon">${isFlagged ? '🚩' : '⚑'}</span>
+        ${isFlagged ? 'Flagged' : 'Flag question'}
+      </button>
+    </div>
+    <div class="ev-que-body">
+      <div class="ev-que-text">${escapeHtml(q.question)}</div>
       ${imgHTML}
-      <div class="exam-options-list" id="examOpts-${i}"></div>
+      <div class="ev-options-list" id="evOptsList"></div>
+    </div>
+  `;
+
+  const optsList = card.querySelector('#evOptsList');
+  getOptionEntries(q).forEach(([key, val]) => {
+    const row = document.createElement('label');
+    row.className = 'ev-option-row' + (answered === key ? ' selected' : '');
+    row.innerHTML = `
+      <input type="radio" name="evq${idx}" value="${key}"${answered === key ? ' checked' : ''} />
+      <span class="ev-option-text"><strong>${key}.</strong>&nbsp;${escapeHtml(val)}</span>
     `;
-
-    const optsList = block.querySelector(`#examOpts-${i}`);
-    getOptionEntries(q).forEach(([key, val]) => {
-      const label = document.createElement('label');
-      label.className = 'exam-option-label';
-      label.innerHTML = `
-        <input type="radio" name="examq${i}" value="${key}" />
-        <span class="exam-opt-key">${key}.</span>
-        <span>${escapeHtml(val)}</span>
-      `;
-      label.addEventListener('click', () => examSelectAnswer(i, key));
-      optsList.appendChild(label);
-    });
-
-    col.appendChild(block);
+    row.addEventListener('click', () => examSelectAnswer(idx, key));
+    optsList.appendChild(row);
   });
+
+  // Update Prev/Next buttons
+  const prevBtn = document.getElementById('evPrevBtn');
+  const nextBtn = document.getElementById('evNextBtn');
+  if (prevBtn) prevBtn.disabled = idx === 0;
+  if (nextBtn) nextBtn.disabled = idx === total - 1;
+
+  // Scroll content to top
+  const content = document.getElementById('evContent');
+  if (content) content.scrollTop = 0;
+
+  buildExamNav();
+}
+
+/* Navigate to a question by index */
+function examGoTo(idx) {
+  if (idx < 0 || idx >= currentQuestions.length) return;
+  examRenderQuestion(idx);
 }
 
 function escapeHtml(str) {
@@ -2566,60 +2592,46 @@ function examSelectAnswer(qIndex, key) {
   const prev    = examAnswers[qIndex] || '';
   const correct = currentQuestions[qIndex].answer;
   if (prev && prev !== key) {
-    if (prev === correct)    correctToWrong++;
+    if (prev === correct)     correctToWrong++;
     else if (key === correct) wrongToCorrect++;
-    const _q = currentQuestions[qIndex];
+    const _q   = currentQuestions[qIndex];
     const _type = prev === correct ? 'c2w' : key === correct ? 'w2c' : 'w2w';
     changeLog.push({ qIndex, fromKey: prev, fromText: _q.options[prev], toKey: key, toText: _q.options[key], type: _type });
   }
   examAnswers[qIndex] = key;
 
-  // Update option labels in this block
-  const block = document.getElementById('exam-q-' + qIndex);
-  block.querySelectorAll('.exam-option-label').forEach(lbl => {
-    const inp = lbl.querySelector('input');
-    lbl.classList.toggle('selected', inp.value === key);
-    if (inp.value === key) inp.checked = true;
-  });
-
-  buildExamNav();
-  updateExamAnsweredCount();
+  // Refresh current question display so status + selection update
+  examRenderQuestion(qIndex);
 }
 
 function examToggleFlag(i) {
   if (examFlagged.has(i)) examFlagged.delete(i);
   else examFlagged.add(i);
-
-  const btn = document.getElementById('examFlagBtn-' + i);
-  if (btn) btn.classList.toggle('flagged', examFlagged.has(i));
-
-  buildExamNav();
+  examRenderQuestion(i);
 }
 
 function buildExamNav() {
   const grid = document.getElementById('examNavGrid');
+  if (!grid) return;
   grid.innerHTML = '';
-  currentQuestions.forEach((_, i) => {
-    const sq = document.createElement('button');
-    sq.className = 'exam-nav-sq';
-    if (examAnswers[i]) sq.classList.add('answered');
-    if (examFlagged.has(i)) sq.classList.add('flagged');
-
-    sq.innerHTML = `${i + 1}<span class="flag-dot"></span>`;
-    sq.title = 'Jump to Q' + (i + 1);
-    sq.onclick = () => {
-      const block = document.getElementById('exam-q-' + i);
-      if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-    grid.appendChild(sq);
-  });
-}
-
-function updateExamAnsweredCount() {
   const total    = currentQuestions.length;
   const answered = Object.keys(examAnswers).length;
-  const el = document.getElementById('examAnsweredCount');
-  if (el) el.textContent = `${answered} / ${total} answered`;
+
+  // Update progress row
+  const pr = document.getElementById('evProgressRow');
+  if (pr) pr.textContent = `${answered} / ${total} answered`;
+
+  currentQuestions.forEach((_, i) => {
+    const sq = document.createElement('button');
+    sq.className = 'ev-nav-sq';
+    if (i === examCurrentIdx)   sq.classList.add('ev-current');
+    if (examAnswers[i])         sq.classList.add('ev-answered');
+    if (examFlagged.has(i))     sq.classList.add('ev-flagged');
+    sq.innerHTML = `${i + 1}<span class="ev-flag-triangle"></span>`;
+    sq.title = `Question ${i + 1}`;
+    sq.onclick = () => examGoTo(i);
+    grid.appendChild(sq);
+  });
 }
 
 /* ── Exam Timer ── */
@@ -2652,8 +2664,8 @@ function updateExamTimerDisplay() {
 }
 
 function confirmExamFinish() {
-  const total    = currentQuestions.length;
-  const answered = Object.keys(examAnswers).length;
+  const total      = currentQuestions.length;
+  const answered   = Object.keys(examAnswers).length;
   const unanswered = total - answered;
   if (unanswered > 0) {
     if (!confirm(`You have ${unanswered} unanswered question(s). Finish attempt anyway?`)) return;
