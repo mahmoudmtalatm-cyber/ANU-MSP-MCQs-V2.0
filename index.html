@@ -8236,6 +8236,13 @@ function _reRenderOpenSelections() {
    appConfig/manifestBackfillDone so the (relatively expensive) full
    subcollection scan only ever runs once, by whichever client hits
    it first — after that the manifest is complete for everyone.
+
+   IMPORTANT: writes to appConfig/* are admin-only per the Firestore
+   rules (same as appConfig/cacheVersion). Only call this once an
+   admin user is confirmed signed in — see the isAdminUser(user)
+   check in onAuthStateChanged below. Calling it for a non-admin or
+   signed-out visitor will just fail with permission-denied on the
+   setDoc calls (harmless, but pointless — it can never complete).
 ══════════════════════════════════════════════════════════ */
 async function _backfillManifestIfNeeded() {
   try {
@@ -8278,10 +8285,6 @@ async function _backfillManifestIfNeeded() {
 async function loadPublishedQuestionsIntoSubjects() {
   if (!window._db) return;
   try {
-    /* ── 0. Pull in any lectures published before the manifest system
-            existed (one-time, self-disabling after it succeeds). ── */
-    await _backfillManifestIfNeeded();
-
     /* ── 1. One tiny read tells us every published quiz's id + its own
             last-modified timestamp, per subject. No questions, no images. ── */
     const manifest = await _fetchPublishedManifest();
@@ -9116,6 +9119,14 @@ const firebaseConfig = {
           window._userDisplayName = null;
         }
       } catch(e) { window._userDisplayName = null; }
+
+      // Manifest backfill needs admin write access to appConfig (same rule
+      // as cacheVersion), so only attempt it once we've confirmed this user
+      // is an admin. Re-load published questions afterward so any lectures
+      // the backfill just discovered show up immediately, without a refresh.
+      if (isAdminUser(user)) {
+        _backfillManifestIfNeeded().then(() => loadPublishedQuestionsIntoSubjects());
+      }
     } else {
       // No user — nothing to load from Firestore, mark as ready immediately
       window._cachedStats = null;
