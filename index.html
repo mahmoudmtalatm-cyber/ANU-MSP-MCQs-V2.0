@@ -7659,10 +7659,57 @@ function adminEditReplaceImage(idx, event) {
   reader.readAsDataURL(file);
 }
 
+/* Swap a published lecture's position with its immediate neighbor (up/down)
+   within its subject. Updates both lectures' 'order' field in Firestore,
+   bumps both entries' manifest timestamp so every user's cache picks up
+   the new order on their next load, and refreshes the current view. */
+async function adminSwapLectureOrder(lectureId, direction) {
+  if (!adminTargetSubject) return;
+  try {
+    const col  = window._collection(window._db, 'publishedQuestions', adminTargetSubject, 'lectures');
+    const snap = await window._getDocs(col);
+    const entries = [];
+    snap.forEach(d => entries.push({ id: d.id, ...d.data() }));
+    entries.sort((a, b) => (a.order ?? a.publishedAt ?? 0) - (b.order ?? b.publishedAt ?? 0));
+
+    const idx = entries.findIndex(e => e.id === lectureId);
+    if (idx === -1) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= entries.length) return; // already at an edge
+
+    const a = entries[idx];
+    const b = entries[swapIdx];
+    const aOrder = a.order ?? a.publishedAt ?? 0;
+    const bOrder = b.order ?? b.publishedAt ?? 0;
+
+    await window._setDoc(
+      window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', a.id),
+      { order: bOrder }, { merge: true }
+    );
+    await window._setDoc(
+      window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', b.id),
+      { order: aOrder }, { merge: true }
+    );
+
+    // Only these two quizzes are invalidated for every other user — nothing
+    // else they've already cached is touched.
+    const now = Date.now();
+    await _updatePublishedManifest(adminTargetSubject, a.id, now);
+    await _updatePublishedManifest(adminTargetSubject, b.id, now + 1);
+
+    // Refresh in-memory ordering + whatever the admin currently has open
+    await loadPublishedQuestionsIntoSubjects();
+    if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
+    renderAdminAssignedList();
+  } catch (e) {
+    alert('Failed to reorder: ' + (e.message || e));
+  }
+}
+
 async function renderAdminAssignedList() {
   const sec = document.getElementById('adminAssignedSection');
   if (!sec) return;
-  sec.innerHTML = `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}"</div>`;
+  sec.innerHTML = `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
 
   let entries = [];
   try {
@@ -7679,9 +7726,17 @@ async function renderAdminAssignedList() {
     return;
   }
 
-  entries.forEach(e => {
+  entries.sort((a, b) => (a.order ?? a.publishedAt ?? 0) - (b.order ?? b.publishedAt ?? 0));
+
+  entries.forEach((e, idx) => {
     sec.innerHTML += `
       <div class="admin-assigned-item">
+        <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;">
+          <button class="admin-remove-btn" style="padding:3px 8px;background:#F0F8FF;color:var(--accent);border:1.5px solid #B0D4F0;line-height:1;" title="Move up"
+            onclick="adminSwapLectureOrder('${e.id}','up')" ${idx === 0 ? 'disabled' : ''}>⬆️</button>
+          <button class="admin-remove-btn" style="padding:3px 8px;background:#F0F8FF;color:var(--accent);border:1.5px solid #B0D4F0;line-height:1;" title="Move down"
+            onclick="adminSwapLectureOrder('${e.id}','down')" ${idx === entries.length - 1 ? 'disabled' : ''}>⬇️</button>
+        </div>
         <div class="admin-assigned-info">
           <div class="admin-assigned-name">${escapeHtml(e.lectureName || e.id)}</div>
           <div class="admin-assigned-path">${(e.questions || []).length} question${(e.questions||[]).length !== 1 ? 's' : ''} · ${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)} → ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}</div>
@@ -7770,7 +7825,8 @@ async function adminSavePublishedEdits() {
       questions: cleanQuestions,
       publishedBy: window._currentUser ? window._currentUser.uid : null,
       publishedAt: existing.publishedAt || updatedAt,
-      updatedAt
+      updatedAt,
+      order: existing.order != null ? existing.order : updatedAt // preserve admin-set position; backfill if missing
     }));
 
     // Update in-memory subject (hydrate images from subcollection for immediate use)
@@ -7891,7 +7947,8 @@ async function adminPublishQuiz() {
       sourceTitle: adminSelectedQuiz.title,
       sourceType: adminSelectedQuiz.sourceType,
       publishedBy: window._currentUser ? window._currentUser.uid : null,
-      publishedAt
+      publishedAt,
+      order: publishedAt // default position: newest goes last; admin can reorder afterward
     }));
 
     // Merge into the in-memory subject so it's usable immediately.
@@ -7976,6 +8033,13 @@ const CACHE_SHARED_VER_KEY = 'anu_msp_cache_shared_ver';
 
 const _IDB_NAME  = 'anu_msp_cache_db';
 const _IDB_STORE = 'kv';
+
+// subjName -> { lectureId: lectureName }, valid only for the current page
+// load. Lets loadPublishedQuestionsIntoSubjects() correctly clean up
+// renamed/reordered entries if it's called more than once in one session
+// (e.g. right after an admin backfill or a manual reorder), without waiting
+// for the slower IndexedDB-persisted track to catch up.
+const _sessionPublishedTrack = {};
 
 let _idbPromise = null;
 function _idbOpen() {
@@ -8282,6 +8346,76 @@ async function _backfillManifestIfNeeded() {
   }
 }
 
+/* ══════════════════════════════════════════════════════════
+   ONE-TIME MIGRATION — give legacy lectures a stable 'order'
+   ------------------------------------------------------------
+   Lectures published before the reorder feature existed have no
+   'order' field, so admin's Up/Down controls (and the sort in
+   loadPublishedQuestionsIntoSubjects) have nothing to sort them by.
+   This scans every subject's lectures once, assigns order = their
+   original publishedAt/updatedAt timestamp to anything missing it
+   (so they land in their existing chronological position rather
+   than jumping around), and bumps each fixed lecture's manifest
+   timestamp so every user's cache picks up the change.
+
+   Separate from _backfillManifestIfNeeded / manifestBackfillDone
+   on purpose — that migration may already have completed on a given
+   deployment before this feature existed, so this uses its own
+   'orderBackfillDone' flag to guarantee it still runs once.
+
+   Admin-only, same reasoning as _backfillManifestIfNeeded: writes to
+   appConfig/* and to lecture docs are gated by Firestore rules, so
+   only call this once an admin user is confirmed signed in.
+══════════════════════════════════════════════════════════ */
+async function _backfillLectureOrderIfNeeded() {
+  try {
+    const doneRef  = window._doc(window._db, 'appConfig', 'orderBackfillDone');
+    const doneSnap = await window._getDoc(doneRef);
+    if (doneSnap.exists() && doneSnap.data().done) return;
+
+    const manifestRef  = window._doc(window._db, 'appConfig', 'publishedManifest');
+    const manifestSnap = await window._getDoc(manifestRef);
+    const manifestData = manifestSnap.exists() ? (manifestSnap.data() || {}) : {};
+    if (!manifestData.subjects) manifestData.subjects = {};
+
+    let changed = false;
+    await Promise.all(Object.keys(subjects).map(async (subjName) => {
+      try {
+        const col   = window._collection(window._db, 'publishedQuestions', subjName, 'lectures');
+        const snaps = await window._getDocs(col);
+        const fixes = [];
+        snaps.forEach(docSnap => {
+          const d = docSnap.data() || {};
+          if (d.order == null) {
+            fixes.push({ id: docSnap.id, order: d.publishedAt || d.updatedAt || Date.now() });
+          }
+        });
+        if (!fixes.length) return;
+
+        // Metadata-only merge — doesn't touch questions/images.
+        await Promise.all(fixes.map(fix =>
+          window._setDoc(
+            window._doc(window._db, 'publishedQuestions', subjName, 'lectures', fix.id),
+            { order: fix.order },
+            { merge: true }
+          )
+        ));
+
+        if (!manifestData.subjects[subjName]) manifestData.subjects[subjName] = {};
+        fixes.forEach(fix => { manifestData.subjects[subjName][fix.id] = Date.now(); });
+        changed = true;
+      } catch (e) {
+        console.warn('Order backfill scan failed for subject', subjName, e);
+      }
+    }));
+
+    if (changed) await window._setDoc(manifestRef, manifestData);
+    await window._setDoc(doneRef, { done: true });
+  } catch (e) {
+    console.warn('Order backfill failed:', e);
+  }
+}
+
 async function loadPublishedQuestionsIntoSubjects() {
   if (!window._db) return;
   try {
@@ -8296,19 +8430,26 @@ async function loadPublishedQuestionsIntoSubjects() {
               • new/changed one → fetch just that one doc, cache it the
                                     moment it lands (not after the whole
                                     subject or app finishes loading)
-              • removed one     → dropped from memory + local cache      ── */
+              • removed one     → dropped from memory + local cache
+            Fetches run in parallel so they can land in any order — the
+            actual student-facing sequence is decided afterward from each
+            quiz's admin-controlled 'order' field, not fetch timing. ── */
     await Promise.all(Object.keys(subjects).map(async (subjName) => {
       const lecVersions = manifest[subjName] || {};
       const lecIds = Object.keys(lecVersions);
 
-      // What we knew was live for this subject last time (id → name),
-      // so we can tell a since-removed/renamed quiz apart from a
-      // subject's own hardcoded, non-published lecture content.
+      // What we knew was live for this subject last time (id → name), so we
+      // can tell a since-removed/renamed quiz apart from a subject's own
+      // hardcoded, non-published lecture content. Prefer the in-memory
+      // session track (set the last time this function ran during THIS
+      // page load, e.g. after an admin migration) over the IndexedDB one,
+      // so repeated in-session calls clean up renames/reorders correctly.
       const trackKey  = 'publishedTrack:' + subjName;
-      const prevTrack = (await _idbGet(trackKey)) || {};
+      const prevTrack = _sessionPublishedTrack[subjName] || (await _idbGet(trackKey)) || {};
 
       if (!subjects[subjName].lectures) subjects[subjName].lectures = {};
       const newTrack = {};
+      const resolved = []; // { name, questions, order } for every lecture we have this pass
 
       await Promise.all(lecIds.map(async (lectureId) => {
         const ver = lecVersions[lectureId];
@@ -8317,7 +8458,7 @@ async function loadPublishedQuestionsIntoSubjects() {
 
         if (cached && cached.ver === ver) {
           // Cache hit for this exact quiz — zero Firestore reads.
-          subjects[subjName].lectures[cached.lectureName] = cached.questions;
+          resolved.push({ name: cached.lectureName, questions: cached.questions, order: cached.order });
           newTrack[lectureId] = cached.lectureName;
           return;
         }
@@ -8330,21 +8471,17 @@ async function loadPublishedQuestionsIntoSubjects() {
           const data = snap.data();
           const name = data.lectureName || lectureId;
           const questions = data.questions || [];
+          const order = data.order != null ? data.order : (data.publishedAt || 0);
           // Hydrate images from the separate images subcollection (published lectures
           // store images there to stay under Firestore's 1 MB doc limit, and to keep
           // the snapshot independent of the original source quiz).
           await hydratePublishedLectureImages(subjName, lectureId, questions);
 
-          // If this quiz was renamed since we last saw it, drop the stale old-name entry.
-          if (prevTrack[lectureId] && prevTrack[lectureId] !== name) {
-            delete subjects[subjName].lectures[prevTrack[lectureId]];
-          }
-
-          subjects[subjName].lectures[name] = questions;
+          resolved.push({ name, questions, order });
           newTrack[lectureId] = name;
           // Persist THIS quiz immediately — it's durably cached even if
           // other quizzes are still loading or the page closes right now.
-          await _idbSet(idbKey, { ver, lectureName: name, questions });
+          await _idbSet(idbKey, { ver, lectureName: name, questions, order });
         } catch (e) {
           // Leave uncached — retried next load. Preserve any previous
           // tracking so we don't wrongly treat it as "removed" below.
@@ -8356,10 +8493,19 @@ async function loadPublishedQuestionsIntoSubjects() {
       // now was deleted or moved elsewhere — remove it (and only it).
       const removedIds = Object.keys(prevTrack).filter(id => !(id in newTrack));
       await Promise.all(removedIds.map(async (id) => {
-        delete subjects[subjName].lectures[prevTrack[id]];
         await _idbDelete('published:' + subjName + ':' + id);
       }));
 
+      // Rebuild this subject's published-lecture entries from a clean slate:
+      // first drop every name we previously knew about (covers renames too),
+      // then re-insert in admin-controlled order. Hardcoded, non-published
+      // lectures were already present as object keys before this function
+      // ever ran, so they keep their original position ahead of these.
+      Object.values(prevTrack).forEach(name => { delete subjects[subjName].lectures[name]; });
+      resolved.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      resolved.forEach(r => { subjects[subjName].lectures[r.name] = r.questions; });
+
+      _sessionPublishedTrack[subjName] = newTrack;
       await _idbSet(trackKey, newTrack);
     }));
 
@@ -8819,7 +8965,8 @@ async function adminExecMoveQuiz(andDelete) {
       sourceTitle: srcData.sourceTitle || _moveQuizLectureName,
       sourceType:  srcData.sourceType  || 'copy',
       publishedBy: window._currentUser ? window._currentUser.uid : null,
-      publishedAt
+      publishedAt,
+      order: publishedAt // appended to the end of the destination subject's list
     }));
 
     // Update in-memory for destination subject
@@ -9125,7 +9272,9 @@ const firebaseConfig = {
       // is an admin. Re-load published questions afterward so any lectures
       // the backfill just discovered show up immediately, without a refresh.
       if (isAdminUser(user)) {
-        _backfillManifestIfNeeded().then(() => loadPublishedQuestionsIntoSubjects());
+        _backfillManifestIfNeeded()
+          .then(() => _backfillLectureOrderIfNeeded())
+          .then(() => loadPublishedQuestionsIntoSubjects());
       }
     } else {
       // No user — nothing to load from Firestore, mark as ready immediately
