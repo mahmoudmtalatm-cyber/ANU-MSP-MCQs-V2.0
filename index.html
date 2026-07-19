@@ -8130,7 +8130,9 @@ async function loadPublishedQuestionsIntoSubjects() {
     const existing = _readCache() || {};
     existing.published = publishedSnapshot;
     _writeCache(existing);
-    if (serverVer) _writeCacheVer(serverVer);
+    let verToStore = serverVer;
+    if (!verToStore) verToStore = await bumpCacheVersion(); // doc doesn't exist yet — create the baseline
+    if (verToStore) _writeCacheVer(verToStore);
 
   } catch (e) {
     console.warn('Failed to load published questions:', e);
@@ -8376,8 +8378,7 @@ async function loadCurriculumExtensions() {
     /* ── 2. Cache miss — do the real fetch ── */
     const ref  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
     const snap = await window._getDoc(ref);
-    if (!snap.exists()) return;
-    const data = snap.data() || {};
+    const data = snap.exists() ? (snap.data() || {}) : {};
 
     // Restore admin-created years
     const extYears = data.years || [];
@@ -8410,11 +8411,15 @@ async function loadCurriculumExtensions() {
     buildYearGrid();
     _reRenderOpenSelections();
 
-    /* ── 3. Save to cache (merge with any existing published cache) ── */
+    /* ── 3. Save to cache (merge with any existing published cache) ──
+       Do this even when the doc didn't exist / was empty, so we still
+       record "nothing to load" and skip re-fetching next time. */
     const existing = _readCache() || {};
     existing.curriculum = { extYears, extModules, extSubjects };
     _writeCache(existing);
-    if (serverVer) _writeCacheVer(serverVer);
+    let verToStore = serverVer;
+    if (!verToStore) verToStore = await bumpCacheVersion(); // doc doesn't exist yet — create the baseline
+    if (verToStore) _writeCacheVer(verToStore);
 
   } catch (e) {
     console.warn('Failed to load curriculum extensions:', e);
