@@ -6809,7 +6809,7 @@ async function renderCommunityQuizzes(forceReload) {
       // Cache check: one tiny doc read tells us if the full collection changed
       const serverVer = forceReload ? null : await _fetchSharedServerVersion();
       const localVer  = _readSharedCacheVer();
-      const cached    = _readCache();
+      const cached    = await _readCache();
 
       if (!forceReload && serverVer && localVer === serverVer && cached && cached.shared) {
         console.log('[cache] community quizzes hit, skipping Firestore fetch');
@@ -6820,9 +6820,9 @@ async function renderCommunityQuizzes(forceReload) {
         snap.forEach(d => _allSharedQuizzes.push(d.data()));
 
         // Save to local cache so the next open skips the full read
-        const existing = _readCache() || {};
+        const existing = (await _readCache()) || {};
         existing.shared = _allSharedQuizzes;
-        _writeCache(existing);
+        await _writeCache(existing);
         let verToStore = forceReload ? await _fetchSharedServerVersion() : serverVer;
         if (!verToStore) verToStore = await bumpSharedQuizzesVersion(); // establish baseline first time
         if (verToStore) _writeSharedCacheVer(verToStore);
@@ -7202,7 +7202,7 @@ async function renderAdminPanel() {
         // instead of always doing a full Firestore read.
         const serverVer = await _fetchSharedServerVersion();
         const localVer  = _readSharedCacheVer();
-        const cached     = _readCache();
+        const cached     = await _readCache();
         let shared;
 
         if (serverVer && localVer === serverVer && cached && cached.shared) {
@@ -7211,9 +7211,9 @@ async function renderAdminPanel() {
           const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
           shared = [];
           snap.forEach(d => shared.push(d.data()));
-          const existing = _readCache() || {};
+          const existing = (await _readCache()) || {};
           existing.shared = shared;
-          _writeCache(existing);
+          await _writeCache(existing);
           let verToStore = serverVer;
           if (!verToStore) verToStore = await bumpSharedQuizzesVersion(); // establish baseline first time
           if (verToStore) _writeSharedCacheVer(verToStore);
@@ -7761,6 +7761,7 @@ async function adminSavePublishedEdits() {
     const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
     const snap = await window._getDoc(ref);
     const existing = snap.exists() ? snap.data() : {};
+    const updatedAt = Date.now();
 
     await window._setDoc(ref, cleanForFirestore({
       ...existing,
@@ -7768,8 +7769,8 @@ async function adminSavePublishedEdits() {
       lectureName: adminEditingPublishedName,
       questions: cleanQuestions,
       publishedBy: window._currentUser ? window._currentUser.uid : null,
-      publishedAt: existing.publishedAt || Date.now(),
-      updatedAt: Date.now()
+      publishedAt: existing.publishedAt || updatedAt,
+      updatedAt
     }));
 
     // Update in-memory subject (hydrate images from subcollection for immediate use)
@@ -7780,8 +7781,9 @@ async function adminSavePublishedEdits() {
 
     if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Changes saved!</div>`;
 
-    _clearCache();
-    await bumpCacheVersion();
+    // Only THIS quiz's cache entry is invalidated for every other user —
+    // everything else they've already cached stays untouched.
+    await _updatePublishedManifest(adminTargetSubject, lectureId, updatedAt);
 
     if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
 
@@ -7823,8 +7825,8 @@ async function adminRemovePublished(lectureId) {
       adminEditingPublishedName = '';
     }
 
-    _clearCache();
-    await bumpCacheVersion();
+    _idbDelete('published:' + adminTargetSubject + ':' + lectureId);
+    await _updatePublishedManifest(adminTargetSubject, lectureId, null);
     renderAdminAssignedList();
     if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
   } catch (e) {
@@ -7881,6 +7883,7 @@ async function adminPublishQuiz() {
     await uploadPublishedLectureImages(adminTargetSubject, lectureId, cleanQuestions);
 
     const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
+    const publishedAt = Date.now();
     await window._setDoc(ref, cleanForFirestore({
       id: lectureId,
       lectureName,
@@ -7888,7 +7891,7 @@ async function adminPublishQuiz() {
       sourceTitle: adminSelectedQuiz.title,
       sourceType: adminSelectedQuiz.sourceType,
       publishedBy: window._currentUser ? window._currentUser.uid : null,
-      publishedAt: Date.now()
+      publishedAt
     }));
 
     // Merge into the in-memory subject so it's usable immediately.
@@ -7902,8 +7905,9 @@ async function adminPublishQuiz() {
     if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Published "${escapeHtml(lectureName)}" to ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}!</div>`;
     if (nameInput) nameInput.value = '';
 
-    _clearCache();
-    await bumpCacheVersion();
+    // Only THIS new quiz shows up as changed for every other user —
+    // their cache for every other quiz/subject stays untouched.
+    await _updatePublishedManifest(adminTargetSubject, lectureId, publishedAt);
 
     // Close the editor after a successful publish
     adminEditMode = null;
@@ -7925,7 +7929,6 @@ async function adminPublishQuiz() {
 
 /* ══════════════════════════════════════════════════════════
    LOCAL CACHE — curriculum + published questions + community quizzes
-   Cache key  : 'anu_msp_cache'
    Version key: 'anu_msp_cache_ver'        (curriculum + published)
                 'anu_msp_cache_shared_ver' (community quizzes)
 
@@ -7948,21 +7951,121 @@ async function adminPublishQuiz() {
    Custom quizzes (private, per-user) use a separate per-user version
    doc: users/{uid}/meta/cacheVersion  { v: <ms> } — see the
    "PER-USER CACHE" section further down.
+
+   STORAGE BACKEND: IndexedDB, not localStorage.
+   The actual payload (published questions + their images, community
+   quizzes + their images) can easily run past localStorage's ~5-10MB
+   per-origin quota. When that happened, localStorage.setItem() threw
+   a QuotaExceededError that was being silently swallowed — so the
+   cache write always failed and every single page load did a full
+   Firestore re-fetch, even though the version-check logic looked
+   correct. IndexedDB has a far larger quota (typically hundreds of MB
+   or more) and comfortably holds this data.
+
+   Each piece is also stored under its OWN key ('curriculum', 'shared',
+   and one 'published:<subjectName>' key per subject) and written the
+   moment it's fetched, rather than being accumulated in memory and
+   only saved once the entire dataset has finished loading. That way
+   a subject that finished loading is durably cached even if the user
+   navigates away or refreshes before every other subject is done —
+   no "must complete a full load before anything is stored" problem.
 ══════════════════════════════════════════════════════════ */
 
-const CACHE_KEY            = 'anu_msp_cache';
 const CACHE_VER_KEY        = 'anu_msp_cache_ver';
 const CACHE_SHARED_VER_KEY = 'anu_msp_cache_shared_ver';
 
-function _readCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch(e) { return null; }
+const _IDB_NAME  = 'anu_msp_cache_db';
+const _IDB_STORE = 'kv';
+
+let _idbPromise = null;
+function _idbOpen() {
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) { reject(new Error('IndexedDB unavailable')); return; }
+    const req = indexedDB.open(_IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(_IDB_STORE)) {
+        req.result.createObjectStore(_IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+  return _idbPromise;
 }
 
-function _writeCache(payload) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(payload)); } catch(e) {}
+async function _idbGet(key) {
+  try {
+    const db = await _idbOpen();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(_IDB_STORE, 'readonly');
+      const rq = tx.objectStore(_IDB_STORE).get(key);
+      rq.onsuccess = () => resolve(rq.result === undefined ? null : rq.result);
+      rq.onerror   = () => reject(rq.error);
+    });
+  } catch (e) { return null; }
+}
+
+async function _idbSet(key, value) {
+  try {
+    const db = await _idbOpen();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(_IDB_STORE, 'readwrite');
+      tx.objectStore(_IDB_STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+    });
+    return true;
+  } catch (e) { console.warn('[cache] IndexedDB write failed for', key, e); return false; }
+}
+
+async function _idbDelete(key) {
+  try {
+    const db = await _idbOpen();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(_IDB_STORE, 'readwrite');
+      tx.objectStore(_IDB_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+    });
+  } catch (e) {}
+}
+
+async function _idbKeys() {
+  try {
+    const db = await _idbOpen();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(_IDB_STORE, 'readonly');
+      const rq = tx.objectStore(_IDB_STORE).getAllKeys();
+      rq.onsuccess = () => resolve(rq.result || []);
+      rq.onerror   = () => reject(rq.error);
+    });
+  } catch (e) { return []; }
+}
+
+/* Back-compat shape: returns { curriculum?, published?, shared? } so
+   existing callers that do `cached.published` / `cached.curriculum` /
+   `cached.shared` keep working unchanged (aside from adding `await`). */
+async function _readCache() {
+  const [curriculum, shared] = await Promise.all([
+    _idbGet('curriculum'),
+    _idbGet('shared')
+  ]);
+  if (curriculum == null && shared == null) return null;
+  const out = {};
+  if (curriculum != null) out.curriculum = curriculum;
+  if (shared     != null) out.shared     = shared;
+  return out;
+}
+
+/* Writes only the top-level sections present on payload (curriculum
+   and/or shared). Published questions are handled separately, per
+   subject — see _idbSet('published:<subject>', ...) below. */
+async function _writeCache(payload) {
+  const jobs = [];
+  if (payload && payload.curriculum !== undefined) jobs.push(_idbSet('curriculum', payload.curriculum));
+  if (payload && payload.shared     !== undefined) jobs.push(_idbSet('shared',     payload.shared));
+  await Promise.all(jobs);
 }
 
 function _readCacheVer() {
@@ -7981,9 +8084,15 @@ function _writeSharedCacheVer(v) {
   try { localStorage.setItem(CACHE_SHARED_VER_KEY, String(v)); } catch(e) {}
 }
 
-function _clearCache() {
+async function _clearCache() {
+  // Only curriculum + community-quiz caches are governed by a single global
+  // version marker, so only they need a full wipe here. Published quizzes
+  // are cached (and invalidated) individually — see the manifest system
+  // below — so clearing this doesn't touch/discard already-cached quizzes.
   try {
-    localStorage.removeItem(CACHE_KEY);
+    await Promise.all([_idbDelete('curriculum'), _idbDelete('shared')]);
+  } catch (e) {}
+  try {
     localStorage.removeItem(CACHE_VER_KEY);
     localStorage.removeItem(CACHE_SHARED_VER_KEY);
   } catch(e) {}
@@ -8031,6 +8140,47 @@ async function _fetchSharedServerVersion() {
   } catch(e) { return null; }
 }
 
+/* ══════════════════════════════════════════════════════════
+   PUBLISHED-QUIZ MANIFEST — quiz-level cache granularity
+   ------------------------------------------------------------
+   One tiny doc, appConfig/publishedManifest, shaped like:
+     { subjects: { [subjectName]: { [lectureId]: lastModifiedTs } } }
+   It lists every published quiz's id and its own last-modified
+   timestamp — no questions, no images, just numbers — so reading it
+   is cheap. Comparing it against what's cached locally tells us
+   EXACTLY which individual quizzes changed since last time, so
+   editing one quiz only invalidates that one quiz's cache entry —
+   not its whole subject, and not any other subject.
+══════════════════════════════════════════════════════════ */
+async function _fetchPublishedManifest() {
+  try {
+    const snap = await window._getDoc(window._doc(window._db, 'appConfig', 'publishedManifest'));
+    return snap.exists() ? (snap.data().subjects || {}) : {};
+  } catch (e) { return {}; }
+}
+
+/* Call after publishing, editing, deleting, or moving a published lecture.
+   Pass ts = null to remove the entry (lecture deleted or moved away). */
+async function _updatePublishedManifest(subject, lectureId, ts) {
+  if (!window._db) return;
+  try {
+    const ref  = window._doc(window._db, 'appConfig', 'publishedManifest');
+    const snap = await window._getDoc(ref);
+    const data = snap.exists() ? (snap.data() || {}) : {};
+    if (!data.subjects) data.subjects = {};
+    if (!data.subjects[subject]) data.subjects[subject] = {};
+    if (ts == null) {
+      delete data.subjects[subject][lectureId];
+      if (!Object.keys(data.subjects[subject]).length) delete data.subjects[subject];
+    } else {
+      data.subjects[subject][lectureId] = ts;
+    }
+    await window._setDoc(ref, data);
+  } catch (e) {
+    console.warn('Failed to update published manifest:', e);
+  }
+}
+
 /* Apply a cached payload directly into memory (no Firestore reads) */
 function _applyCurriculumCache(cached) {
   const { extYears = [], extModules = {}, extSubjects = {} } = cached.curriculum || {};
@@ -8058,18 +8208,6 @@ function _applyCurriculumCache(cached) {
   _reRenderOpenSelections();
 }
 
-function _applyPublishedCache(cached) {
-  const published = cached.published || {};
-  Object.entries(published).forEach(([subjKey, lecs]) => {
-    if (!subjects[subjKey]) return;
-    if (!subjects[subjKey].lectures) subjects[subjKey].lectures = {};
-    Object.entries(lecs).forEach(([lecName, questions]) => {
-      subjects[subjKey].lectures[lecName] = questions;
-    });
-  });
-  _reRenderOpenSelections();
-}
-
 function _reRenderOpenSelections() {
   const _yr = selectedYear, _mod = selectedModule, _subj = selectedSubject, _lecs = selectedLectures;
   if (_yr)   { selectYear(_yr);    selectedLectures = _lecs; }
@@ -8084,55 +8222,86 @@ function _reRenderOpenSelections() {
 async function loadPublishedQuestionsIntoSubjects() {
   if (!window._db) return;
   try {
-    /* ── 1. Check server version (already fetched by loadCurriculumExtensions,
-            but we read it again here in case it got bumped between calls) ── */
-    const serverVer = await _fetchServerCacheVersion();
-    const localVer  = _readCacheVer();
-    const cached    = _readCache();
+    /* ── 1. One tiny read tells us every published quiz's id + its own
+            last-modified timestamp, per subject. No questions, no images. ── */
+    const manifest = await _fetchPublishedManifest();
 
-    if (serverVer && localVer === serverVer && cached && cached.published) {
-      /* Cache hit — apply immediately, no heavy Firestore reads */
-      console.log('[cache] published questions hit, skipping Firestore fetch');
-      _applyPublishedCache(cached);
-      return;
-    }
+    /* ── 2. Handle every subject in parallel, and within each subject
+            every quiz in parallel. Each quiz is checked/fetched/cached
+            completely independently:
+              • unchanged quiz  → read straight from IndexedDB, 0 reads
+              • new/changed one → fetch just that one doc, cache it the
+                                    moment it lands (not after the whole
+                                    subject or app finishes loading)
+              • removed one     → dropped from memory + local cache      ── */
+    await Promise.all(Object.keys(subjects).map(async (subjName) => {
+      const lecVersions = manifest[subjName] || {};
+      const lecIds = Object.keys(lecVersions);
 
-    /* ── 2. Cache miss — do the real fetches ── */
-    const publishedSnapshot = {}; // what we'll save to cache
+      // What we knew was live for this subject last time (id → name),
+      // so we can tell a since-removed/renamed quiz apart from a
+      // subject's own hardcoded, non-published lecture content.
+      const trackKey  = 'publishedTrack:' + subjName;
+      const prevTrack = (await _idbGet(trackKey)) || {};
 
-    for (const subjName of Object.keys(subjects)) {
-      try {
-        const col = window._collection(window._db, 'publishedQuestions', subjName, 'lectures');
-        const snap = await window._getDocs(col);
-        if (snap.empty) continue;
-        if (!subjects[subjName].lectures) subjects[subjName].lectures = {};
-        publishedSnapshot[subjName] = {};
-        await Promise.all(snap.docs.map(async (d) => {
-          const data = d.data();
-          const name = data.lectureName || d.id;
+      if (!subjects[subjName].lectures) subjects[subjName].lectures = {};
+      const newTrack = {};
+
+      await Promise.all(lecIds.map(async (lectureId) => {
+        const ver = lecVersions[lectureId];
+        const idbKey  = 'published:' + subjName + ':' + lectureId;
+        const cached  = await _idbGet(idbKey);
+
+        if (cached && cached.ver === ver) {
+          // Cache hit for this exact quiz — zero Firestore reads.
+          subjects[subjName].lectures[cached.lectureName] = cached.questions;
+          newTrack[lectureId] = cached.lectureName;
+          return;
+        }
+
+        // New or changed quiz — fetch just this one document.
+        try {
+          const ref  = window._doc(window._db, 'publishedQuestions', subjName, 'lectures', lectureId);
+          const snap = await window._getDoc(ref);
+          if (!snap.exists()) return;
+          const data = snap.data();
+          const name = data.lectureName || lectureId;
           const questions = data.questions || [];
           // Hydrate images from the separate images subcollection (published lectures
           // store images there to stay under Firestore's 1 MB doc limit, and to keep
           // the snapshot independent of the original source quiz).
-          await hydratePublishedLectureImages(subjName, d.id, questions);
+          await hydratePublishedLectureImages(subjName, lectureId, questions);
+
+          // If this quiz was renamed since we last saw it, drop the stale old-name entry.
+          if (prevTrack[lectureId] && prevTrack[lectureId] !== name) {
+            delete subjects[subjName].lectures[prevTrack[lectureId]];
+          }
+
           subjects[subjName].lectures[name] = questions;
-          publishedSnapshot[subjName][name] = questions;
-        }));
-      } catch (e) {
-        // Subject may not have a 'publishedQuestions' doc yet — ignore
-      }
-    }
+          newTrack[lectureId] = name;
+          // Persist THIS quiz immediately — it's durably cached even if
+          // other quizzes are still loading or the page closes right now.
+          await _idbSet(idbKey, { ver, lectureName: name, questions });
+        } catch (e) {
+          // Leave uncached — retried next load. Preserve any previous
+          // tracking so we don't wrongly treat it as "removed" below.
+          if (prevTrack[lectureId]) newTrack[lectureId] = prevTrack[lectureId];
+        }
+      }));
+
+      // Anything tracked last time but absent from this subject's manifest
+      // now was deleted or moved elsewhere — remove it (and only it).
+      const removedIds = Object.keys(prevTrack).filter(id => !(id in newTrack));
+      await Promise.all(removedIds.map(async (id) => {
+        delete subjects[subjName].lectures[prevTrack[id]];
+        await _idbDelete('published:' + subjName + ':' + id);
+      }));
+
+      await _idbSet(trackKey, newTrack);
+    }));
 
     // Re-render whatever the user already has open so new content appears immediately
     _reRenderOpenSelections();
-
-    /* ── 3. Save to cache (merge with curriculum cache) ── */
-    const existing = _readCache() || {};
-    existing.published = publishedSnapshot;
-    _writeCache(existing);
-    let verToStore = serverVer;
-    if (!verToStore) verToStore = await bumpCacheVersion(); // doc doesn't exist yet — create the baseline
-    if (verToStore) _writeCacheVer(verToStore);
 
   } catch (e) {
     console.warn('Failed to load published questions:', e);
@@ -8366,7 +8535,7 @@ async function loadCurriculumExtensions() {
     /* ── 1. Check server version (tiny fetch) ── */
     const serverVer  = await _fetchServerCacheVersion();
     const localVer   = _readCacheVer();
-    const cached     = _readCache();
+    const cached     = await _readCache();
 
     if (serverVer && localVer === serverVer && cached && cached.curriculum) {
       /* Cache hit — apply immediately, no heavy Firestore read */
@@ -8414,9 +8583,9 @@ async function loadCurriculumExtensions() {
     /* ── 3. Save to cache (merge with any existing published cache) ──
        Do this even when the doc didn't exist / was empty, so we still
        record "nothing to load" and skip re-fetching next time. */
-    const existing = _readCache() || {};
+    const existing = (await _readCache()) || {};
     existing.curriculum = { extYears, extModules, extSubjects };
-    _writeCache(existing);
+    await _writeCache(existing);
     let verToStore = serverVer;
     if (!verToStore) verToStore = await bumpCacheVersion(); // doc doesn't exist yet — create the baseline
     if (verToStore) _writeCacheVer(verToStore);
@@ -8579,6 +8748,7 @@ async function adminExecMoveQuiz(andDelete) {
     await uploadPublishedLectureImages(destSubject, newId, cleanQ);
 
     const destRef = window._doc(window._db, 'publishedQuestions', destSubject, 'lectures', newId);
+    const publishedAt = Date.now();
     await window._setDoc(destRef, cleanForFirestore({
       id: newId,
       lectureName: destName,
@@ -8586,7 +8756,7 @@ async function adminExecMoveQuiz(andDelete) {
       sourceTitle: srcData.sourceTitle || _moveQuizLectureName,
       sourceType:  srcData.sourceType  || 'copy',
       publishedBy: window._currentUser ? window._currentUser.uid : null,
-      publishedAt: Date.now()
+      publishedAt
     }));
 
     // Update in-memory for destination subject
@@ -8610,8 +8780,13 @@ async function adminExecMoveQuiz(andDelete) {
       ? `✅ Moved to ${subjects[destSubject].label || destSubject}!`
       : `✅ Copied to ${subjects[destSubject].label || destSubject}!`;
 
-    _clearCache();
-    await bumpCacheVersion();
+    // Only the destination quiz (and, on a move, the now-removed source
+    // quiz) show up as changed for every other user.
+    await _updatePublishedManifest(destSubject, newId, publishedAt);
+    if (andDelete) {
+      _idbDelete('published:' + adminTargetSubject + ':' + _moveQuizLectureId);
+      await _updatePublishedManifest(adminTargetSubject, _moveQuizLectureId, null);
+    }
 
     // Refresh views
     if (selectedSubject === adminTargetSubject || selectedSubject === destSubject) {
