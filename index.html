@@ -8834,11 +8834,76 @@ function renderAdminCurriculumPanel() {
         <div id="currSubjList" class="curr-list"><span style="color:var(--text-muted);font-size:.8rem;">Loading…</span></div>
       </div>
 
+      <div class="curr-section">
+        <div class="curr-section-title">🗂️ Manage Existing Quizzes</div>
+        <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;margin-bottom:10px;">
+          Choose a year, module, and subject to view, edit, reorder, copy/move, or delete the quizzes already published there.
+        </div>
+        <div id="adminCurrMgmtArea"></div>
+      </div>
+
     </div>
   `;
 
   adminRefreshSubjModules();
   adminLoadCurrSubjList();
+  renderAdminCurrMgmtSection();
+}
+
+/* ── "Manage Existing Quizzes" section within the Curriculum tab ──
+   Shares adminTargetYear/Module/Subject with the Publish tab's selectors,
+   and reuses renderAdminAssignedList() (Edit / Copy-Move / Delete / reorder)
+   — but with no publish form or publish button, since the point here is
+   only to manage quizzes that are already published. */
+function adminCurrMgmtOnYearChange(val) {
+  adminTargetYear   = val;
+  adminTargetModule = '';
+  adminTargetSubject = '';
+  renderAdminCurrMgmtSection();
+}
+function adminCurrMgmtOnModuleChange(val) {
+  adminTargetModule = val;
+  adminTargetSubject = '';
+  renderAdminCurrMgmtSection();
+}
+function adminCurrMgmtOnSubjectChange(val) {
+  adminTargetSubject = val;
+  renderAdminCurrMgmtSection();
+}
+
+function renderAdminCurrMgmtSection() {
+  const area = document.getElementById('adminCurrMgmtArea');
+  if (!area) return;
+
+  area.innerHTML = `
+    <div class="admin-field">
+      <label>Year</label>
+      <select onchange="adminCurrMgmtOnYearChange(this.value)">
+        <option value="">— Select year —</option>
+        ${adminYearOptionsHtml()}
+      </select>
+    </div>
+
+    <div class="admin-field">
+      <label>Module</label>
+      <select onchange="adminCurrMgmtOnModuleChange(this.value)" ${!adminTargetYear ? 'disabled' : ''}>
+        <option value="">— Select module —</option>
+        ${adminModuleOptionsHtml()}
+      </select>
+    </div>
+
+    <div class="admin-field">
+      <label>Subject</label>
+      <select onchange="adminCurrMgmtOnSubjectChange(this.value)" ${!adminTargetModule ? 'disabled' : ''}>
+        <option value="">— Select subject —</option>
+        ${adminSubjectOptionsHtml()}
+      </select>
+    </div>
+
+    <div class="admin-assigned-section" id="adminAssignedSection"></div>
+  `;
+
+  if (adminTargetSubject) renderAdminAssignedList();
 }
 
 function adminRefreshSubjModules() {
