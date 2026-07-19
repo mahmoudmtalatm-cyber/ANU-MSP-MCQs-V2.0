@@ -376,7 +376,7 @@
 
     /* ── QUIZ MOVE/COPY MODAL ── */
     .qm-overlay {
-      position: fixed; inset: 0; z-index: 9000;
+      position: fixed; inset: 0; z-index: 13500;
       background: rgba(0,0,0,.45); display: flex;
       align-items: center; justify-content: center; padding: 16px;
     }
@@ -1494,11 +1494,6 @@
 }
 .admin-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 
-.admin-step-title {
-  font-size: .74rem; font-weight: 800; color: #7A93A6; text-transform: uppercase;
-  letter-spacing: .8px; margin-bottom: -6px;
-}
-
 .admin-quiz-source-tabs {
   display: flex; gap: 6px; margin-bottom: 4px;
 }
@@ -1654,48 +1649,6 @@
   padding: 6px 10px; font-size: .78rem; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
 .icon-picker-add-row button:hover { filter: brightness(1.1); }
-
-/* ── CURRICULUM SUB-TABS ── */
-.curr-subtabs {
-  display: flex; gap: 4px; background: #EAF4FB; border-radius: 10px; padding: 4px; margin-bottom: 2px;
-}
-.curr-subtab {
-  flex: 1; border: none; background: transparent; border-radius: 7px;
-  padding: 9px 10px; font-family: var(--font); font-size: .82rem; font-weight: 700;
-  color: var(--text-muted); cursor: pointer; transition: all .15s; display: flex; align-items: center;
-  justify-content: center; gap: 5px; white-space: nowrap;
-}
-.curr-subtab .cst-count {
-  background: rgba(0,0,0,.08); border-radius: 10px; padding: 1px 7px; font-size: .72rem;
-}
-.curr-subtab.active { background: #fff; color: #1B4F72; box-shadow: 0 1px 4px rgba(20,40,60,.15); }
-.curr-subtab.active .cst-count { background: #1B4F72; color: #fff; }
-.curr-subtab:hover:not(.active) { color: var(--text-main); }
-
-.curr-search {
-  width: 100%; padding: 9px 12px; border: 1.5px solid #D6E6F2; border-radius: 8px;
-  font-family: var(--font); font-size: .85rem; margin-bottom: 2px;
-}
-.curr-search:focus { border-color: #1B4F72; outline: none; }
-
-.curr-collapsible {
-  border: 1px solid #D6E6F2; border-radius: 10px; overflow: hidden; background: #fff;
-}
-.curr-collapsible-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 12px 14px; cursor: pointer; user-select: none; background: #F7FBFE;
-}
-.curr-collapsible-head:hover { background: #EEF7FF; }
-.curr-collapsible-head .cch-title { font-size: .84rem; font-weight: 800; color: #1B4F72; display: flex; align-items: center; gap: 7px; }
-.curr-collapsible-head .cch-caret { font-size: .7rem; color: var(--text-muted); transition: transform .2s; }
-.curr-collapsible.open .cch-caret { transform: rotate(180deg); }
-.curr-collapsible-body { padding: 14px; display: none; flex-direction: column; gap: 10px; border-top: 1px solid #EEF3F7; }
-.curr-collapsible.open .curr-collapsible-body { display: flex; }
-
-.curr-empty-hint {
-  text-align: center; color: var(--text-muted); font-size: .84rem; padding: 22px 12px;
-  background: #F7FBFE; border: 1px dashed #C7DCEA; border-radius: 10px;
-}
 .curr-tag {
   background: #E3F2FD; border: 1px solid #90CAF9; color: #0D47A1;
   border-radius: 20px; padding: 3px 12px; font-size: .77rem; font-weight: 700;
@@ -7250,18 +7203,14 @@ function adminSetSourceTab(tab) {
   renderAdminPanel();
 }
 
-let adminQuizSearch = '';
-
 async function renderAdminPanel() {
   const body = document.getElementById('adminBody');
-  const q = adminQuizSearch.toLowerCase();
 
   let listHtml = '';
   if (adminSourceTab === 'custom') {
-    let quizzes = loadCustomQuizzes();
-    if (q) quizzes = quizzes.filter(qz => (qz.title || 'Untitled Quiz').toLowerCase().includes(q));
+    const quizzes = loadCustomQuizzes();
     if (!quizzes.length) {
-      listHtml = `<div class="curr-empty-hint">${loadCustomQuizzes().length ? 'No quizzes match your search.' : 'No custom quizzes found for your account.'}</div>`;
+      listHtml = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No custom quizzes found for your account.</div>`;
     } else {
       listHtml = quizzes.map(q => {
         const sel = adminSelectedQuiz && adminSelectedQuiz.sourceType === 'custom' && adminSelectedQuiz.sourceId === q.id;
@@ -7281,13 +7230,10 @@ async function renderAdminPanel() {
   }
 
   body.innerHTML = `
-    <div class="admin-step-title">Step 1 — Pick a quiz</div>
     <div class="admin-quiz-source-tabs">
       <button class="admin-source-tab ${adminSourceTab === 'custom' ? 'active' : ''}" onclick="adminSetSourceTab('custom')">🤖 My Custom Quizzes</button>
       <button class="admin-source-tab ${adminSourceTab === 'community' ? 'active' : ''}" onclick="adminSetSourceTab('community')">🌐 Community Quizzes</button>
     </div>
-    <input type="text" class="curr-search" placeholder="🔍 Search quizzes by title…" value="${escapeHtml(adminQuizSearch)}"
-      oninput="adminQuizSearch=this.value; renderAdminPanel();" />
     <div class="admin-quiz-list" id="adminQuizList">${listHtml}</div>
     <div id="adminAssignArea"></div>
   `;
@@ -7330,15 +7276,10 @@ async function renderAdminPanel() {
     const shared = adminCommunityCache;
     const list = document.getElementById('adminQuizList');
     if (!shared.length) {
-      list.innerHTML = `<div class="curr-empty-hint">No community quizzes available.</div>`;
+      list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No community quizzes available.</div>`;
       return;
     }
-    const filteredShared = q ? shared.filter(qz => (qz.title || 'Untitled Quiz').toLowerCase().includes(q)) : shared;
-    if (!filteredShared.length) {
-      list.innerHTML = `<div class="curr-empty-hint">No quizzes match your search.</div>`;
-      return;
-    }
-    list.innerHTML = filteredShared.map(q => {
+    list.innerHTML = shared.map(q => {
       const sel = adminSelectedQuiz && adminSelectedQuiz.sourceType === 'community' && adminSelectedQuiz.sourceId === q.id;
       return `
         <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('community','${q.id}')">
@@ -7454,7 +7395,6 @@ function renderAdminAssignForm() {
   const qCount = (adminEditMode === 'publish' && adminEditQuestions) ? adminEditQuestions.length : adminSelectedQuiz.questions.length;
 
   area.innerHTML = `
-    <div class="admin-step-title" style="margin-top:6px;">Step 2 — Publish it to a subject</div>
     <div class="admin-assign-form">
       <div class="admin-assign-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <span>Publish "${escapeHtml(adminSelectedQuiz.title)}" (${qCount} q) to:</span>
@@ -7814,7 +7754,7 @@ async function adminSwapLectureOrder(lectureId, direction) {
 async function renderAdminAssignedList() {
   const sec = document.getElementById('adminAssignedSection');
   if (!sec) return;
-  sec.innerHTML = `<div class="admin-step-title" style="margin-top:2px;">Step 3 — Manage published lectures</div><div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
+  sec.innerHTML = `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
 
   let entries = [];
   try {
@@ -8780,64 +8720,19 @@ document.addEventListener('click', (e) => {
 // year -> module -> icon overrides created/edited by admin
 let moduleIconMap = {};
 
-let currAdminSubTab = 'years'; // 'years' | 'modules' | 'subjects'
-let _currFilterYears = '', _currFilterModules = '', _currFilterSubjects = '';
-
 function renderAdminCurriculumPanel() {
   const body = document.getElementById('adminBody');
 
   const years = Object.keys(curriculum);
   const allModules = {};
   years.forEach(y => Object.keys(curriculum[y] || {}).forEach(m => { allModules[m] = y; }));
-  const subjCount = Object.keys(subjects).length;
+  const yearOpts = years.map(y => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`).join('');
 
   body.innerHTML = `
-    <div class="curr-subtabs">
-      <button class="curr-subtab ${currAdminSubTab==='years'?'active':''}" onclick="adminSetCurrSubTab('years')">
-        🗓️ Years <span class="cst-count">${years.length}</span>
-      </button>
-      <button class="curr-subtab ${currAdminSubTab==='modules'?'active':''}" onclick="adminSetCurrSubTab('modules')">
-        📦 Modules <span class="cst-count">${Object.keys(allModules).length}</span>
-      </button>
-      <button class="curr-subtab ${currAdminSubTab==='subjects'?'active':''}" onclick="adminSetCurrSubTab('subjects')">
-        📘 Subjects <span class="cst-count">${subjCount}</span>
-      </button>
-    </div>
-    <div id="currSubTabBody"></div>
-  `;
+    <div style="display:flex;flex-direction:column;gap:14px;">
 
-  renderCurrSubTabBody();
-}
-
-function adminSetCurrSubTab(tab) {
-  currAdminSubTab = tab;
-  renderAdminCurriculumPanel();
-}
-
-function renderCurrSubTabBody() {
-  if (currAdminSubTab === 'years')    return renderCurrYearsTab();
-  if (currAdminSubTab === 'modules')  return renderCurrModulesTab();
-  if (currAdminSubTab === 'subjects') return renderCurrSubjectsTab();
-}
-
-function _currToggleCollapsible(el) {
-  el.closest('.curr-collapsible').classList.toggle('open');
-}
-
-/* ── YEARS SUB-TAB ── */
-function renderCurrYearsTab() {
-  const el = document.getElementById('currSubTabBody');
-  if (!el) return;
-  const years = Object.keys(curriculum);
-  const filtered = years.filter(y => y.toLowerCase().includes(_currFilterYears.toLowerCase()));
-
-  el.innerHTML = `
-    <div class="curr-collapsible open">
-      <div class="curr-collapsible-head" onclick="_currToggleCollapsible(this)">
-        <span class="cch-title">➕ Add New Academic Year</span>
-        <span class="cch-caret">▾</span>
-      </div>
-      <div class="curr-collapsible-body">
+      <div class="curr-section">
+        <div class="curr-section-title">➕ Add New Academic Year</div>
         <div class="curr-row">
           <div class="curr-field">
             <label>Year Name (e.g. "Fourth Year")</label>
@@ -8846,43 +8741,17 @@ function renderCurrYearsTab() {
           <button class="curr-add-btn" onclick="adminAddYear()">Add Year</button>
         </div>
         <div class="curr-status" id="currYearStatus"></div>
+        <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Years</div>
+        <div id="currYearList">${years.length ? years.map(y => `
+          <div class="curr-item-row">
+            <span class="curr-item-name">${escapeHtml(y)}</span>
+            <button class="curr-item-btn edit" onclick="adminRenameYear('${escapeHtml(y)}')">✏️ Rename</button>
+            <button class="curr-item-btn del"  onclick="adminDeleteYear('${escapeHtml(y)}')">🗑 Delete</button>
+          </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
       </div>
-    </div>
 
-    <input type="text" class="curr-search" placeholder="🔍 Search years…" value="${escapeHtml(_currFilterYears)}"
-      oninput="_currFilterYears=this.value; renderCurrYearsTab();" />
-
-    <div id="currYearList">
-      ${filtered.length ? filtered.map(y => `
-        <div class="curr-item-row">
-          <span class="curr-item-name">🗓️ ${escapeHtml(y)}</span>
-          <button class="curr-item-btn edit" onclick="adminRenameYear('${escapeHtml(y)}')">✏️ Rename</button>
-          <button class="curr-item-btn del"  onclick="adminDeleteYear('${escapeHtml(y)}')">🗑 Delete</button>
-        </div>`).join('')
-      : `<div class="curr-empty-hint">${years.length ? 'No years match your search.' : 'No academic years yet — add one above to get started.'}</div>`}
-    </div>
-  `;
-}
-
-/* ── MODULES SUB-TAB ── */
-function renderCurrModulesTab() {
-  const el = document.getElementById('currSubTabBody');
-  if (!el) return;
-  const years = Object.keys(curriculum);
-  const yearOpts = years.map(y => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`).join('');
-  const allModules = {};
-  years.forEach(y => Object.keys(curriculum[y] || {}).forEach(m => { allModules[m] = y; }));
-  const filtered = Object.keys(allModules).filter(m =>
-    m.toLowerCase().includes(_currFilterModules.toLowerCase()) ||
-    allModules[m].toLowerCase().includes(_currFilterModules.toLowerCase()));
-
-  el.innerHTML = `
-    <div class="curr-collapsible open">
-      <div class="curr-collapsible-head" onclick="_currToggleCollapsible(this)">
-        <span class="cch-title">➕ Add New Module</span>
-        <span class="cch-caret">▾</span>
-      </div>
-      <div class="curr-collapsible-body">
+      <div class="curr-section">
+        <div class="curr-section-title">➕ Add New Module</div>
         <div class="curr-row">
           <div class="curr-field">
             <label>Under Year</label>
@@ -8896,43 +8765,21 @@ function renderCurrModulesTab() {
           <button class="curr-add-btn" onclick="adminAddModule()">Add Module</button>
         </div>
         <div class="curr-status" id="currModuleStatus"></div>
-        ${!years.length ? `<div class="curr-empty-hint">Add an academic year first (in the Years tab) before creating modules.</div>` : ''}
+        <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Modules</div>
+        <div id="currModuleList">${Object.keys(allModules).length ? Object.keys(allModules).map(m => `
+          <div class="curr-item-row">
+            <div style="flex:1;">
+              <div class="curr-item-name">${escapeHtml(_moduleIcon(allModules[m], m))} ${escapeHtml(m)}</div>
+              <div class="curr-item-sub">in ${escapeHtml(allModules[m])}</div>
+            </div>
+            <button class="curr-item-btn edit" onclick="adminEditModuleIcon('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">🎨 Icon</button>
+            <button class="curr-item-btn edit" onclick="adminRenameModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">✏️ Rename</button>
+            <button class="curr-item-btn del"  onclick="adminDeleteModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">🗑 Delete</button>
+          </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
       </div>
-    </div>
 
-    <input type="text" class="curr-search" placeholder="🔍 Search modules…" value="${escapeHtml(_currFilterModules)}"
-      oninput="_currFilterModules=this.value; renderCurrModulesTab();" />
-
-    <div id="currModuleList">
-      ${filtered.length ? filtered.map(m => `
-        <div class="curr-item-row">
-          <div style="flex:1;">
-            <div class="curr-item-name">${escapeHtml(_moduleIcon(allModules[m], m))} ${escapeHtml(m)}</div>
-            <div class="curr-item-sub">in ${escapeHtml(allModules[m])}</div>
-          </div>
-          <button class="curr-item-btn edit" onclick="adminEditModuleIcon('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">🎨 Icon</button>
-          <button class="curr-item-btn edit" onclick="adminRenameModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">✏️ Rename</button>
-          <button class="curr-item-btn del"  onclick="adminDeleteModule('${escapeHtml(allModules[m])}','${escapeHtml(m)}')">🗑 Delete</button>
-        </div>`).join('')
-      : `<div class="curr-empty-hint">${Object.keys(allModules).length ? 'No modules match your search.' : 'No modules yet — add one above to get started.'}</div>`}
-    </div>
-  `;
-}
-
-/* ── SUBJECTS SUB-TAB ── */
-function renderCurrSubjectsTab() {
-  const el = document.getElementById('currSubTabBody');
-  if (!el) return;
-  const years = Object.keys(curriculum);
-  const yearOpts = years.map(y => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`).join('');
-
-  el.innerHTML = `
-    <div class="curr-collapsible open">
-      <div class="curr-collapsible-head" onclick="_currToggleCollapsible(this)">
-        <span class="cch-title">➕ Add New Subject</span>
-        <span class="cch-caret">▾</span>
-      </div>
-      <div class="curr-collapsible-body">
+      <div class="curr-section">
+        <div class="curr-section-title">➕ Add New Subject</div>
         <div class="curr-row">
           <div class="curr-field">
             <label>Under Year</label>
@@ -8959,14 +8806,11 @@ function renderCurrSubjectsTab() {
           <button class="curr-add-btn secondary" onclick="adminAddSubject()">Add Subject</button>
         </div>
         <div class="curr-status" id="currSubjStatus"></div>
-        ${!years.length ? `<div class="curr-empty-hint">Add an academic year and module first before creating subjects.</div>` : ''}
+        <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Admin-Created Subjects</div>
+        <div id="currSubjList" class="curr-list"><span style="color:var(--text-muted);font-size:.8rem;">Loading…</span></div>
       </div>
+
     </div>
-
-    <input type="text" class="curr-search" placeholder="🔍 Search subjects…" value="${escapeHtml(_currFilterSubjects)}"
-      oninput="_currFilterSubjects=this.value; adminLoadCurrSubjList();" />
-
-    <div id="currSubjList" class="curr-list"><span style="color:var(--text-muted);font-size:.8rem;">Loading…</span></div>
   `;
 
   adminRefreshSubjModules();
@@ -9072,26 +8916,17 @@ async function adminAddSubject() {
   status.className = 'curr-status ok';
   labelIn.value = ''; keyIn.value = '';
   selectIconForField('currSubjIcon', '📘');
-  adminLoadCurrSubjList(true);
+  adminLoadCurrSubjList();
 }
 
-let _currSubjListCache = null;
-
-async function adminLoadCurrSubjList(forceRefetch) {
+async function adminLoadCurrSubjList() {
   const el = document.getElementById('currSubjList');
   if (!el || !window._db) return;
   try {
-    if (!_currSubjListCache || forceRefetch) {
-      const ref  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
-      const snap = await window._getDoc(ref);
-      _currSubjListCache = snap.exists() ? (snap.data().subjects || {}) : {};
-    }
-    const ext = _currSubjListCache;
-    const q = (_currFilterSubjects || '').toLowerCase();
-    const keys = Object.keys(ext).filter(k => {
-      const s = ext[k];
-      return !q || (s.label || k).toLowerCase().includes(q) || (s.year||'').toLowerCase().includes(q) || (s.module||'').toLowerCase().includes(q);
-    });
+    const ref  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
+    const snap = await window._getDoc(ref);
+    const ext  = snap.exists() ? (snap.data().subjects || {}) : {};
+    const keys = Object.keys(ext);
     el.innerHTML = keys.length
       ? keys.map(k => {
           const s = ext[k];
@@ -9104,7 +8939,7 @@ async function adminLoadCurrSubjList(forceRefetch) {
             <button class="curr-item-btn del"  onclick="adminDeleteSubject('${k}')">🗑 Delete</button>
           </div>`;
         }).join('')
-      : `<div class="curr-empty-hint">${Object.keys(ext).length ? 'No subjects match your search.' : 'No admin-created subjects yet — add one above to get started.'}</div>`;
+      : '<span style="color:var(--text-muted);font-size:.8rem;">No admin-created subjects yet.</span>';
   } catch(e) {
     el.innerHTML = '<span style="color:var(--text-muted);font-size:.8rem;">Could not load list.</span>';
   }
@@ -9535,7 +9370,7 @@ async function adminEditSubject(key) {
   await window._setDoc(extRef, cleanForFirestore(ext));
   _clearCache(); await bumpCacheVersion();
   buildYearGrid();
-  adminLoadCurrSubjList(true);
+  adminLoadCurrSubjList();
 }
 
 async function adminDeleteSubject(key) {
@@ -9568,7 +9403,7 @@ This removes it from all year/module placements.
   await window._setDoc(extRef, cleanForFirestore(ext));
   _clearCache(); await bumpCacheVersion();
   buildYearGrid();
-  adminLoadCurrSubjList(true);
+  adminLoadCurrSubjList();
 }
 
 /* Persist a newly-created Subject (and its Year/Module placement) */
