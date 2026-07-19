@@ -5502,6 +5502,12 @@ function renderCQPreview() {
   if (!area) return;
   if (!cqGeneratedQuestions) { area.innerHTML = ''; return; }
 
+  // Remember scroll position of the inner question list — it gets torn down
+  // and rebuilt below, which would otherwise reset it to the top (Q1) on
+  // every single edit (image change, option edit, delete, etc.)
+  const _prevList = document.getElementById('cqPreviewList');
+  const _prevScrollTop = _prevList ? _prevList.scrollTop : null;
+
   // All next-available option keys
   const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
 
@@ -5655,6 +5661,12 @@ function renderCQPreview() {
   html += renderSplitPanel('preview', null, cqGeneratedQuestions.length);
 
   area.innerHTML = html;
+
+  // Restore scroll position (unless this is the very first render)
+  if (_prevScrollTop !== null) {
+    const _newList = document.getElementById('cqPreviewList');
+    if (_newList) _newList.scrollTop = _prevScrollTop;
+  }
 }
 
 /* ── Edit helpers for the preview ── */
@@ -7469,6 +7481,12 @@ function renderAdminQuestionEditor(containerId) {
   const area = document.getElementById(containerId);
   if (!area || !adminEditQuestions) { if (area) area.innerHTML = ''; return; }
 
+  // Remember scroll position of the inner question list — it gets torn down
+  // and rebuilt below, which would otherwise reset it to the top (Q1) on
+  // every single edit (image change, option edit, delete, etc.)
+  const _prevList = document.getElementById('adminEditList');
+  const _prevScrollTop = _prevList ? _prevList.scrollTop : null;
+
   const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 0 10px;">
@@ -7582,6 +7600,12 @@ function renderAdminQuestionEditor(containerId) {
   <div class="admin-status" id="adminEditStatus"></div>`;
 
   area.innerHTML = html;
+
+  // Restore scroll position (unless this is the very first render)
+  if (_prevScrollTop !== null) {
+    const _newList = document.getElementById('adminEditList');
+    if (_newList) _newList.scrollTop = _prevScrollTop;
+  }
 }
 
 /* ── Edit helpers (mutate adminEditQuestions in place) ── */
