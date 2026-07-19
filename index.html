@@ -8219,9 +8219,69 @@ function _reRenderOpenSelections() {
    Load all previously-published questions into `subjects`
    so they appear as extra lectures for every user.
 ══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   ONE-TIME MIGRATION — pick up lectures published BEFORE the
+   manifest system existed.
+   ------------------------------------------------------------
+   loadPublishedQuestionsIntoSubjects() only ever fetches lecture
+   IDs listed in appConfig/publishedManifest. That manifest is only
+   written by _updatePublishedManifest() (publish/edit/delete/move),
+   so any lecture that was published before that code existed never
+   got an entry — it's still sitting in Firestore, but the loader
+   never asks for it and it silently never appears.
+
+   This scans each known subject's `lectures` subcollection once,
+   finds any doc IDs missing from the manifest, and adds them so the
+   normal fast path picks them up from then on. Gated behind
+   appConfig/manifestBackfillDone so the (relatively expensive) full
+   subcollection scan only ever runs once, by whichever client hits
+   it first — after that the manifest is complete for everyone.
+══════════════════════════════════════════════════════════ */
+async function _backfillManifestIfNeeded() {
+  try {
+    const doneRef  = window._doc(window._db, 'appConfig', 'manifestBackfillDone');
+    const doneSnap = await window._getDoc(doneRef);
+    if (doneSnap.exists() && doneSnap.data().done) return;
+
+    const manifestRef  = window._doc(window._db, 'appConfig', 'publishedManifest');
+    const manifestSnap = await window._getDoc(manifestRef);
+    const manifestData = manifestSnap.exists() ? (manifestSnap.data() || {}) : {};
+    if (!manifestData.subjects) manifestData.subjects = {};
+
+    let changed = false;
+    await Promise.all(Object.keys(subjects).map(async (subjName) => {
+      try {
+        const col   = window._collection(window._db, 'publishedQuestions', subjName, 'lectures');
+        const snaps = await window._getDocs(col);
+        const known = new Set(Object.keys(manifestData.subjects[subjName] || {}));
+        snaps.forEach(docSnap => {
+          if (!known.has(docSnap.id)) {
+            const d  = docSnap.data() || {};
+            const ts = d.updatedAt || d.publishedAt || Date.now();
+            if (!manifestData.subjects[subjName]) manifestData.subjects[subjName] = {};
+            manifestData.subjects[subjName][docSnap.id] = ts;
+            changed = true;
+          }
+        });
+      } catch (e) {
+        console.warn('Manifest backfill scan failed for subject', subjName, e);
+      }
+    }));
+
+    if (changed) await window._setDoc(manifestRef, manifestData);
+    await window._setDoc(doneRef, { done: true });
+  } catch (e) {
+    console.warn('Manifest backfill failed:', e);
+  }
+}
+
 async function loadPublishedQuestionsIntoSubjects() {
   if (!window._db) return;
   try {
+    /* ── 0. Pull in any lectures published before the manifest system
+            existed (one-time, self-disabling after it succeeds). ── */
+    await _backfillManifestIfNeeded();
+
     /* ── 1. One tiny read tells us every published quiz's id + its own
             last-modified timestamp, per subject. No questions, no images. ── */
     const manifest = await _fetchPublishedManifest();
