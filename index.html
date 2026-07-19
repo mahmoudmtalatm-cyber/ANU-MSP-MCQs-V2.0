@@ -420,6 +420,54 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #B0D4F0; border-radius: 3px; }
+
+    /* ── FIRESTORE LOADING TOAST ── */
+    #fsLoadingToast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 99999;
+      background: rgba(27, 138, 196, 0.97);
+      color: #fff;
+      border-radius: 999px;
+      padding: 10px 18px 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font);
+      font-size: .88rem;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(27,138,196,.35);
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(12px) scale(.97);
+      transition: opacity .22s ease, transform .22s ease;
+    }
+    #fsLoadingToast.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .fs-toast-spinner {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 2.5px solid rgba(255,255,255,.35);
+      border-top-color: #fff;
+      animation: fsToastSpin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes fsToastSpin { to { transform: rotate(360deg); } }
+
+    /* ── YEAR GRID SKELETON ── */
+    .year-skeleton {
+      height: 72px; border-radius: 10px;
+      background: linear-gradient(90deg, #D8EAF7 25%, #EAF4FB 50%, #D8EAF7 75%);
+      background-size: 200% 100%;
+      animation: skeletonShimmer 1.4s infinite;
+    }
+    @keyframes skeletonShimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
     /* ── YOU DIED IDLE EASTER EGG ── */
 @keyframes youDiedFadeIn {
   0%   { opacity: 0; }
@@ -1595,239 +1643,15 @@
   .comm-filter-select { min-width: unset; width: 100%; }
   .sq-modal { padding: 22px 16px 18px; }
 }
-
-/* ════════════════════════════════════════════════════════════════
-   MOODLE EXAM THEME — recreation of Moodle's classic "Boost" quiz
-   attempt / review UI (que, multichoice, navigation block, info
-   banners, flags, answer states, etc). Namespaced under
-   #moodleQuiz / #moodleReview so it never collides with the app's
-   native theme.
-   ════════════════════════════════════════════════════════════════ */
-:root {
-  --mdl-blue:        #0f6cbf;
-  --mdl-blue-dark:   #0a5da1;
-  --mdl-link:        #0f6cbf;
-  --mdl-body-bg:     #f8f9fa;
-  --mdl-text:        #1d2125;
-  --mdl-text-muted:  #6a737b;
-  --mdl-border:      #dee2e6;
-  --mdl-border-dark: #ccc;
-  --mdl-green:       #357a32;
-  --mdl-green-bg:    #cdffcc;
-  --mdl-green-border:#86e066;
-  --mdl-red:         #ca3120;
-  --mdl-red-bg:      #ffdddd;
-  --mdl-red-border:  #f4c2c2;
-  --mdl-yellow-bg:   #fff3cd;
-  --mdl-gray-bg:     #f1f1f1;
-  --mdl-nav-notanswered-border: #6a737b;
-  --mdl-nav-answered-border: #357a32;
-  --mdl-nav-current-bg: #0f6cbf;
-  --mdl-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-}
-
-#moodleQuiz, #moodleReview, #moodleSummary {
-  font-family: var(--mdl-font);
-  background: var(--mdl-body-bg);
-  color: var(--mdl-text);
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* ── Moodle top navbar ── */
-.mdl-navbar {
-  background: #fff; border-bottom: 1px solid var(--mdl-border);
-  padding: 10px 24px; display: flex; align-items: center; justify-content: space-between;
-  flex-shrink: 0; flex-wrap: wrap; gap: 8px;
-}
-.mdl-navbar-brand { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; font-weight: 600; color: var(--mdl-text); }
-.mdl-navbar-brand .mdl-logo-badge {
-  width: 30px; height: 30px; border-radius: 4px; background: var(--mdl-blue); color: #fff;
-  display: flex; align-items: center; justify-content: center; font-size: .85rem; font-weight: 800;
-}
-.mdl-navbar-right { display: flex; align-items: center; gap: 16px; }
-.mdl-quiz-timer-box {
-  background: #fff3cd; border: 1px solid #ffe69c; border-radius: 4px; padding: 6px 14px;
-  font-size: .92rem; color: #664d03; font-weight: 600; display: flex; align-items: center; gap: 8px;
-}
-.mdl-quiz-timer-box .mdl-timer-label { opacity: .85; }
-.mdl-quiz-timer-box .mdl-timer-clock { font-variant-numeric: tabular-nums; font-weight: 800; }
-.mdl-quiz-timer-box.urgent { background: var(--mdl-red-bg); border-color: var(--mdl-red-border); color: var(--mdl-red); animation: mdlPulse 1s ease-in-out infinite; }
-@keyframes mdlPulse { 0%,100%{opacity:1} 50%{opacity:.65} }
-
-/* ── Page heading / breadcrumb strip ── */
-.mdl-pageheading { background: #fff; border-bottom: 1px solid var(--mdl-border); padding: 14px 24px 10px; flex-shrink: 0; }
-.mdl-breadcrumb { font-size: .8rem; color: var(--mdl-text-muted); margin-bottom: 6px; }
-.mdl-breadcrumb .crumb-link { color: var(--mdl-link); cursor: pointer; }
-.mdl-breadcrumb .crumb-link:hover { text-decoration: underline; }
-.mdl-breadcrumb .crumb-sep { margin: 0 6px; color: #aaa; }
-.mdl-pagetitle { font-size: 1.4rem; font-weight: 700; color: var(--mdl-text); }
-
-/* ── Body: two-column layout (question + nav block) ── */
-.mdl-quiz-body { flex: 1; display: flex; overflow: hidden; }
-.mdl-quiz-main { flex: 1; overflow-y: auto; padding: 20px 28px 40px; }
-.mdl-quiz-side { width: 280px; flex-shrink: 0; background: #fff; border-left: 1px solid var(--mdl-border); overflow-y: auto; padding: 16px 16px 24px; }
-@media (max-width: 900px) {
-  .mdl-quiz-body { flex-direction: column; }
-  .mdl-quiz-side { width: 100%; border-left: none; border-top: 1px solid var(--mdl-border); order: 2; }
-  .mdl-quiz-main { order: 1; }
-}
-
-/* ── "Quiz navigation" block (right sidebar) ── */
-.mdl-qn-title { font-size: 1rem; font-weight: 700; color: var(--mdl-text); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--mdl-border); }
-.mdl-qn-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-.mdl-qn-btn {
-  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
-  border-radius: 2px; font-size: .82rem; font-weight: 700; cursor: pointer; font-family: var(--mdl-font);
-  position: relative; background: #fff; border: 2px solid var(--mdl-nav-notanswered-border);
-  color: var(--mdl-text); transition: filter .12s;
-}
-.mdl-qn-btn:hover { filter: brightness(.94); }
-.mdl-qn-btn.mdl-answered { background: #fff; border-color: var(--mdl-nav-answered-border); color: var(--mdl-green); }
-.mdl-qn-btn.mdl-notanswered { background: #fff; border-color: var(--mdl-nav-notanswered-border); color: var(--mdl-text); }
-.mdl-qn-btn.mdl-current { box-shadow: 0 0 0 3px var(--mdl-nav-current-bg); border-color: var(--mdl-nav-current-bg); }
-.mdl-qn-btn .mdl-flag-corner { position: absolute; top: -7px; right: -7px; font-size: .85rem; line-height: 1; color: var(--mdl-red); }
-.mdl-qn-legend { display: flex; flex-direction: column; gap: 6px; font-size: .78rem; color: var(--mdl-text-muted); margin-bottom: 18px; }
-.mdl-qn-legend-row { display: flex; align-items: center; gap: 8px; }
-.mdl-qn-legend-swatch { width: 18px; height: 18px; border-radius: 2px; flex-shrink: 0; box-sizing: border-box; }
-.mdl-qn-legend-swatch.answered { background: #fff; border: 2px solid var(--mdl-nav-answered-border); }
-.mdl-qn-legend-swatch.notanswered { background: #fff; border: 2px solid var(--mdl-nav-notanswered-border); }
-.mdl-qn-legend-swatch.flagged { background: #fff; border: 2px solid var(--mdl-nav-notanswered-border); position: relative; }
-.mdl-qn-legend-swatch.flagged::after { content:'⚑'; position:absolute; top:-6px; right:-6px; color: var(--mdl-red); font-size: .75rem; }
-.mdl-qn-legend-swatch.current { background: #fff; border: 3px solid var(--mdl-nav-current-bg); }
-
-.mdl-qn-finish-btn {
-  width: 100%; background: var(--mdl-blue); color: #fff; border: none; border-radius: 4px; padding: 10px 14px;
-  font-family: var(--mdl-font); font-size: .9rem; font-weight: 600; cursor: pointer; margin-bottom: 8px;
-}
-.mdl-qn-finish-btn:hover { background: var(--mdl-blue-dark); }
-.mdl-qn-exit-link { display: block; text-align: center; font-size: .82rem; color: var(--mdl-link); cursor: pointer; padding: 4px 0; }
-.mdl-qn-exit-link:hover { text-decoration: underline; }
-
-/* ── Question status info banner ── */
-.mdl-q-info-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.mdl-q-info-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.mdl-q-no { font-size: 1.15rem; font-weight: 700; color: var(--mdl-text); }
-.mdl-q-state-pill { font-size: .78rem; font-weight: 600; padding: 3px 10px; border-radius: 10px; background: var(--mdl-gray-bg); color: var(--mdl-text-muted); }
-.mdl-q-state-pill.is-answered { background: var(--mdl-green-bg); color: var(--mdl-green); }
-.mdl-q-flag-toggle {
-  display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--mdl-border-dark);
-  border-radius: 4px; padding: 5px 12px; cursor: pointer; font-family: var(--mdl-font); font-size: .82rem;
-  color: var(--mdl-text); font-weight: 600;
-}
-.mdl-q-flag-toggle:hover { background: #f1f1f1; }
-.mdl-q-flag-toggle.is-flagged { color: var(--mdl-red); border-color: var(--mdl-red-border); background: var(--mdl-red-bg); }
-
-/* ── que (question) box — Moodle's actual structure: .que.multichoice ── */
-.que { background: #fff; border: 1px solid var(--mdl-border); border-radius: 4px; margin-bottom: 18px; overflow: hidden; }
-.que .info {
-  background: #f8f9fa; border-bottom: 1px solid var(--mdl-border); padding: 8px 16px; font-size: .78rem;
-  color: var(--mdl-text-muted); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;
-}
-.que .info .grade-info { font-weight: 600; }
-.que .content { padding: 18px 20px 20px; }
-.que .formulation { font-size: 1rem; line-height: 1.6; color: var(--mdl-text); }
-.que .qtext { margin-bottom: 18px; line-height: 1.6; }
-.que .qtext .mdl-q-image img {
-  max-width: 100%; max-height: 320px; display: block; margin: 14px 0;
-  border: 1px solid var(--mdl-border); border-radius: 4px;
-}
-
-/* ── Answer choices, Moodle's r0/r1 zebra + radio styling ── */
-.que .ablock { margin-top: 6px; }
-.que .answer { list-style: none; }
-.que .answer .r0, .que .answer .r1 {
-  display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border-radius: 3px;
-  margin-bottom: 2px; cursor: pointer; border: 1px solid transparent;
-}
-.que .answer .r0 { background: #fff; }
-.que .answer .r1 { background: #f8f9fa; }
-.que .answer .r0:hover, .que .answer .r1:hover { background: #eef4fa; border-color: #cfe2f3; }
-.que .answer input[type="radio"] { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--mdl-blue); flex-shrink: 0; cursor: pointer; }
-.que .answer label { cursor: pointer; flex: 1; line-height: 1.5; font-size: .96rem; }
-.que .answer .answernumber { font-weight: 700; color: var(--mdl-text); margin-right: 2px; }
-.que .answer .r0.checked, .que .answer .r1.checked { background: #d9eaf9; border-color: var(--mdl-blue); }
-
-/* ── Clear-choice row under question ── */
-.que .im-controls { margin-top: 14px; padding-top: 12px; border-top: 1px solid #eee; display: flex; gap: 10px; }
-.que .im-controls .btn-clear {
-  background: none; border: 1px solid var(--mdl-border-dark); border-radius: 4px; padding: 6px 14px;
-  font-size: .82rem; cursor: pointer; color: var(--mdl-text); font-family: var(--mdl-font);
-}
-.que .im-controls .btn-clear:hover { background: #f1f1f1; }
-
-/* ── Bottom quiz navigation row (prev/next) ── */
-.mdl-qpage-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; gap: 10px; flex-wrap: wrap; }
-.mdl-btn { font-family: var(--mdl-font); font-size: .9rem; font-weight: 600; padding: 9px 20px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
-.mdl-btn-secondary { background: #fff; border-color: var(--mdl-border-dark); color: var(--mdl-text); }
-.mdl-btn-secondary:hover { background: #f1f1f1; }
-.mdl-btn-primary { background: var(--mdl-blue); color: #fff; }
-.mdl-btn-primary:hover { background: var(--mdl-blue-dark); }
-.mdl-btn:disabled { opacity: .45; cursor: not-allowed; }
-
-/* ── Finish-attempt summary table (Moodle's quizsummaryofattempt) ── */
-.mdl-summary-table-wrap { background: #fff; border: 1px solid var(--mdl-border); border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
-.mdl-summary-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-.mdl-summary-table th, .mdl-summary-table td { padding: 8px 14px; text-align: left; border-bottom: 1px solid var(--mdl-border); }
-.mdl-summary-table th { background: #f8f9fa; font-weight: 700; color: var(--mdl-text); width: 70px; }
-.mdl-summary-table tr:last-child td, .mdl-summary-table tr:last-child th { border-bottom: none; }
-.mdl-summary-table td a { color: var(--mdl-link); cursor: pointer; text-decoration: none; }
-.mdl-summary-table td a:hover { text-decoration: underline; }
-.mdl-summary-status-answered { color: var(--mdl-green); }
-.mdl-summary-status-notanswered { color: var(--mdl-text-muted); }
-.mdl-summary-flag { color: var(--mdl-red); margin-left: 6px; }
-
-.mdl-alert { border-radius: 4px; padding: 12px 16px; font-size: .88rem; margin-bottom: 16px; border: 1px solid; }
-.mdl-alert-warning { background: #fff3cd; border-color: #ffe69c; color: #664d03; }
-.mdl-alert-info { background: #cfe2ff; border-color: #b6d4fe; color: #084298; }
-
-/* ── REVIEW / RESULTS PAGE (Moodle's "Review" attempt page) ── */
-.mdl-review-summary { background: #fff; border: 1px solid var(--mdl-border); border-radius: 4px; margin: 20px 24px; overflow: hidden; }
-.mdl-review-summary table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-.mdl-review-summary th, .mdl-review-summary td { padding: 9px 16px; border-bottom: 1px solid var(--mdl-border); text-align: left; }
-.mdl-review-summary th { background: #f8f9fa; width: 160px; font-weight: 700; }
-.mdl-review-summary tr:last-child th, .mdl-review-summary tr:last-child td { border-bottom: none; }
-.mdl-review-grade-highlight { font-weight: 800; font-size: 1.05rem; }
-.mdl-review-main { padding: 0 24px 40px; }
-
-.que.correct { border-left: 4px solid var(--mdl-green); }
-.que.incorrect { border-left: 4px solid var(--mdl-red); }
-.que.notanswered { border-left: 4px solid var(--mdl-text-muted); }
-
-.que .rightanswer { margin-top: 12px; font-size: .9rem; color: var(--mdl-green); font-weight: 600; }
-.que .state-pill { font-size: .78rem; font-weight: 700; padding: 3px 10px; border-radius: 10px; }
-.que .state-pill.correct { background: var(--mdl-green-bg); color: var(--mdl-green); }
-.que .state-pill.incorrect { background: var(--mdl-red-bg); color: var(--mdl-red); }
-.que .state-pill.notanswered { background: var(--mdl-gray-bg); color: var(--mdl-text-muted); }
-
-.que .answer .r0.correct-answer, .que .answer .r1.correct-answer { background: var(--mdl-green-bg); border-color: var(--mdl-green-border); }
-.que .answer .r0.incorrect-answer, .que .answer .r1.incorrect-answer { background: var(--mdl-red-bg); border-color: var(--mdl-red-border); }
-.que .answer .icon-correct, .que .answer .icon-incorrect { font-weight: 800; margin-left: 6px; }
-.que .answer .icon-correct { color: var(--mdl-green); }
-.que .answer .icon-incorrect { color: var(--mdl-red); }
-
-.mdl-review-nav { display: flex; justify-content: center; gap: 10px; padding: 4px 24px 28px; flex-wrap: wrap; }
-
-/* Theme picker on the home screen */
-.theme-picker { display: flex; gap: 10px; flex-wrap: wrap; }
-.theme-option { flex: 1; min-width: 150px; border: 1.5px solid #B0D4F0; border-radius: 10px; padding: 12px 14px; cursor: pointer; text-align: left; background: #F7FBFF; transition: border-color .15s, background .15s; }
-.theme-option:hover { border-color: var(--accent); }
-.theme-option.selected { border-color: var(--accent); background: #DDF0FF; box-shadow: 0 0 0 2px rgba(27,138,196,.15) inset; }
-.theme-option-title { font-weight: 800; font-size: .92rem; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
-.theme-option-desc { font-size: .78rem; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
-
-@media (max-width: 600px) {
-  .mdl-quiz-main { padding: 14px 14px 28px; }
-  .mdl-navbar { padding: 8px 14px; }
-  .mdl-pageheading { padding: 12px 14px 8px; }
-  .que .content { padding: 14px 14px 16px; }
-  .mdl-review-summary, .mdl-review-main { margin-left: 12px; margin-right: 12px; padding-left: 0; padding-right: 0; }
-}
   </style>
 </head>
 <body>
+<!-- FIRESTORE LOADING TOAST -->
+<div id="fsLoadingToast">
+  <div class="fs-toast-spinner"></div>
+  <span id="fsLoadingMsg">Loading…</span>
+</div>
+
 <div id="app">
 <canvas id="confettiCanvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;display:none;"></canvas>
 
@@ -1954,7 +1778,11 @@
 <!-- Step 1: Year -->
         <div class="field-group">
           <div class="field-label">① Select Year</div>
-          <div class="year-grid" id="yearGrid"></div>
+          <div class="year-grid" id="yearGrid">
+            <div class="year-skeleton"></div>
+            <div class="year-skeleton"></div>
+            <div class="year-skeleton"></div>
+          </div>
         </div>
 
         <!-- Module section -->
@@ -2006,23 +1834,6 @@
           </div>
         </div>
 
-        <div class="card-divider"></div>
-
-        <!-- Step 4: Quiz view theme -->
-        <div class="field-group">
-          <div class="field-label">⑥ Quiz View</div>
-          <div class="theme-picker" id="themePicker">
-            <div class="theme-option selected" id="themeOptionCustom" onclick="selectQuizTheme('custom')">
-              <div class="theme-option-title">🎨 Custom View</div>
-              <div class="theme-option-desc">This app's own colourful quiz layout with a side question navigator.</div>
-            </div>
-            <div class="theme-option" id="themeOptionMoodle" onclick="selectQuizTheme('moodle')">
-              <div class="theme-option-title">🎓 Exam View (Moodle)</div>
-              <div class="theme-option-desc">Looks &amp; behaves exactly like a Moodle quiz attempt — flags, navigation block, one question per page.</div>
-            </div>
-          </div>
-        </div>
-
         <button class="btn btn-primary" id="startBtn" onclick="startQuiz()" disabled>▶&nbsp; Start Quiz</button>
       </div>
 
@@ -2064,169 +1875,6 @@
       <div class="navigator-wrap">
         <div class="nav-label">Questions Navigator</div>
         <div class="nav-grid" id="navGrid"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════════════
-       MOODLE EXAM VIEW — quiz attempt screen
-       (faithful recreation of Moodle's classic quiz attempt page)
-  ══════════════════════════════════════════════ -->
-  <div id="moodleQuiz" class="hidden">
-    <div class="mdl-navbar">
-      <div class="mdl-navbar-brand">
-        <div class="mdl-logo-badge">M</div>
-        <span>ANU MSP Question Bank</span>
-      </div>
-      <div class="mdl-navbar-right">
-        <div class="mdl-quiz-timer-box" id="mdlTimerBox">
-          <span class="mdl-timer-label">Time left</span>
-          <span class="mdl-timer-clock" id="mdlTimerDisplay">00:00</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="mdl-pageheading">
-      <div class="mdl-breadcrumb">
-        <span class="crumb-link" onclick="mdlConfirmExit()">My courses</span>
-        <span class="crumb-sep">►</span>
-        <span class="crumb-link" id="mdlBreadcrumbSubject">Quiz</span>
-        <span class="crumb-sep">►</span>
-        <span>Attempt 1</span>
-      </div>
-      <div class="mdl-pagetitle" id="mdlPageTitle">Quiz</div>
-    </div>
-
-    <div class="mdl-quiz-body">
-      <div class="mdl-quiz-main">
-        <div class="mdl-q-info-bar">
-          <div class="mdl-q-info-left">
-            <div class="mdl-q-no" id="mdlQNo">Question 1</div>
-            <div class="mdl-q-state-pill" id="mdlQStatePill">Not yet answered</div>
-          </div>
-          <button class="mdl-q-flag-toggle" id="mdlFlagBtn" onclick="mdlToggleFlag()">
-            <span class="flagicon">⚑</span>
-            <span id="mdlFlagLabel">Flag question</span>
-          </button>
-        </div>
-
-        <div class="que multichoice" id="mdlQuestionCard">
-          <div class="info">
-            <span>Question <span id="mdlQInfoNo">1</span></span>
-            <span class="grade-info">Marked out of 1.00</span>
-          </div>
-          <div class="content">
-            <div class="formulation">
-              <div class="qtext" id="mdlQText"></div>
-              <div class="mdl-q-image hidden" id="mdlQImageWrap">
-                <img id="mdlQImage" src="" alt="Question image" />
-              </div>
-              <div class="ablock">
-                <div class="answer" id="mdlAnswerList"></div>
-              </div>
-              <div class="im-controls">
-                <button class="btn-clear" onclick="mdlClearChoice()">Clear my choice</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="mdl-qpage-nav">
-          <button class="mdl-btn mdl-btn-secondary" id="mdlPrevBtn" onclick="mdlPrevQ()">◄ Previous page</button>
-          <button class="mdl-btn mdl-btn-secondary" id="mdlNextBtn" onclick="mdlNextQ()">Next page ►</button>
-        </div>
-      </div>
-
-      <div class="mdl-quiz-side">
-        <div class="mdl-qn-title">Quiz navigation</div>
-        <div class="mdl-qn-grid" id="mdlNavGrid"></div>
-        <div class="mdl-qn-legend">
-          <div class="mdl-qn-legend-row"><span class="mdl-qn-legend-swatch answered"></span> Answered</div>
-          <div class="mdl-qn-legend-row"><span class="mdl-qn-legend-swatch notanswered"></span> Not yet answered</div>
-          <div class="mdl-qn-legend-row"><span class="mdl-qn-legend-swatch flagged"></span> Flagged</div>
-          <div class="mdl-qn-legend-row"><span class="mdl-qn-legend-swatch current"></span> Current page</div>
-        </div>
-        <button class="mdl-qn-finish-btn" onclick="mdlConfirmFinish()">Finish attempt ...</button>
-        <span class="mdl-qn-exit-link" onclick="mdlConfirmExit()">Back to course</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════════════
-       MOODLE EXAM VIEW — "Summary of attempt" screen
-       (Moodle's quiz_attempt_summary page, before final submit)
-  ══════════════════════════════════════════════ -->
-  <div id="moodleSummary" class="hidden">
-    <div class="mdl-navbar">
-      <div class="mdl-navbar-brand">
-        <div class="mdl-logo-badge">M</div>
-        <span>ANU MSP Question Bank</span>
-      </div>
-      <div class="mdl-navbar-right">
-        <div class="mdl-quiz-timer-box" id="mdlSummaryTimerBox">
-          <span class="mdl-timer-label">Time left</span>
-          <span class="mdl-timer-clock" id="mdlSummaryTimerDisplay">00:00</span>
-        </div>
-      </div>
-    </div>
-    <div class="mdl-pageheading">
-      <div class="mdl-breadcrumb">
-        <span class="crumb-link" onclick="mdlBackToAttempt()">Quiz</span>
-        <span class="crumb-sep">►</span>
-        <span>Summary of attempt</span>
-      </div>
-      <div class="mdl-pagetitle">Summary of attempt</div>
-    </div>
-    <div class="mdl-quiz-main" style="max-width:760px;">
-      <div class="mdl-alert mdl-alert-warning" id="mdlSummaryWarning" style="display:none;"></div>
-      <div class="mdl-summary-table-wrap">
-        <table class="mdl-summary-table">
-          <thead><tr><th>Q.</th><th>Status</th></tr></thead>
-          <tbody id="mdlSummaryBody"></tbody>
-        </table>
-      </div>
-      <div class="mdl-qpage-nav">
-        <button class="mdl-btn mdl-btn-secondary" onclick="mdlBackToAttempt()">◄ Return to attempt</button>
-        <button class="mdl-btn mdl-btn-primary" onclick="mdlFinalSubmit()">Submit all and finish</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════════════
-       MOODLE EXAM VIEW — review/results screen
-       (faithful recreation of Moodle's "Review" attempt page)
-  ══════════════════════════════════════════════ -->
-  <div id="moodleReview" class="hidden">
-    <div class="mdl-navbar">
-      <div class="mdl-navbar-brand">
-        <div class="mdl-logo-badge">M</div>
-        <span>ANU MSP Question Bank</span>
-      </div>
-      <div class="mdl-navbar-right"></div>
-    </div>
-    <div class="mdl-pageheading">
-      <div class="mdl-breadcrumb">
-        <span class="crumb-link" onclick="goHome()">My courses</span>
-        <span class="crumb-sep">►</span>
-        <span id="mdlReviewBreadcrumbSubject">Quiz</span>
-        <span class="crumb-sep">►</span>
-        <span>Review</span>
-      </div>
-      <div class="mdl-pagetitle">Review</div>
-    </div>
-
-    <div class="mdl-quiz-main" style="padding:0;overflow-y:auto;">
-      <div class="mdl-review-summary">
-        <table>
-          <tbody id="mdlReviewSummaryBody"></tbody>
-        </table>
-      </div>
-
-      <div class="mdl-review-main" id="mdlReviewQuestions"></div>
-
-      <div class="mdl-review-nav">
-        <button class="mdl-btn mdl-btn-secondary" onclick="goHome()">⟵ Back to course</button>
-        <button class="ai-explain-all-btn" id="mdlExplainAllBtn" onclick="explainAllQuestions()">🤖&nbsp; Explain All Questions</button>
       </div>
     </div>
   </div>
@@ -2422,7 +2070,6 @@ let selectedLectures = {}; // { subjectName: Set of lecture names }
 let correctToWrong   = 0;
 let wrongToCorrect   = 0;
 let currentQuizSource = 'curriculum'; // 'curriculum' | 'custom' | 'community'
-let quizTheme         = 'custom'; // 'custom' | 'moodle' — chosen view for the quiz-taking screen
 /* ══════════════════════════════════════════════════════════
    INIT — build subject grid
 ══════════════════════════════════════════════════════════ */
@@ -2440,12 +2087,50 @@ function buildYearGrid() {
     grid.appendChild(btn);
   });
 }
+/* ══════════════════════════════════════════════════════════
+   FIRESTORE LOADING INDICATOR
+   Tracks background promises. Show toast when user opens
+   something whose data hasn't finished loading yet.
+══════════════════════════════════════════════════════════ */
+const _fsReady = {
+  curriculum:    false,
+  published:     false,
+  stats:         true,   // true until a signed-in user triggers a load
+  customQuizzes: true,   // true until a signed-in user triggers a load
+};
+
+function fsLoadingShow(msg) {
+  const toast = document.getElementById('fsLoadingToast');
+  const label = document.getElementById('fsLoadingMsg');
+  if (label) label.textContent = msg || 'Loading…';
+  if (toast) toast.classList.add('visible');
+}
+
+function fsLoadingHide() {
+  const toast = document.getElementById('fsLoadingToast');
+  if (toast) toast.classList.remove('visible');
+}
+
+/* Call when user opens something — shows toast if data isn't ready, hides when it is */
+function fsAwaitIfNeeded(key, msg) {
+  if (_fsReady[key]) return; // already done, nothing to show
+  fsLoadingShow(msg);
+  // Poll until ready (resolves within the same event-loop tick once the promise sets the flag)
+  const interval = setInterval(() => {
+    if (_fsReady[key]) {
+      clearInterval(interval);
+      fsLoadingHide();
+    }
+  }, 100);
+}
+
 buildYearGrid();
 
 /* ══════════════════════════════════════════════════════════
    SUBJECT SELECTION
 ══════════════════════════════════════════════════════════ */
 function selectYear(year) {
+  fsAwaitIfNeeded('curriculum', 'Loading curriculum…');
   selectedYear    = year;
   selectedModule  = '';
   selectedSubject = '';
@@ -2518,6 +2203,7 @@ function selectModule(mod) {
   subjectSection.classList.remove('hidden');
 }
 function selectSubject(name) {
+  fsAwaitIfNeeded('published', 'Loading lectures…');
   selectedSubject = name;
 
   document.querySelectorAll('.subject-btn').forEach(b =>
@@ -2595,24 +2281,10 @@ function clearAllLectures() {
 /* ══════════════════════════════════════════════════════════
    SCREEN SWITCHING
 ══════════════════════════════════════════════════════════ */
-const ALL_SCREENS = ['home','quiz','results','moodleQuiz','moodleSummary','moodleReview'];
 function showScreen(id) {
-  // 'quiz' and 'results' are logical requests — route them to the
-  // physical screen that matches the chosen quiz theme.
-  if (id === 'quiz'    && quizTheme === 'moodle') id = 'moodleQuiz';
-  if (id === 'results' && quizTheme === 'moodle') id = 'moodleReview';
-  ALL_SCREENS.forEach(s => {
+  ['home','quiz','results'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s !== id);
   });
-}
-
-/* ══════════════════════════════════════════════════════════
-   QUIZ THEME PICKER
-══════════════════════════════════════════════════════════ */
-function selectQuizTheme(theme) {
-  quizTheme = (theme === 'moodle') ? 'moodle' : 'custom';
-  document.getElementById('themeOptionCustom').classList.toggle('selected', quizTheme === 'custom');
-  document.getElementById('themeOptionMoodle').classList.toggle('selected', quizTheme === 'moodle');
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -2696,24 +2368,9 @@ function stopTimer() {
 function updateTimerDisplay() {
   const m = String(Math.floor(timeLeft/60)).padStart(2,'0');
   const s = String(timeLeft%60).padStart(2,'0');
-  const txt = `${m}:${s}`;
-  const urgent = timeLeft <= 60;
-
   const el = document.getElementById('timerDisplay');
-  el.textContent = txt;
-  el.classList.toggle('urgent', urgent);
-
-  // Moodle theme timer (attempt page + summary page share the same clock)
-  const mdlEl = document.getElementById('mdlTimerDisplay');
-  if (mdlEl) {
-    mdlEl.textContent = txt;
-    document.getElementById('mdlTimerBox').classList.toggle('urgent', urgent);
-  }
-  const mdlSummaryEl = document.getElementById('mdlSummaryTimerDisplay');
-  if (mdlSummaryEl) {
-    mdlSummaryEl.textContent = txt;
-    document.getElementById('mdlSummaryTimerBox').classList.toggle('urgent', urgent);
-  }
+  el.textContent = `${m}:${s}`;
+  el.classList.toggle('urgent', timeLeft <= 60);
 }
 
 /* ── Returns option [key, value] pairs in guaranteed original order.
@@ -2730,14 +2387,6 @@ function getOptionEntries(q) {
 ══════════════════════════════════════════════════════════ */
 function renderQuestion() {
   questionStart = Date.now();
-  if (quizTheme === 'moodle') {
-    renderQuestionMoodle();
-  } else {
-    renderQuestionCustom();
-  }
-}
-
-function renderQuestionCustom() {
   const q     = currentQuestions[currentIndex];
   const total = currentQuestions.length;
 
@@ -2775,59 +2424,6 @@ function renderQuestionCustom() {
   renderNavigator();
 }
 
-/* ── Moodle letters: Moodle multichoice options are labelled a., b., c. ... regardless
-   of the underlying data's own key, so the on-screen lettering always matches Moodle. ── */
-const MOODLE_LETTERS = 'abcdefghijklmnopqrstuvwxyz';
-
-function renderQuestionMoodle() {
-  const q     = currentQuestions[currentIndex];
-  const total = currentQuestions.length;
-  const saved = userAnswers[currentIndex] || '';
-  const flagged = markedSet.has(currentIndex);
-
-  document.getElementById('mdlPageTitle').textContent = currentLecture || selectedSubject || 'Quiz';
-  document.getElementById('mdlBreadcrumbSubject').textContent = selectedSubject || 'Quiz';
-  document.getElementById('mdlQNo').textContent   = `Question ${currentIndex + 1}`;
-  document.getElementById('mdlQInfoNo').textContent = currentIndex + 1;
-  document.getElementById('mdlQStatePill').textContent = saved ? 'Answered' : 'Not yet answered';
-  document.getElementById('mdlQStatePill').classList.toggle('is-answered', !!saved);
-  document.getElementById('mdlQText').textContent = q.question;
-
-  const flagBtn = document.getElementById('mdlFlagBtn');
-  flagBtn.classList.toggle('is-flagged', flagged);
-  document.getElementById('mdlFlagLabel').textContent = flagged ? 'Unflag question' : 'Flag question';
-
-  const imgWrap = document.getElementById('mdlQImageWrap');
-  const imgEl   = document.getElementById('mdlQImage');
-  if (q.image) {
-    imgEl.src = q.image;
-    imgWrap.classList.remove('hidden');
-  } else {
-    imgWrap.classList.add('hidden');
-    imgEl.src = '';
-  }
-
-  const list = document.getElementById('mdlAnswerList');
-  list.innerHTML = '';
-  getOptionEntries(q).forEach(([key, val], idx) => {
-    const letter = MOODLE_LETTERS[idx] || key;
-    const row = document.createElement('div');
-    row.className = (idx % 2 === 0 ? 'r0' : 'r1') + (saved === key ? ' checked' : '');
-    row.innerHTML = `
-      <input type="radio" name="mdlq${currentIndex}" id="mdlq${currentIndex}_${key}" value="${key}" ${saved===key?'checked':''} />
-      <label for="mdlq${currentIndex}_${key}"><span class="answernumber">${letter}.</span> ${val}</label>
-    `;
-    row.addEventListener('click', () => selectAnswer(key));
-    list.appendChild(row);
-  });
-
-  document.getElementById('mdlPrevBtn').disabled = (currentIndex === 0);
-  document.getElementById('mdlNextBtn').textContent = (currentIndex === total - 1) ? 'Finish attempt ►' : 'Next page ►';
-  document.getElementById('mdlNextBtn').onclick = (currentIndex === total - 1) ? mdlConfirmFinish : mdlNextQ;
-
-  renderNavigator();
-}
-
 function selectAnswer(key) {
   const prev    = userAnswers[currentIndex] || '';
   const correct = currentQuestions[currentIndex].answer;
@@ -2844,39 +2440,17 @@ function selectAnswer(key) {
     });
   }
   userAnswers[currentIndex] = key;
-
   document.querySelectorAll('.option-label').forEach(lbl => {
     const inp = lbl.querySelector('input');
     lbl.classList.toggle('selected', inp.value === key);
   });
-  document.querySelectorAll('#mdlAnswerList .r0, #mdlAnswerList .r1').forEach(row => {
-    const inp = row.querySelector('input');
-    row.classList.toggle('checked', inp.value === key);
-  });
-  const pill = document.getElementById('mdlQStatePill');
-  if (pill) { pill.textContent = 'Answered'; pill.classList.add('is-answered'); }
-
   renderNavigator();
 }
-
-function mdlClearChoice() {
-  delete userAnswers[currentIndex];
-  document.querySelectorAll('#mdlAnswerList .r0, #mdlAnswerList .r1').forEach(row => {
-    row.classList.remove('checked');
-    row.querySelector('input').checked = false;
-  });
-  const pill = document.getElementById('mdlQStatePill');
-  if (pill) { pill.textContent = 'Not yet answered'; pill.classList.remove('is-answered'); }
-  renderNavigator();
-}
-
-function mdlToggleFlag() { toggleMark(); }
 
 /* ══════════════════════════════════════════════════════════
    NAVIGATOR
 ══════════════════════════════════════════════════════════ */
 function renderNavigator() {
-  if (quizTheme === 'moodle') { renderNavigatorMoodle(); return; }
   const grid = document.getElementById('navGrid');
   grid.innerHTML = '';
   currentQuestions.forEach((_, i) => {
@@ -2894,22 +2468,6 @@ function navState(i) {
   return 'state-default';
 }
 
-function renderNavigatorMoodle() {
-  const grid = document.getElementById('mdlNavGrid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  currentQuestions.forEach((_, i) => {
-    const answered = !!userAnswers[i];
-    const flagged  = markedSet.has(i);
-    const current  = i === currentIndex;
-    const btn = document.createElement('button');
-    btn.className = 'mdl-qn-btn ' + (answered ? 'mdl-answered' : 'mdl-notanswered') + (current ? ' mdl-current' : '');
-    btn.innerHTML = String(i + 1) + (flagged ? '<span class="mdl-flag-corner">⚑</span>' : '');
-    btn.onclick = () => goTo(i);
-    grid.appendChild(btn);
-  });
-}
-
 /* ══════════════════════════════════════════════════════════
    NAVIGATION
 ══════════════════════════════════════════════════════════ */
@@ -2921,300 +2479,18 @@ function goTo(i) {
 }
 function prevQ()  { if (currentIndex > 0) goTo(currentIndex - 1); }
 function nextQ()  { if (currentIndex < currentQuestions.length - 1) goTo(currentIndex + 1); }
-function mdlPrevQ() { prevQ(); }
-function mdlNextQ() { nextQ(); }
 
 /* ══════════════════════════════════════════════════════════
-   MOODLE EXAM — FINISH / SUMMARY / SUBMIT
-══════════════════════════════════════════════════════════ */
-
-/**
- * Called when user clicks "Finish attempt ►" on the last question,
- * or the "Finish attempt…" button in the nav sidebar.
- * Shows the Summary of Attempt screen (Moodle's quiz_attempt_summary).
- */
-function mdlConfirmFinish() {
-  // Record time spent on current question before leaving
-  const spent = Math.round((Date.now() - questionStart) / 1000);
-  questionTimes[currentIndex] = (questionTimes[currentIndex] || 0) + spent;
-
-  // Build the summary table rows
-  const tbody = document.getElementById('mdlSummaryBody');
-  tbody.innerHTML = '';
-  let unansweredCount = 0;
-  currentQuestions.forEach((q, i) => {
-    const answered = !!userAnswers[i];
-    const flagged  = markedSet.has(i);
-    if (!answered) unansweredCount++;
-    const tr = document.createElement('tr');
-    const flagHtml = flagged ? '<span class="mdl-summary-flag" title="Flagged">⚑</span>' : '';
-    const statusHtml = answered
-      ? `<span class="mdl-summary-status-answered">Answer saved${flagHtml}</span>`
-      : `<span class="mdl-summary-status-notanswered">Not yet answered${flagHtml}</span>`;
-    tr.innerHTML = `
-      <th><a onclick="mdlSummaryGoTo(${i})">${i + 1}</a></th>
-      <td>${statusHtml}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  // Show warning if there are unanswered questions
-  const warn = document.getElementById('mdlSummaryWarning');
-  if (unansweredCount > 0) {
-    warn.style.display = 'block';
-    warn.textContent = `The following questions have not been answered yet: ${
-      Array.from({length: currentQuestions.length}, (_, i) => !userAnswers[i] ? i + 1 : null)
-        .filter(Boolean).join(', ')
-    }. Are you sure you want to submit?`;
-  } else {
-    warn.style.display = 'none';
-  }
-
-  // Switch to summary screen (keep timer running)
-  ALL_SCREENS.forEach(s => {
-    document.getElementById(s).classList.toggle('hidden', s !== 'moodleSummary');
-  });
-}
-
-/**
- * "Return to attempt" link on the summary page — go back to the quiz
- * at the last question the user was on.
- */
-function mdlBackToAttempt() {
-  questionStart = Date.now(); // restart per-question timer
-  ALL_SCREENS.forEach(s => {
-    document.getElementById(s).classList.toggle('hidden', s !== 'moodleQuiz');
-  });
-  renderQuestionMoodle();
-}
-
-/**
- * Navigate to a specific question from the summary table's clickable Q# link,
- * then switch back to the quiz attempt screen.
- */
-function mdlSummaryGoTo(i) {
-  currentIndex = i;
-  mdlBackToAttempt();
-}
-
-/**
- * "Submit all and finish" — the real submit button on the summary page.
- * Delegates to the shared submitQuiz() which scores, saves stats, and
- * calls showScreen('results') which routes to moodleReview for Moodle theme.
- */
-function mdlFinalSubmit() {
-  // submitQuiz() calls stopTimer(), scores, builds results, showScreen('results')
-  // showScreen('results') routes to moodleReview when quizTheme === 'moodle'
-  submitQuiz();
-}
-
-/* ══════════════════════════════════════════════════════════
-   MOODLE EXAM — REVIEW (results) PAGE
-══════════════════════════════════════════════════════════ */
-
-/**
- * Override of the showScreen('results') path for Moodle theme.
- * Called by submitQuiz() → showScreen('results') → routes here via
- * the theme-aware showScreen logic. We build the Moodle review page
- * before it becomes visible.
- */
-function buildMoodleReview() {
-  const total     = currentQuestions.length;
-  let   score     = 0;
-  currentQuestions.forEach((q, i) => { if (userAnswers[i] === q.answer) score++; });
-  const pct       = Math.round(score / total * 100);
-  const gradeStr  = `${score} / ${total}  (${pct}%)`;
-
-  // Breadcrumb title
-  const bc = document.getElementById('mdlReviewBreadcrumbSubject');
-  if (bc) bc.textContent = selectedSubject || currentLecture || 'Quiz';
-
-  // ── Summary table at the top ──
-  const summaryBody = document.getElementById('mdlReviewSummaryBody');
-  if (summaryBody) {
-    const totalTimeSecs = Object.values(questionTimes).reduce((a, b) => a + b, 0);
-    const mm = String(Math.floor(totalTimeSecs / 60)).padStart(2, '0');
-    const ss = String(totalTimeSecs % 60).padStart(2, '0');
-    const timeStr = `${mm}:${ss}`;
-
-    summaryBody.innerHTML = `
-      <tr><th>Started on</th><td>${new Date().toLocaleString()}</td></tr>
-      <tr><th>State</th><td>Finished</td></tr>
-      <tr><th>Completed</th><td>${new Date().toLocaleString()}</td></tr>
-      <tr><th>Time taken</th><td>${timeStr}</td></tr>
-      <tr><th>Grade</th><td class="mdl-review-grade-highlight">${gradeStr}</td></tr>
-    `;
-  }
-
-  // ── Per-question review cards ──
-  const main = document.getElementById('mdlReviewQuestions');
-  if (!main) return;
-  main.innerHTML = '';
-
-  // Cancel any previous explain sessions
-  if (_allCancelToken) { _allCancelToken.cancelled = true; _allCancelToken = null; }
-  Object.keys(_singleCancelToken).forEach(k => {
-    if (_singleCancelToken[k]) _singleCancelToken[k].cancelled = true;
-    delete _singleCancelToken[k];
-  });
-  for (const k in _explainCache) delete _explainCache[k];
-  for (const k in _explainRawText) delete _explainRawText[k];
-  for (const k in _chatHistory) delete _chatHistory[k];
-  for (const k in _chatPending) delete _chatPending[k];
-  for (const k in _chatBusy) delete _chatBusy[k];
-  _explainAllBusy = false;
-  _explainPoolLoadPromise = _loadExplainPool(currentQuestions);
-
-  const explainAllBtn = document.getElementById('mdlExplainAllBtn');
-  if (explainAllBtn) {
-    explainAllBtn.disabled = false;
-    explainAllBtn.innerHTML = '🤖&nbsp; Explain All Questions';
-    explainAllBtn.onclick = explainAllQuestions;
-  }
-
-  currentQuestions.forEach((q, i) => {
-    const userAns  = userAnswers[i] || '';
-    const correct  = q.answer;
-    const isOk     = userAns === correct;
-    const isUnansw = !userAns;
-    const flagged  = markedSet.has(i);
-
-    // Outer .que.multichoice card — Moodle's exact structure
-    const queClass = isOk ? 'correct' : (isUnansw ? 'notanswered' : 'incorrect');
-    const statePillClass = queClass;
-    const statePillText  = isOk ? 'Correct' : (isUnansw ? 'Not answered' : 'Incorrect');
-
-    const card = document.createElement('div');
-    card.className = `que multichoice ${queClass}`;
-    card.style.marginBottom = '18px';
-
-    // .info bar (Moodle's per-question info strip)
-    const infoDiv = document.createElement('div');
-    infoDiv.className = 'info';
-    infoDiv.innerHTML = `
-      <span>Question <strong>${i + 1}</strong>${flagged ? ' &nbsp;<span style="color:var(--mdl-red)" title="Flagged">⚑ Flagged</span>' : ''}</span>
-      <span class="grade-info">
-        <span class="state-pill ${statePillClass}">${statePillText}</span>
-        &nbsp; ${isOk ? '1' : '0'} / 1 mark
-      </span>
-    `;
-    card.appendChild(infoDiv);
-
-    // .content > .formulation
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'content';
-
-    const formDiv = document.createElement('div');
-    formDiv.className = 'formulation';
-
-    // Question text
-    const qtextDiv = document.createElement('div');
-    qtextDiv.className = 'qtext';
-    qtextDiv.textContent = q.question;
-    formDiv.appendChild(qtextDiv);
-
-    // Optional image
-    if (q.image) {
-      const imgWrap = document.createElement('div');
-      imgWrap.className = 'mdl-q-image';
-      imgWrap.innerHTML = `<img src="${q.image}" alt="Question image" />`;
-      formDiv.appendChild(imgWrap);
-    }
-
-    // Answer list (read-only, with correct/incorrect highlighting)
-    const ablockDiv = document.createElement('div');
-    ablockDiv.className = 'ablock';
-    const answerList = document.createElement('div');
-    answerList.className = 'answer';
-
-    getOptionEntries(q).forEach(([key, val], idx) => {
-      const letter       = MOODLE_LETTERS[idx] || key;
-      const isCorrectOpt = key === correct;
-      const isUserOpt    = key === userAns;
-      const rowClass     = (idx % 2 === 0 ? 'r0' : 'r1')
-        + (isCorrectOpt ? ' correct-answer' : '')
-        + (isUserOpt && !isCorrectOpt ? ' incorrect-answer' : '');
-
-      const iconHtml = isCorrectOpt
-        ? '<span class="icon-correct"> ✔</span>'
-        : (isUserOpt ? '<span class="icon-incorrect"> ✘</span>' : '');
-
-      const row = document.createElement('div');
-      row.className = rowClass;
-      row.innerHTML = `
-        <input type="radio" disabled ${isUserOpt ? 'checked' : ''} />
-        <label><span class="answernumber">${letter}.</span> ${val}${iconHtml}</label>
-      `;
-      answerList.appendChild(row);
-    });
-    ablockDiv.appendChild(answerList);
-    formDiv.appendChild(ablockDiv);
-
-    // "The correct answer is …" line (shown when user was wrong/unanswered)
-    if (!isOk && !isUnansw) {
-      const rightAns = document.createElement('div');
-      rightAns.className = 'rightanswer';
-      const correctIdx = getOptionEntries(q).findIndex(([k]) => k === correct);
-      const correctLetter = MOODLE_LETTERS[correctIdx] ?? correct;
-      rightAns.textContent = `The correct answer is: ${correctLetter}. ${q.options[correct] || correct}`;
-      formDiv.appendChild(rightAns);
-    } else if (isUnansw) {
-      const rightAns = document.createElement('div');
-      rightAns.className = 'rightanswer';
-      const correctIdx = getOptionEntries(q).findIndex(([k]) => k === correct);
-      const correctLetter = MOODLE_LETTERS[correctIdx] ?? correct;
-      rightAns.textContent = `The correct answer is: ${correctLetter}. ${q.options[correct] || correct}`;
-      formDiv.appendChild(rightAns);
-    }
-
-    contentDiv.appendChild(formDiv);
-    card.appendChild(contentDiv);
-
-    // ── AI Explain & Chat buttons ──
-    const explainBtn = document.createElement('button');
-    explainBtn.className = 'ai-explain-btn';
-    explainBtn.id = `explainBtn_${i}`;
-    explainBtn.innerHTML = '🤖 Explain';
-    explainBtn.onclick = () => explainQuestion(i);
-    contentDiv.appendChild(explainBtn);
-
-    const explainPanel = document.createElement('div');
-    explainPanel.id = `explainPanel_${i}`;
-    contentDiv.appendChild(explainPanel);
-
-    const chatBtn = document.createElement('button');
-    chatBtn.className = 'ai-chat-btn';
-    chatBtn.id = `chatBtn_${i}`;
-    chatBtn.innerHTML = '💬 Chat';
-    chatBtn.onclick = () => toggleChatPanel(i);
-    contentDiv.appendChild(chatBtn);
-
-    const chatPanel = document.createElement('div');
-    chatPanel.id = `chatPanel_${i}`;
-    chatPanel.className = 'ai-chat-panel';
-    contentDiv.appendChild(chatPanel);
-
-    main.appendChild(card);
-  });
-}
-
-/* ══════════════════════════════════════════════════════════
-   MARK  (in Moodle theme this is the "Flag question" toggle)
+   MARK
 ══════════════════════════════════════════════════════════ */
 function toggleMark() {
   if (markedSet.has(currentIndex)) markedSet.delete(currentIndex);
   else markedSet.add(currentIndex);
   updateMarkBtn();
   renderNavigator();
-  if (quizTheme === 'moodle') {
-    const flagged = markedSet.has(currentIndex);
-    document.getElementById('mdlFlagBtn').classList.toggle('is-flagged', flagged);
-    document.getElementById('mdlFlagLabel').textContent = flagged ? 'Unflag question' : 'Flag question';
-  }
 }
 function updateMarkBtn() {
   const btn = document.getElementById('markBtn');
-  if (!btn) return;
   btn.classList.toggle('is-marked', markedSet.has(currentIndex));
   btn.textContent = markedSet.has(currentIndex) ? '🔴 Unmark' : '🔴 Mark / Unmark';
 }
@@ -3273,11 +2549,7 @@ if (prevTotal < threshold && newTotal >= threshold) {
   const _wrong      = currentQuestions.length - score - _unanswered;
   saveQuizStats(score, currentQuestions.length, _wrong, _unanswered, _totalSecs, _timedQs, correctToWrong, wrongToCorrect, selectedSubject, currentLecture);
 
-  if (quizTheme === 'moodle') {
-    buildMoodleReview();
-  } else {
-    buildResults();
-  }
+  buildResults();
   showScreen('results');
 
   // Split Quiz button: curriculum quizzes are admin-only; custom & community are available to all
@@ -3533,6 +2805,8 @@ async function loadStatsFromFirestore() {
   } catch(e) {
     console.error('Failed to load stats from Firestore:', e);
     window._cachedStats = defaultStats();
+  } finally {
+    _fsReady.stats = true;
   }
 }
 
@@ -3599,6 +2873,7 @@ function saveQuizStats(score, total, wrong, unanswered, timeSecs, timedQs, c2w, 
 }
 
 function openStats() {
+  fsAwaitIfNeeded('stats', 'Loading your stats…');
   document.getElementById('statsOverlay').classList.remove('hidden');
 
   if (window._currentUser && !window._cachedStats) {
@@ -3617,7 +2892,7 @@ function openStats() {
     renderStatsModal();
   }
 }
-function closeStats() { document.getElementById('statsOverlay').classList.add('hidden'); }
+function closeStats() { document.getElementById('statsOverlay').classList.add('hidden'); fsLoadingHide(); }
 
 function resetStats() {
   if (!confirm('Reset ALL statistics? This cannot be undone.')) return;
@@ -3792,12 +3067,14 @@ function retakeSingleQuiz(h) {
 }
 
 function openRetake() {
+  fsAwaitIfNeeded('stats', 'Loading your stats…');
   renderRetakeSelector();
   document.getElementById('retakeOverlay').classList.remove('hidden');
 }
 
 function closeRetake() {
   document.getElementById('retakeOverlay').classList.add('hidden');
+  fsLoadingHide();
 }
 
 function renderRetakeSelector() {
@@ -4759,6 +4036,56 @@ const CQ_KEY           = 'anu_msp_custom_quizzes_v1';
 const CQ_API_KEY_STORE = 'anu_msp_gemini_api_key';
 const CQ_MODEL         = 'gemini-2.5-flash';
 
+/* ── PER-USER CACHE for Custom Quizzes ──────────────────────
+   These are private, so each user gets their own tiny version
+   doc instead of the shared appConfig/cacheVersion doc:
+     Server doc : users/{uid}/meta/cacheVersion  { v: <ms> }
+     Local keys : anu_msp_cq_full_cache_<uid>
+                  anu_msp_cq_full_cache_ver_<uid>
+   saveCustomQuizzesList() bumps the doc (and refreshes the local
+   cache immediately, so the very next load is already warm).
+   loadCustomQuizzesFromFirestore() checks the doc before doing
+   the full collection read + per-question image hydration. */
+function _cqCacheKey(uid)    { return 'anu_msp_cq_full_cache_' + uid; }
+function _cqCacheVerKey(uid) { return 'anu_msp_cq_full_cache_ver_' + uid; }
+
+function _readCqCache(uid) {
+  try {
+    const raw = localStorage.getItem(_cqCacheKey(uid));
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+function _writeCqCache(uid, arr) {
+  try { localStorage.setItem(_cqCacheKey(uid), JSON.stringify(arr)); } catch(e) {}
+}
+function _readCqCacheVer(uid) {
+  return localStorage.getItem(_cqCacheVerKey(uid)) || null;
+}
+function _writeCqCacheVer(uid, v) {
+  try { localStorage.setItem(_cqCacheVerKey(uid), String(v)); } catch(e) {}
+}
+
+/* Fetch this user's tiny custom-quizzes version doc */
+async function _fetchCqServerVersion(uid) {
+  try {
+    const snap = await window._getDoc(window._doc(window._db, 'users', uid, 'meta', 'cacheVersion'));
+    return snap.exists() && snap.data().v != null ? String(snap.data().v) : null;
+  } catch(e) { return null; }
+}
+
+/* Bump this user's custom-quizzes version doc (call after any write) */
+async function _bumpCqVersion(uid) {
+  if (!window._db) return null;
+  try {
+    const v = Date.now();
+    await window._setDoc(window._doc(window._db, 'users', uid, 'meta', 'cacheVersion'), { v });
+    return String(v);
+  } catch(e) {
+    console.warn('_bumpCqVersion failed:', e);
+    return null;
+  }
+}
+
 let cqSelectedFile      = null;
 let cqGeneratedQuestions = null;
 let cqGeneratedTitle    = '';
@@ -4892,21 +4219,38 @@ function loadCustomQuizzes() {
 
 async function loadCustomQuizzesFromFirestore() {
   if (!window._currentUser) return;
+  const uid = window._currentUser.uid;
   try {
-    const col = window._collection(window._db, 'users', window._currentUser.uid, 'customQuizzes');
+    // Cache check: one tiny doc read tells us if anything changed since last time
+    const serverVer = await _fetchCqServerVersion(uid);
+    const localVer  = _readCqCacheVer(uid);
+    const cached    = _readCqCache(uid);
+
+    if (serverVer && localVer === serverVer && cached) {
+      console.log('[cache] custom quizzes hit, skipping Firestore fetch');
+      window._cachedCustomQuizzes = cached;
+      return;
+    }
+
+    const col = window._collection(window._db, 'users', uid, 'customQuizzes');
     const snap = await window._getDocs(col);
     const quizzes = [];
     snap.forEach(d => quizzes.push(d.data()));
     quizzes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    // Hydrate images from Storage in the background
     await Promise.all(quizzes.map(quiz => hydrateQuizImages(quiz.questions || [])));
     window._cachedCustomQuizzes = quizzes;
+
+    _writeCqCache(uid, quizzes);
+    if (serverVer) _writeCqCacheVer(uid, serverVer);
+    else await _bumpCqVersion(uid).then(v => v && _writeCqCacheVer(uid, v)); // first time: create the doc
   } catch (e) {
     console.error('Failed to load custom quizzes:', e);
     try {
-      const raw = localStorage.getItem(CQ_KEY);
-      window._cachedCustomQuizzes = raw ? JSON.parse(raw) : [];
+      const cached = _readCqCache(uid);
+      window._cachedCustomQuizzes = cached || [];
     } catch (_) { window._cachedCustomQuizzes = []; }
+  } finally {
+    _fsReady.customQuizzes = true;
   }
 }
 
@@ -4945,6 +4289,14 @@ async function saveCustomQuizzesList(arr) {
         const ref = window._doc(window._db, 'users', window._currentUser.uid, 'customQuizzes', quizToSave.id);
         await window._setDoc(ref, quizToSave);
       }
+
+      // Refresh this user's local cache immediately (arr is already fully
+      // hydrated in memory) and bump the server version so other devices
+      // know to refetch on their next load.
+      const uid = window._currentUser.uid;
+      _writeCqCache(uid, arr);
+      const newVer = await _bumpCqVersion(uid);
+      if (newVer) _writeCqCacheVer(uid, newVer);
     } catch (e) { console.error('Failed to save custom quizzes:', e); }
   } else {
     try { localStorage.setItem(CQ_KEY, JSON.stringify(arr)); } catch (e) {}
@@ -4958,6 +4310,7 @@ function setGeminiKey(key) {
 }
 
 function openCustomQuizzes() {
+  fsAwaitIfNeeded('customQuizzes', 'Loading your quizzes…');
   cqSelectedFile = null;
   cqGeneratedQuestions = null;
   cqGeneratedTitle = '';
@@ -4970,6 +4323,7 @@ function openCustomQuizzes() {
 }
 function closeCustomQuizzes() {
   document.getElementById('customQuizOverlay').classList.add('hidden');
+  fsLoadingHide();
 }
 
 function toggleCQKeyVisibility() {
@@ -7300,7 +6654,8 @@ async function shareCustomQuiz(id) {
 
     quiz.sharedAt = Date.now();
     await saveCustomQuizzesList(quizzes);
-    _allSharedQuizzes = []; // invalidate cache so community list refreshes on next open
+    _allSharedQuizzes = []; // invalidate in-memory cache so community list refreshes on next open
+    await bumpSharedQuizzesVersion(); // invalidate every user's local community-quiz cache
     renderCustomQuizModal();
 
     const statusEl = document.getElementById('cqStatus');
@@ -7432,6 +6787,7 @@ function openCommunityQuizzes() {
 
 function closeCommunityQuizzes() {
   document.getElementById('communityQuizOverlay').classList.add('hidden');
+  fsLoadingHide();
 }
 
 function communityOnSearchInput(val) {
@@ -7450,9 +6806,27 @@ async function renderCommunityQuizzes(forceReload) {
   if (!_allSharedQuizzes.length || forceReload) {
     body.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-muted);"><div style="font-size:2rem;margin-bottom:10px;">&#8987;</div><div style="font-weight:700;">Loading community quizzes…</div></div>`;
     try {
-      const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
-      _allSharedQuizzes = [];
-      snap.forEach(d => _allSharedQuizzes.push(d.data()));
+      // Cache check: one tiny doc read tells us if the full collection changed
+      const serverVer = forceReload ? null : await _fetchSharedServerVersion();
+      const localVer  = _readSharedCacheVer();
+      const cached    = _readCache();
+
+      if (!forceReload && serverVer && localVer === serverVer && cached && cached.shared) {
+        console.log('[cache] community quizzes hit, skipping Firestore fetch');
+        _allSharedQuizzes = cached.shared;
+      } else {
+        const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
+        _allSharedQuizzes = [];
+        snap.forEach(d => _allSharedQuizzes.push(d.data()));
+
+        // Save to local cache so the next open skips the full read
+        const existing = _readCache() || {};
+        existing.shared = _allSharedQuizzes;
+        _writeCache(existing);
+        let verToStore = forceReload ? await _fetchSharedServerVersion() : serverVer;
+        if (!verToStore) verToStore = await bumpSharedQuizzesVersion(); // establish baseline first time
+        if (verToStore) _writeSharedCacheVer(verToStore);
+      }
     } catch(e) {
       body.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;">&#10060; Failed to load community quizzes. Please try again.</div>`;
       return;
@@ -7718,9 +7092,10 @@ async function deleteCommunityQuiz(sharedId) {
     const localQuiz = quizzes.find(q => 'sq_' + window._currentUser.uid + '_' + q.id === sharedId);
     if (localQuiz) { delete localQuiz.sharedAt; await saveCustomQuizzesList(quizzes); }
 
-    // Invalidate client cache so list refreshes from Firestore
+    // Invalidate client + local + everyone-else's cache so lists refresh from Firestore
     _allSharedQuizzes = [];
-    renderCommunityQuizzes();
+    await bumpSharedQuizzesVersion();
+    renderCommunityQuizzes(true);
     renderCustomQuizModal();
   } catch(e) {
     alert('Failed to remove quiz: ' + (e.message || e));
@@ -7765,6 +7140,7 @@ function openAdminPanel() {
 
 function closeAdminPanel() {
   document.getElementById('adminOverlay').classList.add('hidden');
+  fsLoadingHide();
 }
 
 function adminSwitchTab(tab) {
@@ -7822,11 +7198,30 @@ async function renderAdminPanel() {
   if (adminSourceTab === 'community') {
     if (!adminCommunityCache) {
       try {
-        const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
-        const shared = [];
-        snap.forEach(d => shared.push(d.data()));
+        // Reuse the version-checked community cache (shared with the browse overlay)
+        // instead of always doing a full Firestore read.
+        const serverVer = await _fetchSharedServerVersion();
+        const localVer  = _readSharedCacheVer();
+        const cached     = _readCache();
+        let shared;
+
+        if (serverVer && localVer === serverVer && cached && cached.shared) {
+          shared = cached.shared.slice();
+        } else {
+          const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
+          shared = [];
+          snap.forEach(d => shared.push(d.data()));
+          const existing = _readCache() || {};
+          existing.shared = shared;
+          _writeCache(existing);
+          let verToStore = serverVer;
+          if (!verToStore) verToStore = await bumpSharedQuizzesVersion(); // establish baseline first time
+          if (verToStore) _writeSharedCacheVer(verToStore);
+        }
+
         shared.sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
         adminCommunityCache = shared;
+        _allSharedQuizzes = shared; // keep the browse overlay's in-memory copy in sync too
       } catch (e) {
         document.getElementById('adminQuizList').innerHTML =
           `<div style="text-align:center;padding:16px;color:#C62828;">❌ Failed to load community quizzes.</div>`;
@@ -7889,6 +7284,8 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
       await window._deleteDoc(ref);
       await deleteSharedQuizImages(sourceId);
       adminCommunityCache = (adminCommunityCache || []).filter(q => q.id !== sourceId);
+      _allSharedQuizzes = [];
+      await bumpSharedQuizzesVersion();
     }
     if (adminSelectedQuiz && adminSelectedQuiz.sourceType === sourceType && adminSelectedQuiz.sourceId === sourceId) {
       adminSelectedQuiz = null;
@@ -8383,6 +7780,9 @@ async function adminSavePublishedEdits() {
 
     if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Changes saved!</div>`;
 
+    _clearCache();
+    await bumpCacheVersion();
+
     if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
 
     // Close editor after a short delay so the user sees the success message
@@ -8423,6 +7823,8 @@ async function adminRemovePublished(lectureId) {
       adminEditingPublishedName = '';
     }
 
+    _clearCache();
+    await bumpCacheVersion();
     renderAdminAssignedList();
     if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
   } catch (e) {
@@ -8500,6 +7902,9 @@ async function adminPublishQuiz() {
     if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Published "${escapeHtml(lectureName)}" to ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}!</div>`;
     if (nameInput) nameInput.value = '';
 
+    _clearCache();
+    await bumpCacheVersion();
+
     // Close the editor after a successful publish
     adminEditMode = null;
     adminEditQuestions = null;
@@ -8519,33 +7924,219 @@ async function adminPublishQuiz() {
 }
 
 /* ══════════════════════════════════════════════════════════
+   LOCAL CACHE — curriculum + published questions + community quizzes
+   Cache key  : 'anu_msp_cache'
+   Version key: 'anu_msp_cache_ver'        (curriculum + published)
+                'anu_msp_cache_shared_ver' (community quizzes)
+
+   TWO separate tiny server docs (kept separate on purpose so the
+   Firestore rules stay simple — see note below):
+     appConfig/cacheVersion         { v: <ms> }  — admin-only writes
+     appConfig/sharedQuizzesVersion { v: <ms> }  — any signed-in user
+                                                    can write (publishing
+                                                    or deleting their own
+                                                    community quiz bumps
+                                                    this one)
+
+   Any write that changes shared data calls bumpCacheVersion() (admin
+   curriculum/published writes) or bumpSharedQuizzesVersion() (any
+   user sharing/deleting a community quiz). On the next page-load /
+   panel-open every user fetches only the relevant tiny doc, compares
+   it to their stored version, and re-downloads the full data only
+   when the versions differ.
+
+   Custom quizzes (private, per-user) use a separate per-user version
+   doc: users/{uid}/meta/cacheVersion  { v: <ms> } — see the
+   "PER-USER CACHE" section further down.
+══════════════════════════════════════════════════════════ */
+
+const CACHE_KEY            = 'anu_msp_cache';
+const CACHE_VER_KEY        = 'anu_msp_cache_ver';
+const CACHE_SHARED_VER_KEY = 'anu_msp_cache_shared_ver';
+
+function _readCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function _writeCache(payload) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(payload)); } catch(e) {}
+}
+
+function _readCacheVer() {
+  return localStorage.getItem(CACHE_VER_KEY) || null;
+}
+
+function _writeCacheVer(v) {
+  try { localStorage.setItem(CACHE_VER_KEY, String(v)); } catch(e) {}
+}
+
+function _readSharedCacheVer() {
+  return localStorage.getItem(CACHE_SHARED_VER_KEY) || null;
+}
+
+function _writeSharedCacheVer(v) {
+  try { localStorage.setItem(CACHE_SHARED_VER_KEY, String(v)); } catch(e) {}
+}
+
+function _clearCache() {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(CACHE_VER_KEY);
+    localStorage.removeItem(CACHE_SHARED_VER_KEY);
+  } catch(e) {}
+}
+
+/* Call this after every ADMIN write that changes curriculum/published data. */
+async function bumpCacheVersion() {
+  if (!window._db) return null;
+  try {
+    const val = Date.now();
+    await window._setDoc(window._doc(window._db, 'appConfig', 'cacheVersion'), { v: val });
+    return String(val);
+  } catch(e) {
+    console.warn('bumpCacheVersion failed:', e);
+    return null;
+  }
+}
+
+/* Call this after any SIGNED-IN USER publishes or deletes a community quiz. */
+async function bumpSharedQuizzesVersion() {
+  if (!window._db) return null;
+  try {
+    const val = Date.now();
+    await window._setDoc(window._doc(window._db, 'appConfig', 'sharedQuizzesVersion'), { v: val });
+    return String(val);
+  } catch(e) {
+    console.warn('bumpSharedQuizzesVersion failed:', e);
+    return null;
+  }
+}
+
+/* Fetch the curriculum/published version (single tiny doc read) */
+async function _fetchServerCacheVersion() {
+  try {
+    const snap = await window._getDoc(window._doc(window._db, 'appConfig', 'cacheVersion'));
+    return snap.exists() && snap.data().v != null ? String(snap.data().v) : null;
+  } catch(e) { return null; }
+}
+
+/* Fetch the community-quizzes version (single tiny doc read) */
+async function _fetchSharedServerVersion() {
+  try {
+    const snap = await window._getDoc(window._doc(window._db, 'appConfig', 'sharedQuizzesVersion'));
+    return snap.exists() && snap.data().v != null ? String(snap.data().v) : null;
+  } catch(e) { return null; }
+}
+
+/* Apply a cached payload directly into memory (no Firestore reads) */
+function _applyCurriculumCache(cached) {
+  const { extYears = [], extModules = {}, extSubjects = {} } = cached.curriculum || {};
+
+  extYears.forEach(yr => { if (!curriculum[yr]) curriculum[yr] = {}; });
+
+  Object.entries(extModules).forEach(([yr, mods]) => {
+    if (!curriculum[yr]) curriculum[yr] = {};
+    (mods || []).forEach(mod => {
+      if (!curriculum[yr][mod]) curriculum[yr][mod] = [];
+    });
+  });
+
+  Object.entries(extSubjects).forEach(([key, info]) => {
+    if (!subjects[key])
+      subjects[key] = { icon: info.icon || '📘', label: info.label || key, lectures: {} };
+    const { year, module: mod } = info;
+    if (!year || !mod) return;
+    if (!curriculum[year]) curriculum[year] = {};
+    if (!curriculum[year][mod]) curriculum[year][mod] = [];
+    if (!curriculum[year][mod].includes(key)) curriculum[year][mod].push(key);
+  });
+
+  buildYearGrid();
+  _reRenderOpenSelections();
+}
+
+function _applyPublishedCache(cached) {
+  const published = cached.published || {};
+  Object.entries(published).forEach(([subjKey, lecs]) => {
+    if (!subjects[subjKey]) return;
+    if (!subjects[subjKey].lectures) subjects[subjKey].lectures = {};
+    Object.entries(lecs).forEach(([lecName, questions]) => {
+      subjects[subjKey].lectures[lecName] = questions;
+    });
+  });
+  _reRenderOpenSelections();
+}
+
+function _reRenderOpenSelections() {
+  const _yr = selectedYear, _mod = selectedModule, _subj = selectedSubject, _lecs = selectedLectures;
+  if (_yr)   { selectYear(_yr);    selectedLectures = _lecs; }
+  if (_mod)  { selectModule(_mod); selectedLectures = _lecs; }
+  if (_subj) { selectSubject(_subj); }
+}
+
+/* ══════════════════════════════════════════════════════════
    Load all previously-published questions into `subjects`
    so they appear as extra lectures for every user.
 ══════════════════════════════════════════════════════════ */
 async function loadPublishedQuestionsIntoSubjects() {
   if (!window._db) return;
-  for (const subjName of Object.keys(subjects)) {
-    try {
-      const col = window._collection(window._db, 'publishedQuestions', subjName, 'lectures');
-      const snap = await window._getDocs(col);
-      if (snap.empty) continue;
-      if (!subjects[subjName].lectures) subjects[subjName].lectures = {};
-      await Promise.all(snap.docs.map(async (d) => {
-        const data = d.data();
-        const name = data.lectureName || d.id;
-        const questions = data.questions || [];
-        // Hydrate images from the separate images subcollection (published lectures
-        // store images there to stay under Firestore's 1 MB doc limit, and to keep
-        // the snapshot independent of the original source quiz).
-        await hydratePublishedLectureImages(subjName, d.id, questions);
-        subjects[subjName].lectures[name] = questions;
-      }));
-    } catch (e) {
-      // Subject may not have a 'publishedQuestions' doc yet — ignore
+  try {
+    /* ── 1. Check server version (already fetched by loadCurriculumExtensions,
+            but we read it again here in case it got bumped between calls) ── */
+    const serverVer = await _fetchServerCacheVersion();
+    const localVer  = _readCacheVer();
+    const cached    = _readCache();
+
+    if (serverVer && localVer === serverVer && cached && cached.published) {
+      /* Cache hit — apply immediately, no heavy Firestore reads */
+      console.log('[cache] published questions hit, skipping Firestore fetch');
+      _applyPublishedCache(cached);
+      return;
     }
+
+    /* ── 2. Cache miss — do the real fetches ── */
+    const publishedSnapshot = {}; // what we'll save to cache
+
+    for (const subjName of Object.keys(subjects)) {
+      try {
+        const col = window._collection(window._db, 'publishedQuestions', subjName, 'lectures');
+        const snap = await window._getDocs(col);
+        if (snap.empty) continue;
+        if (!subjects[subjName].lectures) subjects[subjName].lectures = {};
+        publishedSnapshot[subjName] = {};
+        await Promise.all(snap.docs.map(async (d) => {
+          const data = d.data();
+          const name = data.lectureName || d.id;
+          const questions = data.questions || [];
+          // Hydrate images from the separate images subcollection (published lectures
+          // store images there to stay under Firestore's 1 MB doc limit, and to keep
+          // the snapshot independent of the original source quiz).
+          await hydratePublishedLectureImages(subjName, d.id, questions);
+          subjects[subjName].lectures[name] = questions;
+          publishedSnapshot[subjName][name] = questions;
+        }));
+      } catch (e) {
+        // Subject may not have a 'publishedQuestions' doc yet — ignore
+      }
+    }
+
+    // Re-render whatever the user already has open so new content appears immediately
+    _reRenderOpenSelections();
+
+    /* ── 3. Save to cache (merge with curriculum cache) ── */
+    const existing = _readCache() || {};
+    existing.published = publishedSnapshot;
+    _writeCache(existing);
+    if (serverVer) _writeCacheVer(serverVer);
+
+  } catch (e) {
+    console.warn('Failed to load published questions:', e);
+  } finally {
+    _fsReady.published = true;
   }
-  // If a subject is already open, refresh its lecture list
-  if (selectedSubject) selectSubject(selectedSubject);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -8770,6 +8361,19 @@ async function adminLoadCurrSubjList() {
 async function loadCurriculumExtensions() {
   if (!window._db) return;
   try {
+    /* ── 1. Check server version (tiny fetch) ── */
+    const serverVer  = await _fetchServerCacheVersion();
+    const localVer   = _readCacheVer();
+    const cached     = _readCache();
+
+    if (serverVer && localVer === serverVer && cached && cached.curriculum) {
+      /* Cache hit — apply immediately, no heavy Firestore read */
+      console.log('[cache] curriculum hit, skipping Firestore fetch');
+      _applyCurriculumCache(cached);
+      return;
+    }
+
+    /* ── 2. Cache miss — do the real fetch ── */
     const ref  = window._doc(window._db, 'appConfig', 'curriculumExtensions');
     const snap = await window._getDoc(ref);
     if (!snap.exists()) return;
@@ -8804,8 +8408,18 @@ async function loadCurriculumExtensions() {
     });
 
     buildYearGrid();
+    _reRenderOpenSelections();
+
+    /* ── 3. Save to cache (merge with any existing published cache) ── */
+    const existing = _readCache() || {};
+    existing.curriculum = { extYears, extModules, extSubjects };
+    _writeCache(existing);
+    if (serverVer) _writeCacheVer(serverVer);
+
   } catch (e) {
     console.warn('Failed to load curriculum extensions:', e);
+  } finally {
+    _fsReady.curriculum = true;
   }
 }
 
@@ -8829,6 +8443,8 @@ async function saveCurriculumStructure() {
     data.modules = modulesMap;
     if (!data.subjects) data.subjects = {};
     await window._setDoc(ref, cleanForFirestore(data));
+    _clearCache();
+    await bumpCacheVersion();
   } catch (e) {
     console.warn('Failed to save curriculum structure:', e);
   }
@@ -8989,6 +8605,9 @@ async function adminExecMoveQuiz(andDelete) {
       ? `✅ Moved to ${subjects[destSubject].label || destSubject}!`
       : `✅ Copied to ${subjects[destSubject].label || destSubject}!`;
 
+    _clearCache();
+    await bumpCacheVersion();
+
     // Refresh views
     if (selectedSubject === adminTargetSubject || selectedSubject === destSubject) {
       selectSubject(selectedSubject);
@@ -9035,6 +8654,7 @@ async function adminRenameYear(oldName) {
   }
   ext.years = Object.keys(curriculum);
   await window._setDoc(extRef, cleanForFirestore(ext));
+  _clearCache(); await bumpCacheVersion();
   buildYearGrid();
   renderAdminCurriculumPanel();
 }
@@ -9057,6 +8677,7 @@ This also removes ${modCount} module(s) and ${subjCount} subject placement(s) fr
     Object.keys(ext.subjects).forEach(k => { if (ext.subjects[k].year === name) delete ext.subjects[k]; });
   }
   await window._setDoc(extRef, cleanForFirestore(ext));
+  _clearCache(); await bumpCacheVersion();
   buildYearGrid();
   renderAdminCurriculumPanel();
 }
@@ -9081,6 +8702,7 @@ async function adminRenameModule(year, oldMod) {
   }
   ext.years = Object.keys(curriculum);
   await window._setDoc(extRef, cleanForFirestore(ext));
+  _clearCache(); await bumpCacheVersion();
   buildYearGrid();
   renderAdminCurriculumPanel();
 }
@@ -9102,6 +8724,7 @@ This also removes ${arr.length} subject placement(s).
   }
   ext.years = Object.keys(curriculum);
   await window._setDoc(extRef, cleanForFirestore(ext));
+  _clearCache(); await bumpCacheVersion();
   buildYearGrid();
   renderAdminCurriculumPanel();
 }
@@ -9125,6 +8748,7 @@ async function adminEditSubject(key) {
     ext.subjects[key].icon  = subjects[key].icon;
   }
   await window._setDoc(extRef, cleanForFirestore(ext));
+  _clearCache(); await bumpCacheVersion();
   buildYearGrid();
   adminLoadCurrSubjList();
 }
@@ -9157,6 +8781,7 @@ This removes it from all year/module placements.
   ext.modules = modulesMap;
   ext.years   = Object.keys(curriculum);
   await window._setDoc(extRef, cleanForFirestore(ext));
+  _clearCache(); await bumpCacheVersion();
   buildYearGrid();
   adminLoadCurrSubjList();
 }
@@ -9180,6 +8805,8 @@ async function saveCurriculumExtensionSubject(key, info) {
     data.years   = allYears;
     data.modules = modulesMap;
     await window._setDoc(ref, cleanForFirestore(data));
+    _clearCache();
+    await bumpCacheVersion();
   } catch (e) {
     console.warn('Failed to save curriculum extension:', e);
   }
@@ -9234,6 +8861,9 @@ const firebaseConfig = {
     window._currentUser = user || null;
     updateAuthUI(user);
     if (user) {
+      // Mark as loading before the async calls so fsAwaitIfNeeded shows the spinner
+      _fsReady.stats         = false;
+      _fsReady.customQuizzes = false;
       loadStatsFromFirestore();
       loadCustomQuizzesFromFirestore();
       // Pre-load display name so sharing feels instant
@@ -9247,9 +8877,11 @@ const firebaseConfig = {
         }
       } catch(e) { window._userDisplayName = null; }
     } else {
-      // No user — fall back to localStorage
+      // No user — nothing to load from Firestore, mark as ready immediately
       window._cachedStats = null;
       window._userDisplayName = null;
+      _fsReady.customQuizzes = true;
+      _fsReady.stats = true;
     }
   });
 </script>
