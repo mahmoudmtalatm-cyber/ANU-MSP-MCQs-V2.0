@@ -7145,8 +7145,8 @@ function renderCQPreview() {
       <button class="cq-edit-reask-btn" title="Ask AI to solve this question using the configured source"
         onclick="cqAiSolveOne(${i})"
         style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 AI Solve</button>
-      <button class="cq-edit-reask-btn" title="Re-ask AI to re-extract this specific question"
-        onclick="cqReaskQuestion(${i})">🔄 Re-extract</button>
+      ${q._notExtractable ? '' : `<button class="cq-edit-reask-btn" title="Re-ask AI to re-extract this specific question"
+        onclick="cqReaskQuestion(${i})">🔄 Re-extract</button>`}
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="cqDeleteQuestion(${i})"
         style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
@@ -7173,7 +7173,7 @@ function renderCQPreview() {
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
           <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqRemoveImage(${i})" type="button">🗑️ Remove Image</button>
-          ${(cqSelectedFiles.length || cqLectureFiles.length) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
+          ${(!q._notExtractable && (cqSelectedFiles.length || cqLectureFiles.length)) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
             style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
         </div>
       </div>`;
@@ -7188,7 +7188,7 @@ function renderCQPreview() {
             📎 Upload Image Manually
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
-          ${(cqSelectedFiles.length || cqLectureFiles.length) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
+          ${(!q._notExtractable && (cqSelectedFiles.length || cqLectureFiles.length)) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
             style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
         </div>
       </div>`;
@@ -7360,7 +7360,14 @@ function cqAddBlankQuestion() {
       { key: 'C', value: '' }, { key: 'D', value: '' }
     ],
     answer: 'A',
-    has_image: false
+    has_image: false,
+    // This question has no counterpart in the source document — it was
+    // typed in by hand, not extracted. It must never offer "Re-extract"
+    // controls, and it must be skipped entirely when numbering/targeting
+    // other questions for AI re-extraction (see _cqSourceOrdinal), so that
+    // adding/reordering it never shifts what re-extraction does to
+    // genuinely-extracted questions around it.
+    _notExtractable: true
   });
   renderCQPreview();
   // Scroll to new question
@@ -7407,6 +7414,7 @@ function cqAddOption(qIdx) {
 /* ── Re-extract just the image for a single question from the source file ── */
 async function cqReExtractImage(idx) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  if (cqGeneratedQuestions[idx]._notExtractable) return; // no source to re-extract from
   const apiKey = getGeminiKey();
   if (!apiKey) { openApiKeyManager(); return; }
   const sourceFile = cqGeneratedQuestions[idx]._sourceFile || cqSelectedFiles[0] || cqLectureFiles[0];
@@ -7436,8 +7444,24 @@ async function cqReExtractImage(idx) {
   }
 }
 
+/* Returns the 1-based position of list[idx] counting ONLY questions that
+   actually came from the source document (i.e. skipping any question
+   flagged _notExtractable, such as manually-added or merged-in ones).
+   This is what gets told to the AI during re-extraction, so inserting or
+   reordering a manual/merged question never shifts the "question number"
+   context used to re-extract a genuinely-extracted question — it behaves
+   exactly as if the non-extractable question was never there. */
+function _cqSourceOrdinal(list, idx) {
+  let n = 0;
+  for (let i = 0; i <= idx && i < list.length; i++) {
+    if (!list[i]._notExtractable) n++;
+  }
+  return n;
+}
+
 async function cqReaskQuestion(idx) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
+  if (cqGeneratedQuestions[idx]._notExtractable) return; // no source to re-extract from
   const apiKey = getGeminiKey();
   if (!apiKey) {
     openApiKeyManager();
@@ -7451,7 +7475,8 @@ async function cqReaskQuestion(idx) {
   if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="padding:7px 11px;font-size:.8rem;"><div class="cq-spinner"></div> Re-asking AI for Q${idx + 1}…</div>`;
 
   const q = cqGeneratedQuestions[idx];
-  const reaskPrompt = `The following is a single MCQ question that was already extracted. Please re-examine the source document and re-extract this specific question (question number ${idx + 1}) with perfect accuracy.
+  const sourceQNum = _cqSourceOrdinal(cqGeneratedQuestions, idx);
+  const reaskPrompt = `The following is a single MCQ question that was already extracted. Please re-examine the source document and re-extract this specific question (question number ${sourceQNum}) with perfect accuracy.
 
 Current extraction:
 Question: ${q.question}
@@ -9340,6 +9365,12 @@ function _mergeCloneQuestions(rawQuestions, namespace, sourceLabel) {
     if (q.case_group) q.case_group = namespace + '::' + q.case_group;
     delete q.sharedImageIdx;
     delete q.pubImageIdx;
+    // Merged-in questions came from a different quiz/source entirely, so
+    // they have no valid position in *this* editor's source document.
+    // Never offer Re-extract controls for them, and never let them count
+    // toward the source-relative numbering used when re-extracting the
+    // questions that actually did come from this session's source.
+    q._notExtractable = true;
     // Transient — shows a "from: <quiz>" badge in the editor so it's obvious
     // which merged-in quiz a question came from before the merge is saved.
     // Stripped out by _stripEditorTransientFields right before saving.
