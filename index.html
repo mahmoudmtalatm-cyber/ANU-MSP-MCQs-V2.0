@@ -4946,6 +4946,64 @@ const _caseGroupEditors = {
   }
 };
 
+/* Swaps question `i` with its neighbor (dir: -1 = up, +1 = down) in
+   whichever editor invoked it, via the registry above. Case-group links
+   are matched by id rather than array position, so reordering never
+   breaks a linked case cluster — it just changes display order. */
+function _editorMoveQuestion(editorKey, i, dir) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions) return;
+  const j = i + dir;
+  if (j < 0 || j >= questions.length) return;
+  [questions[i], questions[j]] = [questions[j], questions[i]];
+  ed.rerender();
+}
+
+/* Moves question `i` to a specific 1-based position typed into the number
+   input `inputId` — useful for reordering in large quizzes where nudging
+   one spot at a time with ▲▼ would take forever. The target is clamped to
+   [1, questions.length] so it can never be pushed past either end. */
+function _editorMoveQuestionTo(editorKey, i, inputId) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions) return;
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  let target = parseInt(input.value, 10);
+  if (!target || isNaN(target)) return;
+  target = Math.max(1, Math.min(target, questions.length)); // never allow a number bigger than the quiz
+  const j = target - 1;
+  if (j === i) return;
+  const [moved] = questions.splice(i, 1);
+  questions.splice(j, 0, moved);
+  ed.rerender();
+}
+
+/* Renders the ▲▼ reorder buttons plus a "jump to position" number input
+   for one question card. */
+function _renderReorderButtons(editorKey, i, total) {
+  const upDisabled   = i === 0;
+  const downDisabled = i === total - 1;
+  const inputId = `_moveQNumInput_${editorKey}_${i}`;
+  return `<button class="cq-edit-reask-btn" title="Move up" type="button"
+      onclick="_editorMoveQuestion('${editorKey}', ${i}, -1)" ${upDisabled ? 'disabled' : ''}
+      style="padding:2px 8px;${upDisabled ? 'opacity:.35;cursor:not-allowed;' : ''}">▲</button>
+    <button class="cq-edit-reask-btn" title="Move down" type="button"
+      onclick="_editorMoveQuestion('${editorKey}', ${i}, 1)" ${downDisabled ? 'disabled' : ''}
+      style="padding:2px 8px;${downDisabled ? 'opacity:.35;cursor:not-allowed;' : ''}">▼</button>
+    <span style="display:inline-flex;align-items:center;gap:3px;" title="Move this question to a specific number">
+      <span style="font-size:.7rem;font-weight:700;color:var(--text-muted);">#</span>
+      <input type="number" id="${inputId}" min="1" max="${total}" step="1" value="${i + 1}"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();_editorMoveQuestionTo('${editorKey}', ${i}, '${inputId}');}"
+        style="width:48px;padding:3px 4px;border:1.5px solid #B0D4F0;border-radius:5px;
+          font-family:var(--font);font-size:.72rem;text-align:center;" />
+      <button class="cq-edit-reask-btn" title="Move to this number" type="button"
+        onclick="_editorMoveQuestionTo('${editorKey}', ${i}, '${inputId}')"
+        style="padding:2px 7px;">➜</button>
+    </span>`;
+}
+
 const _CASE_GROUP_COLORS = ['#1B8AC4', '#7B1FA2', '#2E7D32', '#E65100', '#C2185B', '#00838F', '#5D4037', '#616161'];
 function _caseGroupColor(gid) {
   let h = 0;
@@ -7067,7 +7125,9 @@ function renderCQPreview() {
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
       ${qBadge}
+      ${_renderMergeSourceBadge(q)}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
+      ${_renderReorderButtons('cq', i, cqGeneratedQuestions.length)}
       <button class="cq-edit-reask-btn" title="Ask AI to solve this question using the configured source"
         onclick="cqAiSolveOne(${i})"
         style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 AI Solve</button>
@@ -7478,6 +7538,7 @@ async function saveGeneratedCustomQuiz() {
   const title = (titleInput && titleInput.value.trim()) || cqGeneratedTitle || 'Custom Quiz';
 
   _cqNormalizeCaseGroups(cqGeneratedQuestions);
+  _stripEditorTransientFields(cqGeneratedQuestions);
 
   const quizzes = loadCustomQuizzes();
   quizzes.unshift({
@@ -9193,14 +9254,35 @@ function mergeToggleCurriculum(key, checked) {
    one merged-in quiz can never collide with one from another, and stripping
    image sentinels that only resolve against their original source collection
    (the actual image data, already hydrated into q.image, is kept). */
-function _mergeCloneQuestions(rawQuestions, namespace) {
+function _mergeCloneQuestions(rawQuestions, namespace, sourceLabel) {
   const qs = JSON.parse(JSON.stringify(rawQuestions || []));
   qs.forEach(q => {
     if (q.case_group) q.case_group = namespace + '::' + q.case_group;
     delete q.sharedImageIdx;
     delete q.pubImageIdx;
+    // Transient — shows a "from: <quiz>" badge in the editor so it's obvious
+    // which merged-in quiz a question came from before the merge is saved.
+    // Stripped out by _stripEditorTransientFields right before saving.
+    if (sourceLabel) q._mergeSourceLabel = sourceLabel;
   });
   return qs;
+}
+
+/* Small pill showing which merged-in quiz a question came from, while the
+   merge is still unsaved. Nothing is rendered once the label is stripped
+   at save time. */
+function _renderMergeSourceBadge(q) {
+  if (!q || !q._mergeSourceLabel) return '';
+  return `<span title="Merged in from this quiz — not yet saved"
+      style="background:#ECEFF1;color:#455A64;font-size:.68rem;font-weight:700;
+        border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #B0BEC5;">
+      🔀 ${escapeHtml(q._mergeSourceLabel)}</span>`;
+}
+
+/* Removes editor-only fields that should never be persisted, called right
+   before a question set is written to storage. */
+function _stripEditorTransientFields(questions) {
+  (questions || []).forEach(q => { delete q._mergeSourceLabel; });
 }
 
 async function confirmMergeSelectedQuizzes() {
@@ -9225,7 +9307,7 @@ async function confirmMergeSelectedQuizzes() {
       const restored = restoreOptionsOrder(JSON.parse(JSON.stringify(item.questions)));
       await hydrateSharedQuizImages(id, restored);
       await hydrateQuizImages(restored);
-      appended = appended.concat(_mergeCloneQuestions(restored, 'comm_' + id));
+      appended = appended.concat(_mergeCloneQuestions(restored, 'comm_' + id, item.title || 'Community quiz'));
     }
 
     // Saved custom quizzes are already hydrated in memory.
@@ -9233,7 +9315,7 @@ async function confirmMergeSelectedQuizzes() {
     mergeSelectedCustom.forEach(id => {
       const quiz = customQuizzes.find(q => q.id === id);
       if (!quiz) return;
-      appended = appended.concat(_mergeCloneQuestions(quiz.questions, quiz.id));
+      appended = appended.concat(_mergeCloneQuestions(quiz.questions, quiz.id, quiz.title || 'Custom quiz'));
     });
 
     // Curriculum lectures are already hydrated in memory.
@@ -9242,7 +9324,7 @@ async function confirmMergeSelectedQuizzes() {
       const subjectKey = key.slice(0, sep), lectureName = key.slice(sep + 2);
       const qs = subjects[subjectKey] && subjects[subjectKey].lectures && subjects[subjectKey].lectures[lectureName];
       if (!qs) return;
-      appended = appended.concat(_mergeCloneQuestions(qs, 'curr_' + key));
+      appended = appended.concat(_mergeCloneQuestions(qs, 'curr_' + key, lectureName || 'Lecture'));
     });
 
     target.push(...appended);
@@ -9612,7 +9694,9 @@ function renderAdminQuestionEditor(containerId) {
     html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
+      ${_renderMergeSourceBadge(q)}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
+      ${_renderReorderButtons('admin', i, adminEditQuestions.length)}
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="adminEditDeleteQuestion(${i})"
         style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
@@ -9927,7 +10011,9 @@ function renderCustomQuizEditor() {
     html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
+      ${_renderMergeSourceBadge(q)}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
+      ${_renderReorderButtons('customQuiz', i, cqEditQuestions.length)}
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="cqEditDeleteQuestion(${i})"
         style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
@@ -10171,6 +10257,7 @@ async function saveCustomQuizEdits() {
   }
 
   _cqNormalizeCaseGroups(cqEditQuestions);
+  _stripEditorTransientFields(cqEditQuestions);
 
   const statusEl = document.getElementById('cqCustomEditStatus_' + _cqEditorKey());
   if (statusEl) statusEl.innerHTML = `<div class="cq-status info">💾 Saving…</div>`;
@@ -10376,6 +10463,7 @@ async function adminSavePublishedEdits() {
 
   try {
     _cqNormalizeCaseGroups(adminEditQuestions);
+    _stripEditorTransientFields(adminEditQuestions);
     const cleanQuestions = JSON.parse(JSON.stringify(adminEditQuestions)).map(q => {
       delete q.imageUrl;
       delete q.sharedImageIdx;
@@ -10484,6 +10572,7 @@ async function adminPublishQuiz() {
     if (adminEditMode === 'publish' && adminEditQuestions) {
       // Use the admin-edited working copy as-is (images already inline as data URLs)
       _cqNormalizeCaseGroups(adminEditQuestions);
+      _stripEditorTransientFields(adminEditQuestions);
       questions = adminEditQuestions;
     } else {
       // Restore options order if this quiz came from a shared/community doc
