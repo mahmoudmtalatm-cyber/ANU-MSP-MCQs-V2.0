@@ -403,14 +403,15 @@
 
     /* ── CURR-ITEM EDITABLE (years / modules / subjects with delete/rename) ── */
     .curr-item-row {
-      display: flex; align-items: center; gap: 6px;
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
       background: #F7FBFF; border: 1px solid #D8EAF7;
       border-radius: 8px; padding: 7px 10px; margin-bottom: 6px;
     }
-    .curr-item-name { flex: 1; font-size: .88rem; font-weight: 700; color: var(--text-main); }
+    .curr-item-row > div:first-child { min-width: 0; flex-basis: 140px; }
+    .curr-item-name { flex: 1; font-size: .88rem; font-weight: 700; color: var(--text-main); overflow-wrap: anywhere; }
     .curr-item-sub { font-size: .74rem; color: var(--text-muted); font-weight: 500; }
     .curr-item-btn {
-      border: none; border-radius: 6px; padding: 5px 9px;
+      border: none; border-radius: 6px; padding: 5px 9px; flex-shrink: 0;
       font-family: var(--font); font-size: .75rem; font-weight: 700;
       cursor: pointer; transition: filter .15s; white-space: nowrap;
     }
@@ -920,7 +921,7 @@
 }
 .cq-edit-reask-btn:hover { background: #D1C4E9; }
 .cq-opt-edit-row {
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
   padding: 5px 8px; border-radius: 7px; border: 1.5px solid #D8EAF7;
   background: #fff; transition: border-color .15s, background .15s;
 }
@@ -946,7 +947,7 @@
   font-weight: 800; color: var(--accent); font-size: .83rem; flex-shrink: 0; min-width: 16px;
 }
 .cq-opt-text-input {
-  flex: 1; padding: 5px 8px; border: 1px solid transparent; border-radius: 5px;
+  flex: 1 1 90px; min-width: 90px; padding: 5px 8px; border: 1px solid transparent; border-radius: 5px;
   font-family: var(--font); font-size: .85rem; color: var(--text-main);
   background: transparent; outline: none; transition: border-color .15s, background .15s;
 }
@@ -1577,13 +1578,13 @@
 
 .admin-quiz-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
 .admin-quiz-item {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   background: #F7FBFF; border: 1.5px solid #D8EAF7; border-radius: 8px;
   padding: 10px 14px; cursor: pointer; transition: all .15s;
 }
 .admin-quiz-item:hover { border-color: var(--accent); background: #EEF7FF; }
 .admin-quiz-item.selected { border-color: #1B4F72; background: #EBF4FA; }
-.admin-quiz-item-info { flex: 1; }
+.admin-quiz-item-info { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
 .admin-quiz-item-title { font-weight: 700; font-size: .9rem; color: var(--text-main); }
 .admin-quiz-item-meta { font-size: .74rem; color: var(--text-muted); margin-top: 2px; }
 .admin-quiz-item-check {
@@ -1690,7 +1691,7 @@
 .icon-picker-trigger .ip-caret { font-size: .65rem; color: var(--text-muted); }
 .icon-picker-pop {
   position: absolute; z-index: 50; top: calc(100% + 6px); left: 0;
-  width: 300px; max-height: 320px; overflow-y: auto;
+  width: 300px; max-width: calc(100vw - 48px); max-height: 320px; overflow-y: auto;
   background: #fff; border: 1px solid #B0D4F0; border-radius: 10px;
   box-shadow: 0 8px 28px rgba(20,40,60,.22); padding: 10px;
 }
@@ -1870,6 +1871,23 @@
   .apikey-item { padding: 12px; }
   .apikey-info { flex-basis: 100%; min-width: 0; }
   .apikey-item-actions { flex-basis: 100%; margin-left: 0; justify-content: flex-end; }
+
+  /* Admin panel + curriculum manager + custom quiz editor: keep everything
+     inside the card on narrow screens instead of overlapping/spilling out */
+  .admin-overlay { padding: 8px; }
+  .admin-modal { max-height: 94vh; border-radius: 12px; }
+  .admin-modal-header { padding: 12px 16px; }
+  .admin-body { padding: 14px; gap: 12px; }
+  .admin-panel-tab { font-size: .76rem; padding: 10px 6px; }
+  .curr-section { padding: 12px; }
+  .curr-row { gap: 6px; }
+  .curr-item-row { padding: 8px; }
+  .curr-item-row > div:first-child { flex-basis: 100%; }
+  .curr-item-btn { font-size: .72rem; padding: 5px 7px; }
+  .cq-section { padding: 12px 14px; }
+  .cq-opt-edit-row { padding: 6px; }
+  .cq-opt-text-input { min-width: 70px; }
+  .cq-quiz-item { padding: 10px; }
 }
 @media (max-width: 360px) {
   .apikey-item-actions { justify-content: stretch; }
