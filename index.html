@@ -2147,10 +2147,8 @@
     <div class="results-footer">
       <button class="btn btn-home" onclick="goHome()">⟵&nbsp; Back to Home</button>
       <button class="ai-explain-all-btn" id="explainAllBtn" onclick="explainAllQuestions()">🤖&nbsp; Explain All Questions</button>
-      <button id="resultsSplitBtn" onclick="openSplitPanel('active')" style="background:#7B1FA2;color:#fff;border:none;padding:9px 18px;border-radius:8px;cursor:pointer;font-weight:700;font-size:.9rem;font-family:inherit;">✂️ Split Quiz</button>
       <button onclick="openApiKeyManager()" style="background:#F0F8FF;color:var(--accent);border:1.5px solid var(--accent);padding:9px 18px;border-radius:8px;cursor:pointer;font-weight:700;font-size:.9rem;font-family:inherit;">🔑&nbsp; Manage APIs</button>
     </div>
-    <div id="resultsSplitContainer" style="margin:0 16px 16px;"></div>
   </div>
 
 </div>
@@ -2835,16 +2833,6 @@ if (prevTotal < threshold && newTotal >= threshold) {
 
   buildResults();
   showScreen('results');
-
-  // Split Quiz button: curriculum quizzes are admin-only; custom & community are available to all
-  const splitBtn = document.getElementById('resultsSplitBtn');
-  if (splitBtn) {
-    if (currentQuizSource === 'curriculum') {
-      splitBtn.classList.toggle('hidden', !isAdminUser(window._currentUser));
-    } else {
-      splitBtn.classList.remove('hidden');
-    }
-  }
 }
 
 function buildResults() {
@@ -5637,10 +5625,8 @@ function renderCustomQuizModal() {
           <button class="cq-btn" onclick="startCustomQuiz('${q.id}')">&#9654; Start</button>
           <button class="cq-btn cq-btn-secondary" onclick="${isEditing ? 'closeCustomQuizEditor()' : `openCustomQuizEditor('${q.id}')`}" style="background:#1B8AC4;color:#fff;">${isEditing ? '✖ Close Editor' : '✏️ Edit'}</button>
           <button class="cq-share-btn" onclick="shareCustomQuiz('${q.id}')" title="Share with community">&#128279; Share</button>
-          <button class="cq-btn cq-btn-secondary" onclick="openSplitPanel('saved','${q.id}')" title="Split into multiple quizzes" style="background:#7B1FA2;color:#fff;">✂️ Split</button>
           <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">&#128465;</button>
         </div>
-        ${renderSplitPanel('saved', q.id, (isEditing && cqEditQuestions) ? cqEditQuestions.length : q.questions.length)}
         ${isEditing ? `<div class="cq-inline-editor" id="cqCustomEditorArea_${q.id}" style="margin-top:10px;"></div>` : ''}
       </div>`;
     });
@@ -7569,7 +7555,7 @@ async function saveGeneratedCustomQuiz() {
 ══════════════════════════════════════════════════════════ */
 
 function openSplitPanel(context, quizId) {
-  // context: 'preview' | 'saved' | 'active'
+  // context: 'preview' | 'saved' | 'adminPublished'
   cqSplitState = {
     context,
     quizId: quizId || null,
@@ -7581,8 +7567,6 @@ function openSplitPanel(context, quizId) {
   };
   if (context === 'preview') {
     renderCQPreview();
-  } else if (context === 'active') {
-    _renderActiveSplitPanel();
   } else if (context === 'adminPublished') {
     _renderAdminAssignedListHTML();
   } else {
@@ -7590,17 +7574,10 @@ function openSplitPanel(context, quizId) {
   }
   // Scroll split panel into view
   setTimeout(() => {
-    const panelKey = context === 'active' ? 'active' : (quizId || 'preview');
+    const panelKey = quizId || 'preview';
     const el = document.getElementById('cqSplitPanel_' + panelKey);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, 80);
-}
-
-function _renderActiveSplitPanel() {
-  const container = document.getElementById('resultsSplitContainer');
-  if (!container) return;
-  const total = currentQuestions ? currentQuestions.length : 0;
-  container.innerHTML = renderSplitPanel('active', null, total);
 }
 
 function closeSplitPanel() {
@@ -7608,8 +7585,6 @@ function closeSplitPanel() {
   renderCQPreview && renderCQPreview();
   renderCustomQuizModal && renderCustomQuizModal();
   if (document.getElementById('adminAssignedSection')) _renderAdminAssignedListHTML();
-  const activeContainer = document.getElementById('resultsSplitContainer');
-  if (activeContainer) activeContainer.innerHTML = '';
 }
 
 function setSplitMode(mode) {
@@ -7797,7 +7772,6 @@ function updateSplitRange(idx, field, val) {
 function _rerenderSplitOwner() {
   if (!cqSplitState) return;
   if (cqSplitState.context === 'preview') renderCQPreview();
-  else if (cqSplitState.context === 'active') _renderActiveSplitPanel();
   else if (cqSplitState.context === 'adminPublished') _renderAdminAssignedListHTML();
   else renderCustomQuizModal();
 }
@@ -7805,7 +7779,6 @@ function _rerenderSplitOwner() {
 function _getSplitSourceQuestions() {
   if (!cqSplitState) return null;
   if (cqSplitState.context === 'preview') return cqGeneratedQuestions || [];
-  if (cqSplitState.context === 'active') return currentQuestions || [];
   if (cqSplitState.context === 'adminPublished') {
     const entry = adminAssignedEntries.find(x => x.id === cqSplitState.quizId);
     return entry ? (entry.questions || []) : [];
@@ -7874,8 +7847,8 @@ function _buildSplitSummaryHTML(total) {
 function renderSplitPanel(context, quizId, totalQuestions) {
   if (!cqSplitState) return '';
   if (cqSplitState.context !== context || cqSplitState.quizId !== (quizId || null)) return '';
-  const panelId = 'cqSplitPanel_' + (context === 'active' ? 'active' : (quizId || 'preview'));
-  const summaryId = 'cqSplitSummary_' + (context === 'active' ? 'active' : (quizId || 'preview'));
+  const panelId = 'cqSplitPanel_' + (quizId || 'preview');
+  const summaryId = 'cqSplitSummary_' + (quizId || 'preview');
   const mode = cqSplitState.mode || 'equal';
   const isEqual = mode === 'equal';
   const isCustom = mode === 'custom';
@@ -7978,8 +7951,6 @@ async function executeSplitQuiz(targetMode) {
   if (cqSplitState.context === 'preview') {
     const titleInput = document.getElementById('cqTitleInput');
     baseTitle = (titleInput && titleInput.value.trim()) || cqGeneratedTitle || 'Custom Quiz';
-  } else if (cqSplitState.context === 'active') {
-    baseTitle = currentLecture || 'Active Quiz';
   } else if (cqSplitState.context === 'adminPublished') {
     const src = adminAssignedEntries.find(x => x.id === cqSplitState.quizId);
     baseTitle = src ? (src.lectureName || src.id) : 'Published Lecture';
@@ -8127,19 +8098,10 @@ async function executeSplitQuiz(targetMode) {
     cqGeneratedTitle = '';
   }
 
-  const wasActive = cqSplitState.context === 'active';
   cqSplitState = null;
-
-  if (wasActive) {
-    const activeContainer = document.getElementById('resultsSplitContainer');
-    if (activeContainer) {
-      activeContainer.innerHTML = `<div style="margin:12px 0;padding:12px 16px;background:#e8f5e9;border:1.5px solid #4CAF50;border-radius:8px;color:#2e7d32;font-weight:600;">✅ Created ${newQuizzes.length} split quiz${newQuizzes.length !== 1 ? 'zes' : ''} from "${escapeHtml(baseTitle)}"! Find them in Custom Quizzes.</div>`;
-    }
-  } else {
-    renderCustomQuizModal();
-    const statusEl = document.getElementById('cqStatus');
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Created ${newQuizzes.length} split quiz${newQuizzes.length !== 1 ? 'zes' : ''} from "${escapeHtml(baseTitle)}"!</div>`;
-  }
+  renderCustomQuizModal();
+  const statusEl = document.getElementById('cqStatus');
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Created ${newQuizzes.length} split quiz${newQuizzes.length !== 1 ? 'zes' : ''} from "${escapeHtml(baseTitle)}"!</div>`;
 }
 
 async function deleteCustomQuiz(id) {
@@ -9877,6 +9839,8 @@ function renderAdminQuestionEditor(containerId) {
     <button class="cq-btn cq-btn-secondary" onclick="adminEditAddBlankQuestion()" style="background:#4CAF50;">＋ Add Question</button>
     <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('admin')" style="background:#7B1FA2;color:#fff;">🧩 Merge Quizzes In</button>
     ${adminEditMode === 'published' ? `
+      <button class="cq-btn cq-btn-secondary" onclick="openAdminSplitPanel('${adminEditingPublishedId}')"
+        style="background:#7B1FA2;color:#fff;" title="Split into multiple quizzes">✂️ Split into Multiple</button>
       <button class="cq-btn" onclick="adminSavePublishedEdits()" title="Implement these edits on the curriculum lecture">💾 Save Changes</button>
       <button class="cq-btn cq-btn-secondary" onclick="adminSaveEditsAsCustomQuiz()"
         style="background:#7B1FA2;color:#fff;" title="Save these edits as a new custom quiz — the curriculum lecture stays untouched">📄 Save as Custom Quiz</button>
@@ -9885,6 +9849,7 @@ function renderAdminQuestionEditor(containerId) {
       <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;">Edits will be used when you publish below.</div>
     `}
   </div>
+  ${adminEditMode === 'published' ? renderSplitPanel('adminPublished', adminEditingPublishedId, adminEditQuestions.length) : ''}
   <div class="admin-status" id="adminEditStatus"></div>`;
 
   area.innerHTML = html;
@@ -10195,9 +10160,14 @@ function renderCustomQuizEditor() {
   html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="cq-btn cq-btn-secondary" onclick="cqEditAddBlankQuestion()" style="background:#4CAF50;">＋ Add Question</button>
     <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('customQuiz')" style="background:#7B1FA2;color:#fff;">🧩 Merge Quizzes In</button>
+    ${!cqCreatingNew ? `
+      <button class="cq-btn cq-btn-secondary" onclick="openSplitPanel('saved', '${cqEditingQuizId}')"
+        style="background:#7B1FA2;color:#fff;" title="Split into multiple quizzes">✂️ Split into Multiple</button>
+    ` : ''}
     <button class="cq-btn" onclick="saveCustomQuizEdits()">💾 Save Changes</button>
     <button class="cq-btn cq-btn-secondary" onclick="closeCustomQuizEditor()">✖ Cancel</button>
   </div>
+  ${!cqCreatingNew ? renderSplitPanel('saved', cqEditingQuizId, cqEditQuestions.length) : ''}
   <div class="admin-status" id="cqCustomEditStatus_${key}"></div>`;
 
   area.innerHTML = html;
@@ -10487,12 +10457,9 @@ function _renderAdminAssignedListHTML() {
           onclick="adminEditPublished('${e.id}')">✏️ Edit</button>
         <button class="admin-remove-btn" style="background:#E3F2FD;color:#0D47A1;border:1.5px solid #90CAF9;"
           onclick="adminOpenMoveQuiz('${e.id}', '${(e.lectureName||e.id).replace(/'/g,"\'")}')">📋 Copy/Move</button>
-        <button class="admin-remove-btn" style="background:#F3E5F5;color:#4A148C;border:1.5px solid #CE93D8;"
-          onclick="openAdminSplitPanel('${e.id}')" title="Split into multiple quizzes">✂️ Split</button>
         <button class="admin-remove-btn" onclick="adminRemovePublished('${e.id}')">🗑 Delete</button>
       </div>
-      <div id="adminPublishedEditorArea_${e.id}"></div>
-      ${renderSplitPanel('adminPublished', e.id, (e.questions || []).length)}`;
+      <div id="adminPublishedEditorArea_${e.id}"></div>`;
   });
 
   // If currently editing one of these, render its editor
