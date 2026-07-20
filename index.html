@@ -4710,6 +4710,11 @@ let cqSplitState = null;
 let cqEditingQuizId = null; // id of the saved quiz currently being edited, or null
 let cqEditQuestions = null; // working copy of that quiz's questions while the editor is open
 
+// ── Writing a brand-new quiz by hand (no AI) — reuses the same editor
+//    as above, just starts from a blank slate instead of an existing quiz ──
+let cqCreatingNew  = false; // true while the "write your own" composer is open
+let cqNewQuizTitle = '';    // title for the quiz currently being composed
+
 // ── Taking multiple saved custom quizzes together in one sitting ──
 let cqMultiSelected = new Set(); // ids of saved quizzes checked for a combined run
 
@@ -5349,6 +5354,8 @@ function openCustomQuizzes() {
   cqQuestionCount = '';
   cqEditingQuizId = null;
   cqEditQuestions = null;
+  cqCreatingNew = false;
+  cqNewQuizTitle = '';
   cqMultiSelected = new Set();
   document.getElementById('customQuizOverlay').classList.remove('hidden');
   renderCustomQuizModal();
@@ -5445,6 +5452,22 @@ function renderCustomQuizModal() {
         ${isEditing ? `<div class="cq-inline-editor" id="cqCustomEditorArea_${q.id}" style="margin-top:10px;"></div>` : ''}
       </div>`;
     });
+  }
+  html += `</div>`;
+
+  /* ── Write your own quiz by hand (no AI) ── */
+  html += `<div class="cq-section">
+    <div class="cq-section-title">✍️ Create Your Own Quiz</div>`;
+  if (cqCreatingNew) {
+    html += `<div class="cq-field-hint">Write your quiz from scratch — same editor as editing an existing quiz, you just start from a blank question.</div>
+    <div class="cq-input-row">
+      <input type="text" id="cqNewQuizTitleInput" placeholder="Quiz title (e.g. 'My Practice Set')"
+             value="${escapeHtml(cqNewQuizTitle)}" oninput="cqNewQuizTitle = this.value" />
+    </div>
+    <div class="cq-inline-editor" id="cqNewQuizEditorArea"></div>`;
+  } else {
+    html += `<div class="cq-field-hint">Prefer to type your own questions instead of using AI? Start with one blank question and build it up.</div>
+    <button class="cq-btn cq-btn-secondary" onclick="openNewQuizComposer()" style="background:#4CAF50;margin-top:6px;">＋ Start Writing a New Quiz</button>`;
   }
   html += `</div>`;
 
@@ -5600,7 +5623,7 @@ function renderCustomQuizModal() {
   body.innerHTML = html;
 
   if (cqGeneratedQuestions) renderCQPreview();
-  if (cqEditingQuizId && cqEditQuestions) renderCustomQuizEditor();
+  if ((cqEditingQuizId || cqCreatingNew) && cqEditQuestions) renderCustomQuizEditor();
   setupCQDropzone();
   setupLectureDropzone();
   setupSourceDropzone();
@@ -9209,6 +9232,7 @@ function openCustomQuizEditor(id) {
   const quizzes = loadCustomQuizzes();
   const quiz = quizzes.find(q => q.id === id);
   if (!quiz) return;
+  cqCreatingNew = false;
   cqEditingQuizId = id;
   cqEditQuestions = JSON.parse(JSON.stringify(quiz.questions || []));
   renderCustomQuizModal();
@@ -9217,32 +9241,63 @@ function openCustomQuizEditor(id) {
 }
 
 function closeCustomQuizEditor() {
+  cqCreatingNew = false;
   cqEditingQuizId = null;
   cqEditQuestions = null;
+  cqNewQuizTitle = '';
   renderCustomQuizModal();
 }
 
+/* Opens the same editor used for existing quizzes, but starting from one
+   blank question and no saved quiz behind it yet — "Save Changes" creates
+   a brand-new custom quiz instead of updating one. */
+function openNewQuizComposer() {
+  cqEditingQuizId = null;
+  cqCreatingNew = true;
+  cqNewQuizTitle = '';
+  cqEditQuestions = [{
+    question: '',
+    options: { A: '', B: '', C: '', D: '' },
+    optionsOrder: [
+      { key: 'A', value: '' }, { key: 'B', value: '' },
+      { key: 'C', value: '' }, { key: 'D', value: '' }
+    ],
+    answer: 'A'
+  }];
+  renderCustomQuizModal();
+  const area = document.getElementById('cqNewQuizEditorArea');
+  if (area) area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* Resolves the DOM ids the editor should read/write — differs depending on
+   whether we're editing an existing saved quiz (namespaced by its id) or
+   composing a brand-new one (a single fixed area, since it has no id yet). */
+function _cqEditorKey() { return cqCreatingNew ? 'new' : cqEditingQuizId; }
+function _cqEditorContainerId() {
+  return cqCreatingNew ? 'cqNewQuizEditorArea' : ('cqCustomEditorArea_' + cqEditingQuizId);
+}
+
 function renderCustomQuizEditor() {
-  const id = cqEditingQuizId;
-  const containerId = 'cqCustomEditorArea_' + id;
+  const key = _cqEditorKey();
+  const containerId = _cqEditorContainerId();
   const area = document.getElementById(containerId);
   if (!area || !cqEditQuestions) { if (area) area.innerHTML = ''; return; }
 
   // Preserve scroll position across re-renders (image change, option edit, etc.)
-  const _prevList = document.getElementById('cqCustomEditList_' + id);
+  const _prevList = document.getElementById('cqCustomEditList_' + key);
   const _prevScrollTop = _prevList ? _prevList.scrollTop : null;
 
   const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 0 10px;">
     <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;">
-      ✏️ Editing — ${cqEditQuestions.length} question${cqEditQuestions.length !== 1 ? 's' : ''}
+      ✏️ ${cqCreatingNew ? 'Writing a new quiz' : 'Editing'} — ${cqEditQuestions.length} question${cqEditQuestions.length !== 1 ? 's' : ''}
     </div>
     <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
       🔘 = correct answer &nbsp;·&nbsp; 🔗 = linked case questions
     </div>
   </div>`;
-  html += `<div class="cq-preview-list" id="cqCustomEditList_${id}">`;
+  html += `<div class="cq-preview-list" id="cqCustomEditList_${key}">`;
 
   cqEditQuestions.forEach((q, i) => {
     const optEntries = getOptionEntries(q);
@@ -9341,12 +9396,12 @@ function renderCustomQuizEditor() {
     <button class="cq-btn" onclick="saveCustomQuizEdits()">💾 Save Changes</button>
     <button class="cq-btn cq-btn-secondary" onclick="closeCustomQuizEditor()">✖ Cancel</button>
   </div>
-  <div class="admin-status" id="cqCustomEditStatus_${id}"></div>`;
+  <div class="admin-status" id="cqCustomEditStatus_${key}"></div>`;
 
   area.innerHTML = html;
 
   if (_prevScrollTop !== null) {
-    const _newList = document.getElementById('cqCustomEditList_' + id);
+    const _newList = document.getElementById('cqCustomEditList_' + key);
     if (_newList) _newList.scrollTop = _prevScrollTop;
   }
 }
@@ -9470,9 +9525,20 @@ function cqEditReplaceImage(idx, event) {
 
 /* Validates the working copy, then writes it back into the saved quiz
    list via the normal save path (handles Firestore image upload / local
-   storage the same way every other custom-quiz save already does). */
+   storage the same way every other custom-quiz save already does). If
+   `cqCreatingNew` is set, this creates a fresh quiz instead of updating one. */
 async function saveCustomQuizEdits() {
-  if (!cqEditQuestions || !cqEditingQuizId) return;
+  if (!cqEditQuestions) return;
+  if (!cqCreatingNew && !cqEditingQuizId) return;
+
+  if (cqCreatingNew && !cqNewQuizTitle.trim()) {
+    alert('Give your quiz a title first.');
+    return;
+  }
+  if (!cqEditQuestions.length) {
+    alert('Add at least one question first.');
+    return;
+  }
 
   for (let i = 0; i < cqEditQuestions.length; i++) {
     const q = cqEditQuestions[i];
@@ -9487,18 +9553,30 @@ async function saveCustomQuizEdits() {
 
   _cqNormalizeCaseGroups(cqEditQuestions);
 
-  const statusEl = document.getElementById('cqCustomEditStatus_' + cqEditingQuizId);
+  const statusEl = document.getElementById('cqCustomEditStatus_' + _cqEditorKey());
   if (statusEl) statusEl.innerHTML = `<div class="cq-status info">💾 Saving…</div>`;
 
   const quizzes = loadCustomQuizzes();
-  const quiz = quizzes.find(q => q.id === cqEditingQuizId);
-  if (!quiz) return;
-  quiz.questions = JSON.parse(JSON.stringify(cqEditQuestions));
+
+  if (cqCreatingNew) {
+    quizzes.push({
+      id: 'custom_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
+      title: cqNewQuizTitle.trim(),
+      questions: JSON.parse(JSON.stringify(cqEditQuestions)),
+      createdAt: Date.now()
+    });
+  } else {
+    const quiz = quizzes.find(q => q.id === cqEditingQuizId);
+    if (!quiz) return;
+    quiz.questions = JSON.parse(JSON.stringify(cqEditQuestions));
+  }
 
   try {
     await saveCustomQuizzesList(quizzes);
+    cqCreatingNew = false;
     cqEditingQuizId = null;
     cqEditQuestions = null;
+    cqNewQuizTitle = '';
     renderCustomQuizModal();
   } catch (e) {
     if (statusEl) statusEl.innerHTML = `<div class="cq-status warning">⚠️ Save failed: ${escapeHtml(e.message || String(e))}</div>`;
