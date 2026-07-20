@@ -1386,6 +1386,16 @@
 }
 .ai-chat-btn:hover:not(:disabled) { background: #B3E5FC; border-color: #29B6F6; }
 
+.ai-apikey-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #F0F8FF; color: var(--accent); border: 1.5px solid #B0D4F0;
+  border-radius: 7px; padding: 5px 12px; font-family: var(--font);
+  font-size: .8rem; font-weight: 700; cursor: pointer;
+  transition: all .15s; margin-top: 8px; margin-left: 8px;
+}
+.ai-apikey-btn:hover { background: #E3F2FD; border-color: var(--accent); }
+.ai-apikey-btn .apikey-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
 .ai-chat-panel { margin-top: 10px; }
 .ai-chat-panel:empty { margin-top: 0; }
 .ai-chat-box {
@@ -1731,7 +1741,7 @@
 .apikey-manager-body { display: flex; flex-direction: column; gap: 16px; }
 .apikey-list { display: flex; flex-direction: column; gap: 10px; }
 .apikey-item {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   background: #F7FBFF; border: 2px solid #D8EAF7; border-radius: 10px;
   padding: 12px 14px; transition: border-color .15s, box-shadow .15s;
 }
@@ -1746,7 +1756,7 @@
   display: flex; align-items: center; justify-content: center;
   font-weight: 800; font-size: .85rem;
 }
-.apikey-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.apikey-info { flex: 1 1 160px; min-width: 160px; display: flex; flex-direction: column; gap: 3px; }
 .apikey-label-row { display: flex; align-items: center; gap: 8px; }
 .apikey-label-input {
   border: none; background: transparent; font-weight: 800; font-size: .92rem;
@@ -1762,7 +1772,7 @@
 .apikey-masked {
   font-size: .78rem; color: var(--text-muted); font-family: monospace; letter-spacing: .5px;
 }
-.apikey-item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.apikey-item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; margin-left: auto; }
 .apikey-item-actions button {
   border: none; border-radius: 7px; cursor: pointer; font-family: var(--font);
   font-weight: 700; font-size: .78rem; padding: 7px 10px; transition: filter .15s;
@@ -1804,6 +1814,10 @@
   .comm-filter-row { flex-direction: column; }
   .comm-filter-select { min-width: unset; width: 100%; }
   .sq-modal { padding: 22px 16px 18px; }
+  .apikey-item { padding: 12px; }
+  .apikey-info { flex-basis: 100%; min-width: 0; }
+  .apikey-item-actions { flex-basis: 100%; margin-left: 0; justify-content: flex-end; }
+  #apikeyLabelInput { flex-basis: 100%; }
 }
   </style>
 </head>
@@ -2891,6 +2905,15 @@ if (changeLog.length > 0) {
     chatBtn.onclick = () => toggleChatPanel(i);
     card.querySelector('.r-content').appendChild(chatBtn);
 
+    // Quick-access API Key Manager button (shows the currently active key)
+    const apikeyBtn = document.createElement('button');
+    apikeyBtn.className = 'ai-apikey-btn';
+    apikeyBtn.id = `apikeyQuickBtn_${i}`;
+    apikeyBtn.title = 'Manage API Keys';
+    apikeyBtn.innerHTML = _apiKeyQuickBtnHTML();
+    apikeyBtn.onclick = () => openApiKeyManager();
+    card.querySelector('.r-content').appendChild(apikeyBtn);
+
     // Placeholder for the chat panel
     const chatPanel = document.createElement('div');
     chatPanel.id = `chatPanel_${i}`;
@@ -3417,6 +3440,16 @@ let _apiKeyPendingCallback = null; // callback to resume once a key becomes acti
 
 function _apiKeyNewId() { return 'k_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+/* Picks a random color for a new API key, preferring one not already used
+   by an existing key so entries stay visually distinct. Falls back to a
+   fully random color from the palette once every color is already taken. */
+function _pickRandomApiKeyColor(usedColors) {
+  usedColors = usedColors || [];
+  const available = API_KEY_COLORS.filter(c => !usedColors.includes(c));
+  const pool = available.length ? available : API_KEY_COLORS;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 function loadApiKeys() {
   try {
     const raw = localStorage.getItem(API_KEYS_STORE);
@@ -3464,8 +3497,15 @@ function addApiKey(key, label, color) {
   if (!key) return null;
   const keys = loadApiKeys();
   const id = _apiKeyNewId();
-  color = color || API_KEY_COLORS[keys.length % API_KEY_COLORS.length];
-  keys.push({ id, label: (label || '').trim() || `API ${keys.length + 1}`, key, color });
+  color = color || _pickRandomApiKeyColor(keys.map(k => k.color));
+  // Auto-number new keys as "API N" — N is the next free number, so it stays
+  // correct even after earlier keys were deleted or renamed.
+  const usedNums = keys
+    .map(k => /^API (\d+)$/.exec(k.label))
+    .filter(Boolean)
+    .map(m => parseInt(m[1], 10));
+  const nextNum = usedNums.length ? Math.max(...usedNums) + 1 : keys.length + 1;
+  keys.push({ id, label: (label || '').trim() || `API ${nextNum}`, key, color });
   saveApiKeys(keys);
   if (keys.length === 1) setActiveApiKeyId(id); // first key added becomes active automatically
   return id;
@@ -3487,6 +3527,19 @@ function maskApiKey(key) {
   if (!key) return '';
   if (key.length <= 8) return '•'.repeat(key.length);
   return key.slice(0, 4) + '•'.repeat(Math.max(4, key.length - 8)) + key.slice(-4);
+}
+
+/* Small "🔑 API" button shown under each reviewed question, for quick
+   access to the API Key Manager without scrolling back to the top. */
+function _apiKeyQuickBtnHTML() {
+  const entry = getActiveApiKeyEntry();
+  if (!entry) return '🔑 Add API Key';
+  return `<span class="apikey-dot" style="background:${entry.color || 'var(--accent)'};"></span> ${escapeHtml(entry.label)}`;
+}
+function _refreshApiKeyQuickButtons() {
+  document.querySelectorAll('.ai-apikey-btn').forEach(btn => {
+    btn.innerHTML = _apiKeyQuickBtnHTML();
+  });
 }
 
 /* ── Legacy wrappers (kept so existing call sites keep working) ── */
@@ -3616,11 +3669,16 @@ function renderApiKeyManager() {
   }
   html += `</div>`;
 
-  const nextColor = API_KEY_COLORS[keys.length % API_KEY_COLORS.length];
+  const nextColor = _pickRandomApiKeyColor(keys.map(k => k.color));
+  const usedNums = keys
+    .map(k => /^API (\d+)$/.exec(k.label))
+    .filter(Boolean)
+    .map(m => parseInt(m[1], 10));
+  const nextLabel = `API ${usedNums.length ? Math.max(...usedNums) + 1 : keys.length + 1}`;
   html += `<div class="apikey-add-form" id="apiKeyAddForm" data-color="${nextColor}">
     <div class="cq-section-title" style="margin-bottom:0;">➕ Add a New API Key</div>
     <div class="apikey-add-row">
-      <input type="text" id="apikeyLabelInput" placeholder="Label (e.g. Personal, Backup)" maxlength="30" />
+      <input type="text" id="apikeyLabelInput" placeholder="Label (e.g. Personal, Backup)" maxlength="30" value="${escapeHtml(nextLabel)}" />
       <input type="password" id="apikeyValueInput" placeholder="Paste your Gemini API key here" oninput="this.style.borderColor='#B0D4F0'" />
     </div>
     <div class="apikey-swatches">
@@ -3631,6 +3689,7 @@ function renderApiKeyManager() {
   </div>`;
 
   body.innerHTML = html;
+  _refreshApiKeyQuickButtons();
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -6291,6 +6350,8 @@ function openSplitPanel(context, quizId) {
     renderCQPreview();
   } else if (context === 'active') {
     _renderActiveSplitPanel();
+  } else if (context === 'adminPublished') {
+    _renderAdminAssignedListHTML();
   } else {
     renderCustomQuizModal();
   }
@@ -6313,6 +6374,7 @@ function closeSplitPanel() {
   cqSplitState = null;
   renderCQPreview && renderCQPreview();
   renderCustomQuizModal && renderCustomQuizModal();
+  if (document.getElementById('adminAssignedSection')) _renderAdminAssignedListHTML();
   const activeContainer = document.getElementById('resultsSplitContainer');
   if (activeContainer) activeContainer.innerHTML = '';
 }
@@ -6503,6 +6565,7 @@ function _rerenderSplitOwner() {
   if (!cqSplitState) return;
   if (cqSplitState.context === 'preview') renderCQPreview();
   else if (cqSplitState.context === 'active') _renderActiveSplitPanel();
+  else if (cqSplitState.context === 'adminPublished') _renderAdminAssignedListHTML();
   else renderCustomQuizModal();
 }
 
@@ -6510,6 +6573,10 @@ function _getSplitSourceQuestions() {
   if (!cqSplitState) return null;
   if (cqSplitState.context === 'preview') return cqGeneratedQuestions || [];
   if (cqSplitState.context === 'active') return currentQuestions || [];
+  if (cqSplitState.context === 'adminPublished') {
+    const entry = adminAssignedEntries.find(x => x.id === cqSplitState.quizId);
+    return entry ? (entry.questions || []) : [];
+  }
   const quizzes = loadCustomQuizzes();
   const q = quizzes.find(x => x.id === cqSplitState.quizId);
   return q ? q.questions : [];
@@ -6667,6 +6734,9 @@ async function executeSplitQuiz() {
     baseTitle = (titleInput && titleInput.value.trim()) || cqGeneratedTitle || 'Custom Quiz';
   } else if (cqSplitState.context === 'active') {
     baseTitle = currentLecture || 'Active Quiz';
+  } else if (cqSplitState.context === 'adminPublished') {
+    const src = adminAssignedEntries.find(x => x.id === cqSplitState.quizId);
+    baseTitle = src ? (src.lectureName || src.id) : 'Published Lecture';
   } else {
     const quizzes = loadCustomQuizzes();
     const src = quizzes.find(x => x.id === cqSplitState.quizId);
@@ -6674,6 +6744,54 @@ async function executeSplitQuiz() {
   }
 
   if (!confirm(`This will create ${chunks.length} new quiz${chunks.length !== 1 ? 'zes' : ''} from "${baseTitle}". Continue?`)) return;
+
+  // ── Admin-published curriculum lectures split off into new Firestore
+  //    lecture docs (rather than into the user's local custom-quiz list) ──
+  if (cqSplitState.context === 'adminPublished') {
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        const c = chunks[i];
+        const partQuestions = JSON.parse(JSON.stringify(srcQuestions.slice(c.start - 1, c.end)));
+        const lectureName = ((cqSplitState.mode === 'custom' || cqSplitState.mode === 'visual') && c.label)
+          ? c.label
+          : `${baseTitle} — Part ${i + 1} (Q${c.start}–Q${Math.min(c.end, total)})`;
+        const cleanQuestions = partQuestions.map(q => {
+          delete q.imageUrl;
+          delete q.sharedImageIdx;
+          delete q.pubImageIdx; // will be re-assigned after upload
+          return q;
+        });
+
+        const lectureId = 'pub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '_' + i;
+        await uploadPublishedLectureImages(adminTargetSubject, lectureId, cleanQuestions);
+
+        const publishedAt = Date.now() + i;
+        const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
+        await window._setDoc(ref, cleanForFirestore({
+          id: lectureId,
+          lectureName,
+          questions: cleanQuestions,
+          sourceTitle: baseTitle,
+          publishedBy: window._currentUser ? window._currentUser.uid : null,
+          publishedAt,
+          order: publishedAt
+        }));
+
+        const hydratedForMemory = JSON.parse(JSON.stringify(cleanQuestions));
+        await hydratePublishedLectureImages(adminTargetSubject, lectureId, hydratedForMemory);
+        if (!subjects[adminTargetSubject].lectures) subjects[adminTargetSubject].lectures = {};
+        subjects[adminTargetSubject].lectures[lectureName] = hydratedForMemory;
+      }
+    } catch (e) {
+      alert('Failed to create split quizzes: ' + (e.message || e));
+      return;
+    }
+
+    cqSplitState = null;
+    await renderAdminAssignedList();
+    if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
+    return;
+  }
 
   const quizzes = loadCustomQuizzes();
   const newQuizzes = chunks.map((c, i) => ({
@@ -7489,6 +7607,12 @@ let adminEditMode      = null;   // 'publish' | 'published' | null
 let adminEditingPublishedId   = null; // lectureId when editing an already-published lecture
 let adminEditingPublishedName = '';   // its lecture name
 
+// Cache of the currently-listed published lectures for adminTargetSubject.
+// Populated by renderAdminAssignedList(); used as the Split-Quiz source so
+// re-rendering the split panel (mode switches, range edits) doesn't need to
+// re-hit Firestore every keystroke.
+let adminAssignedEntries = [];
+
 let adminActiveTab = 'publish'; // 'publish' | 'curriculum'
 
 function openAdminPanel() {
@@ -8103,12 +8227,27 @@ async function renderAdminAssignedList() {
     return;
   }
 
+  entries.sort((a, b) => (a.order ?? a.publishedAt ?? 0) - (b.order ?? b.publishedAt ?? 0));
+  adminAssignedEntries = entries;
+
+  _renderAdminAssignedListHTML();
+}
+
+/* Rebuilds the #adminAssignedSection HTML from the already-fetched
+   adminAssignedEntries cache — no Firestore round-trip. Used to
+   re-render the Split Quiz panel (mode switches, range/label edits,
+   visual cut toggles) without re-querying the database each time. */
+function _renderAdminAssignedListHTML() {
+  const sec = document.getElementById('adminAssignedSection');
+  if (!sec) return;
+  const entries = adminAssignedEntries;
+
+  sec.innerHTML = `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
+
   if (!entries.length) {
     sec.innerHTML += `<div style="color:var(--text-muted);font-size:.82rem;">No quizzes have been published to this subject yet.</div>`;
     return;
   }
-
-  entries.sort((a, b) => (a.order ?? a.publishedAt ?? 0) - (b.order ?? b.publishedAt ?? 0));
 
   entries.forEach((e, idx) => {
     sec.innerHTML += `
@@ -8127,15 +8266,31 @@ async function renderAdminAssignedList() {
           onclick="adminEditPublished('${e.id}')">✏️ Edit</button>
         <button class="admin-remove-btn" style="background:#E3F2FD;color:#0D47A1;border:1.5px solid #90CAF9;"
           onclick="adminOpenMoveQuiz('${e.id}', '${(e.lectureName||e.id).replace(/'/g,"\'")}')">📋 Copy/Move</button>
+        <button class="admin-remove-btn" style="background:#F3E5F5;color:#4A148C;border:1.5px solid #CE93D8;"
+          onclick="openAdminSplitPanel('${e.id}')" title="Split into multiple quizzes">✂️ Split</button>
         <button class="admin-remove-btn" onclick="adminRemovePublished('${e.id}')">🗑 Delete</button>
       </div>
-      <div id="adminPublishedEditorArea_${e.id}"></div>`;
+      <div id="adminPublishedEditorArea_${e.id}"></div>
+      ${renderSplitPanel('adminPublished', e.id, (e.questions || []).length)}`;
   });
 
   // If currently editing one of these, render its editor
   if (adminEditMode === 'published' && adminEditingPublishedId) {
     renderAdminQuestionEditor('adminPublishedEditorArea_' + adminEditingPublishedId);
   }
+}
+
+/* Opens the Split Quiz panel for a published curriculum lecture.
+   Hydrates its images first (published lectures store images in a
+   separate Firestore subcollection) so the split-off quizzes keep them. */
+async function openAdminSplitPanel(lectureId) {
+  const entry = adminAssignedEntries.find(x => x.id === lectureId);
+  if (!entry) return;
+  if (!entry._splitImagesHydrated) {
+    await hydratePublishedLectureImages(adminTargetSubject, lectureId, entry.questions || []);
+    entry._splitImagesHydrated = true;
+  }
+  openSplitPanel('adminPublished', lectureId);
 }
 
 /* Load a published lecture's questions into the inline editor */
