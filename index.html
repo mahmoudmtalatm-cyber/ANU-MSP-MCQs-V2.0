@@ -7921,15 +7921,24 @@ function renderSplitPanel(context, quizId, totalQuestions) {
   }
 
   html += `<div class="cq-split-summary" id="${summaryId}">${_buildSplitSummaryHTML(total)}</div>`;
-  html += `<div class="cq-split-actions">
-    <button class="cq-btn" onclick="executeSplitQuiz()">✂️ Create Split Quizzes</button>
-    <button class="cq-btn cq-btn-secondary" onclick="closeSplitPanel()">Cancel</button>
+  html += `<div class="cq-split-actions">`;
+  if (context === 'adminPublished') {
+    html += `<button class="cq-btn" onclick="executeSplitQuiz('publish')"
+        title="Publish the split parts as new curriculum lectures and remove the original lecture">
+        🚀 Split &amp; Publish to Curriculum</button>
+      <button class="cq-btn cq-btn-secondary" onclick="executeSplitQuiz('custom')"
+        style="background:#7B1FA2;color:#fff;" title="Save the split parts as custom quizzes — the curriculum lecture stays untouched">
+        📄 Split to Custom Quizzes</button>`;
+  } else {
+    html += `<button class="cq-btn" onclick="executeSplitQuiz()">✂️ Create Split Quizzes</button>`;
+  }
+  html += `<button class="cq-btn cq-btn-secondary" onclick="closeSplitPanel()">Cancel</button>
   </div>`;
   html += `</div>`;
   return html;
 }
 
-async function executeSplitQuiz() {
+async function executeSplitQuiz(targetMode) {
   if (!cqSplitState) return;
   const srcQuestions = _getSplitSourceQuestions();
   if (!srcQuestions || !srcQuestions.length) return;
@@ -7975,13 +7984,90 @@ async function executeSplitQuiz() {
     baseTitle = src ? src.title : 'Custom Quiz';
   }
 
-  if (!confirm(`This will create ${chunks.length} new quiz${chunks.length !== 1 ? 'zes' : ''} from "${baseTitle}". Continue?`)) return;
+  const isCurriculumPublish = cqSplitState.context === 'adminPublished' && targetMode === 'publish';
+  const confirmMsg = isCurriculumPublish
+    ? `This will replace the curriculum lecture "${baseTitle}" with ${chunks.length} new lecture${chunks.length !== 1 ? 's' : ''} in its place. The original lecture will be removed. Continue?`
+    : `This will create ${chunks.length} new quiz${chunks.length !== 1 ? 'zes' : ''} from "${baseTitle}". Continue?`;
+  if (!confirm(confirmMsg)) return;
 
-  // ── Admin-published curriculum lectures split off into new Firestore
-  //    lecture docs (rather than into the user's local custom-quiz list) ──
-  // ── Admin-published curriculum lectures are split into the admin's own
-  //    Custom Quizzes — NOT published directly to the subject — so the admin
-  //    can review/edit each part before publishing it themselves. ──
+  // ── Admin-published curriculum lectures: the admin chooses between two
+  //    pathways —
+  //    'publish' (normal pathway): the split parts REPLACE the original
+  //    lecture as new published curriculum lectures — live for all users.
+  //    'custom': the split parts go into the admin's own Custom Quizzes
+  //    instead, leaving the original curriculum lecture untouched, so the
+  //    admin can review/edit each part before publishing it themselves. ──
+  if (isCurriculumPublish) {
+    const origLectureId = cqSplitState.quizId;
+    const subject = adminTargetSubject;
+    try {
+      const publishedAt = Date.now();
+      const newLectures = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const c = chunks[i];
+        const partQuestions = JSON.parse(JSON.stringify(srcQuestions.slice(c.start - 1, c.end))).map(q => {
+          delete q.imageUrl;
+          delete q.sharedImageIdx;
+          delete q.pubImageIdx; // will be re-assigned after upload
+          return q;
+        });
+        const lectureName = ((cqSplitState.mode === 'custom' || cqSplitState.mode === 'visual') && c.label)
+          ? c.label
+          : `${baseTitle} — Part ${i + 1} (Q${c.start}–Q${Math.min(c.end, total)})`;
+        const lectureId = 'pub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '_' + i;
+
+        await uploadPublishedLectureImages(subject, lectureId, partQuestions);
+        const ref = window._doc(window._db, 'publishedQuestions', subject, 'lectures', lectureId);
+        await window._setDoc(ref, cleanForFirestore({
+          id: lectureId,
+          lectureName,
+          questions: partQuestions,
+          sourceTitle: baseTitle,
+          sourceType: 'split',
+          publishedBy: window._currentUser ? window._currentUser.uid : null,
+          publishedAt: publishedAt + i,
+          order: publishedAt + i
+        }));
+        newLectures.push({ lectureId, lectureName, questions: partQuestions });
+      }
+
+      // Remove the original lecture now that its replacements are live.
+      await deletePublishedLectureImages(subject, origLectureId);
+      await window._deleteDoc(window._doc(window._db, 'publishedQuestions', subject, 'lectures', origLectureId));
+
+      // Update in-memory subject: drop the old lecture, add the new ones.
+      if (subjects[subject].lectures) delete subjects[subject].lectures[baseTitle];
+      if (!subjects[subject].lectures) subjects[subject].lectures = {};
+      for (const nl of newLectures) {
+        const hydrated = JSON.parse(JSON.stringify(nl.questions));
+        await hydratePublishedLectureImages(subject, nl.lectureId, hydrated);
+        subjects[subject].lectures[nl.lectureName] = hydrated;
+      }
+
+      // If the original lecture was open in the editor, close it.
+      if (adminEditMode === 'published' && adminEditingPublishedId === origLectureId) {
+        adminEditMode = null;
+        adminEditQuestions = null;
+        adminEditingPublishedId = null;
+        adminEditingPublishedName = '';
+      }
+
+      _idbDelete('published:' + subject + ':' + origLectureId);
+      await _updatePublishedManifest(subject, origLectureId, null);
+      for (const nl of newLectures) {
+        await _updatePublishedManifest(subject, nl.lectureId, publishedAt);
+      }
+
+      cqSplitState = null;
+      renderAdminAssignedList();
+      if (selectedSubject === subject) selectSubject(subject);
+      alert(`✅ Published ${newLectures.length} new lecture${newLectures.length !== 1 ? 's' : ''} from "${baseTitle}" to ${subjects[subject].label || subject}, replacing the original lecture.`);
+    } catch (e) {
+      alert('Failed to split & publish: ' + (e.message || e));
+    }
+    return;
+  }
+
   if (cqSplitState.context === 'adminPublished') {
     const customQuizzes = loadCustomQuizzes();
     const newCustomQuizzes = chunks.map((c, i) => {
