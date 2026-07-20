@@ -5635,7 +5635,7 @@ function renderCustomQuizModal() {
           <button class="cq-btn cq-btn-secondary" onclick="openSplitPanel('saved','${q.id}')" title="Split into multiple quizzes" style="background:#7B1FA2;color:#fff;">✂️ Split</button>
           <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">&#128465;</button>
         </div>
-        ${renderSplitPanel('saved', q.id, q.questions.length)}
+        ${renderSplitPanel('saved', q.id, (isEditing && cqEditQuestions) ? cqEditQuestions.length : q.questions.length)}
         ${isEditing ? `<div class="cq-inline-editor" id="cqCustomEditorArea_${q.id}" style="margin-top:10px;"></div>` : ''}
       </div>`;
     });
@@ -7805,6 +7805,10 @@ function _getSplitSourceQuestions() {
     const entry = adminAssignedEntries.find(x => x.id === cqSplitState.quizId);
     return entry ? (entry.questions || []) : [];
   }
+  // If this saved quiz is currently open in its inline editor, split from the
+  // live working copy (cqEditQuestions) rather than storage — otherwise any
+  // not-yet-saved edits, like questions just merged in, would be missing.
+  if (cqEditingQuizId === cqSplitState.quizId && cqEditQuestions) return cqEditQuestions;
   const quizzes = loadCustomQuizzes();
   const q = quizzes.find(x => x.id === cqSplitState.quizId);
   return q ? q.questions : [];
@@ -9691,7 +9695,7 @@ function renderAdminQuestionEditor(containerId) {
 
     html += `<div class="cq-preview-q cq-editable-q" id="adminEditQ_${i}">`;
 
-    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;">
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
       ${_renderMergeSourceBadge(q)}
@@ -9782,7 +9786,9 @@ function renderAdminQuestionEditor(containerId) {
     <button class="cq-btn cq-btn-secondary" onclick="adminEditAddBlankQuestion()" style="background:#4CAF50;">＋ Add Question</button>
     <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('admin')" style="background:#7B1FA2;color:#fff;">🧩 Merge Quizzes In</button>
     ${adminEditMode === 'published' ? `
-      <button class="cq-btn" onclick="adminSavePublishedEdits()">💾 Save Changes</button>
+      <button class="cq-btn" onclick="adminSavePublishedEdits()" title="Implement these edits on the curriculum lecture">💾 Save Changes</button>
+      <button class="cq-btn cq-btn-secondary" onclick="adminSaveEditsAsCustomQuiz()"
+        style="background:#7B1FA2;color:#fff;" title="Save these edits as a new custom quiz — the curriculum lecture stays untouched">📄 Save as Custom Quiz</button>
       <button class="cq-btn cq-btn-secondary" onclick="adminCancelEditPublished()">✖ Cancel</button>
     ` : `
       <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;">Edits will be used when you publish below.</div>
@@ -10008,7 +10014,7 @@ function renderCustomQuizEditor() {
 
     html += `<div class="cq-preview-q cq-editable-q" id="cqCustomEditQ_${i}">`;
 
-    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;">
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
         border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
       ${_renderMergeSourceBadge(q)}
@@ -10455,6 +10461,43 @@ function adminCancelEditPublished() {
 }
 
 /* Save edits made to an already-published lecture */
+/* Lets an admin spin off their in-editor changes to a published curriculum
+   lecture (e.g. after merging in extra questions) as a brand-new custom
+   quiz, WITHOUT touching the published lecture at all. The normal
+   "💾 Save Changes" pathway (adminSavePublishedEdits, below) remains the
+   way to actually implement the edits on the curriculum. */
+async function adminSaveEditsAsCustomQuiz() {
+  if (!adminEditQuestions || !adminEditQuestions.length) return;
+  const defaultTitle = (adminEditingPublishedName || 'Custom Quiz') + ' (copy)';
+  const title = prompt('Save these edits as a new custom quiz — the curriculum lecture will not be changed. Title:', defaultTitle);
+  if (title === null) return; // cancelled
+  const finalTitle = title.trim() || defaultTitle;
+
+  const statusEl = document.getElementById('adminEditStatus');
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status">⏳ Saving as custom quiz…</div>`;
+
+  try {
+    // Clone before normalizing/stripping so the live working copy — and the
+    // separate "Save Changes to curriculum" pathway — is left untouched.
+    const questions = JSON.parse(JSON.stringify(adminEditQuestions));
+    _cqNormalizeCaseGroups(questions);
+    _stripEditorTransientFields(questions);
+
+    const quizzes = loadCustomQuizzes();
+    quizzes.unshift({
+      id: 'cq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      title: finalTitle,
+      questions,
+      createdAt: Date.now()
+    });
+    await saveCustomQuizzesList(quizzes);
+
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Saved as custom quiz "${escapeHtml(finalTitle)}" — the curriculum lecture was not changed.</div>`;
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ Failed to save: ${escapeHtml(e.message || String(e))}</div>`;
+  }
+}
+
 async function adminSavePublishedEdits() {
   if (!adminEditQuestions || !adminEditingPublishedId) return;
   const lectureId = adminEditingPublishedId;
