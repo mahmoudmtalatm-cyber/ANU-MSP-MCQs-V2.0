@@ -4739,12 +4739,33 @@ function _cqNormalizeCaseGroups(questions) {
   });
   Object.entries(byGroup).forEach(([gid, members]) => {
     if (members.length < 2) {
-      members.forEach(q => { q.case_group = null; q.case_context = ''; q.case_has_image = false; });
+      members.forEach(q => { q.case_group = null; q.case_context = ''; q.case_has_image = false; q.case_is_core = false; });
       return;
     }
     const sharedContext = members.map(q => q.case_context).find(t => t && t.trim()) || '';
     members.forEach(q => { q.case_context = sharedContext; });
   });
+  // Every surviving group must have EXACTLY one core question (the one that
+  // holds the case/image the others depend on) — never zero, never more
+  // than one, so shuffling and display always know which question to lead
+  // the group with.
+  Object.keys(byGroup).forEach(gid => _caseGroupEnsureSingleCore(questions, gid));
+}
+
+/* Ensures the case group `gid` has exactly one member with case_is_core
+   true. If none are marked core, promotes the first member in current
+   array order (usually the one that physically presents the case). If more
+   than one is marked core (e.g. after a manual edit), keeps only the first
+   and demotes the rest. Shared by both auto-extraction normalization and
+   the manual case-link editors below. */
+function _caseGroupEnsureSingleCore(questions, gid) {
+  if (!gid) return;
+  const members = questions.filter(q => q.case_group === gid);
+  if (!members.length) return;
+  const cores = members.filter(q => q.case_is_core);
+  if (cores.length === 1) return;
+  members.forEach(q => { q.case_is_core = false; });
+  members[0].case_is_core = true;
 }
 
 /* Finds the shared image for a case cluster by looking at the other member
@@ -4754,8 +4775,220 @@ function _cqNormalizeCaseGroups(questions) {
    quizzes and could bloat those documents). */
 function _cqFindCaseGroupImage(questions, q) {
   if (!q.case_group) return null;
+  const core = questions.find(o => o.case_group === q.case_group && o.case_is_core && o.image);
+  if (core) return core.image;
   const sibling = questions.find(o => o.case_group === q.case_group && o.image);
   return sibling ? sibling.image : null;
+}
+
+/* -- Manual case-group linking --
+   Auto-detection during extraction gets the shared case/vignette/image
+   right most of the time, but not always — and grouping is also useful
+   for quizzes that weren't extracted at all (typed by hand, or edited
+   later). These helpers add a small "🔗 Case Link" control to every
+   question card in BOTH inline editors (the extraction review screen and
+   the generic admin quiz editor) so the user can see which question
+   carries a case's shared context, see which other questions are linked
+   to it, and freely create/join/leave a group before saving — using the
+   exact same case_group / case_context / case_has_image fields the
+   automatic detection uses, so both paths stay fully compatible. */
+
+// Registry so the shared functions below can operate on whichever
+// editor invoked them, without duplicating this logic per editor.
+const _caseGroupEditors = {
+  cq: {
+    getQuestions: () => cqGeneratedQuestions,
+    rerender: () => renderCQPreview()
+  },
+  admin: {
+    getQuestions: () => adminEditQuestions,
+    rerender: () => renderAdminQuestionEditor(_adminEditorContainerId())
+  }
+};
+
+const _CASE_GROUP_COLORS = ['#1B8AC4', '#7B1FA2', '#2E7D32', '#E65100', '#C2185B', '#00838F', '#5D4037', '#616161'];
+function _caseGroupColor(gid) {
+  let h = 0;
+  const s = String(gid);
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return _CASE_GROUP_COLORS[h % _CASE_GROUP_COLORS.length];
+}
+
+/* Scans a question list and returns, in first-seen order:
+   - order: [groupId, ...]
+   - labelOf: { groupId: 'Case 1' } — a stable, friendly label for display
+   - membersOf: { groupId: [questionIndex, ...] } */
+function _caseGroupSummarize(questions) {
+  const order = [];
+  const membersOf = {};
+  (questions || []).forEach((q, idx) => {
+    const gid = q && q.case_group;
+    if (!gid) return;
+    if (!membersOf[gid]) { membersOf[gid] = []; order.push(gid); }
+    membersOf[gid].push(idx);
+  });
+  const labelOf = {};
+  order.forEach((gid, i) => { labelOf[gid] = `Case ${i + 1}`; });
+  return { order, labelOf, membersOf };
+}
+
+function _caseGroupNewId() {
+  return 'manual_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+/* Renders the "🔗 Case Link" control block for one question card.
+   editorKey: 'cq' | 'admin' — selects which editor's state to read/write. */
+function _renderCaseGroupBlock(editorKey, questions, i) {
+  const q = questions[i];
+  const { labelOf, membersOf } = _caseGroupSummarize(questions);
+  const gid = q.case_group || '';
+  const color = gid ? _caseGroupColor(gid) : '#B0D4F0';
+
+  const coreLabelFor = (g) => {
+    const idxs = membersOf[g] || [];
+    const coreIdx = idxs.find(idx => questions[idx].case_is_core);
+    const others = idxs.filter(idx => idx !== i)
+      .map(idx => `Q${idx + 1}${idx === coreIdx ? ' ★core' : ''}`)
+      .join(', ');
+    return others || 'empty';
+  };
+
+  let optsHtml = `<option value="" ${!gid ? 'selected' : ''}>— Not linked to a case —</option>`;
+  Object.keys(membersOf).forEach(g => {
+    if (g === gid) return;
+    optsHtml += `<option value="${escapeHtml(g)}">${labelOf[g]} (${coreLabelFor(g)})</option>`;
+  });
+  if (gid) {
+    optsHtml += `<option value="${escapeHtml(gid)}" selected>${labelOf[gid]} (${coreLabelFor(gid) === 'empty' ? 'only this question so far' : coreLabelFor(gid)})</option>`;
+  }
+  optsHtml += `<option value="__new__">＋ Start a new case group…</option>`;
+
+  let html = `<div class="case-link-block" style="margin:8px 0;padding:8px 10px;border-radius:8px;
+    border:1.5px dashed ${color};background:${gid ? color + '14' : '#F7FBFF'};">`;
+  html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span style="font-size:.78rem;font-weight:800;color:${gid ? color : 'var(--text-muted)'};white-space:nowrap;">🔗 Case Link</span>
+    <select style="flex:1;min-width:160px;font-family:var(--font);font-size:.78rem;padding:4px 6px;
+      border-radius:6px;border:1.5px solid ${color};background:#fff;color:var(--text-main);"
+      onchange="_caseGroupOnSelect('${editorKey}', ${i}, this.value)">
+      ${optsHtml}
+    </select>
+    ${gid ? `<button type="button" class="cq-img-action-btn cq-img-remove-btn" onclick="_caseGroupUnlink('${editorKey}', ${i})">✕ Unlink</button>` : ''}
+  </div>`;
+
+  if (gid) {
+    const memberIdxs = membersOf[gid] || [];
+    const coreIdx = memberIdxs.find(idx => questions[idx].case_is_core);
+    const isCore = !!q.case_is_core;
+    const others = memberIdxs.filter(idx => idx !== i);
+
+    html += `<div style="font-size:.72rem;color:${color};font-weight:700;margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">`;
+    if (isCore) {
+      html += `<span>🧩 Core question — holds the case${(q.case_has_image || q.image) ? ' &amp; image' : ''} that the others depend on</span>`;
+    } else if (coreIdx !== undefined) {
+      html += `<span>↳ Depends on Q${coreIdx + 1}</span>
+        <button type="button" class="cq-img-action-btn" style="padding:2px 8px;font-size:.68rem;"
+          onclick="_caseGroupSetCore('${editorKey}', ${i})">★ Make this the core question instead</button>`;
+    } else {
+      html += `<span>⚠️ No core question set for this case yet</span>
+        <button type="button" class="cq-img-action-btn" style="padding:2px 8px;font-size:.68rem;"
+          onclick="_caseGroupSetCore('${editorKey}', ${i})">★ Make this the core question</button>`;
+    }
+    html += `</div>`;
+
+    html += `<div style="font-size:.7rem;color:${color};margin-top:2px;">
+      🔗 Linked with ${others.length ? others.map(idx => 'Q' + (idx + 1) + (idx === coreIdx ? ' ★' : '')).join(', ') : '(no other questions yet — link another question to this case)'}
+    </div>`;
+
+    html += `<div style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:8px;margin-bottom:3px;">
+      Shared case / vignette text <span style="font-weight:500;text-transform:none;letter-spacing:0;">— shown to the AI, and kept identical across every linked question</span>
+    </div>`;
+    html += `<textarea rows="2" class="cq-edit-textarea" style="width:100%;resize:vertical;border-color:${color};"
+      oninput="_caseGroupEditContext('${editorKey}', ${i}, this.value)"
+      placeholder="Paste or write the shared case/vignette text here…">${escapeHtml(q.case_context || '')}</textarea>`;
+    if (q.case_has_image || q.image) {
+      html += `<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.74rem;font-weight:700;color:${color};cursor:pointer;">
+        <input type="checkbox" ${q.case_has_image ? 'checked' : ''} onchange="_caseGroupToggleSharedImage('${editorKey}', ${i}, this.checked)" />
+        This case's image is shared context for every linked question
+      </label>`;
+    }
+  }
+  html += `</div>`;
+  return html;
+}
+
+function _caseGroupOnSelect(editorKey, i, val) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const q = questions[i];
+  const prevGid = q.case_group;
+  if (val === '') {
+    q.case_group = null; q.case_context = ''; q.case_has_image = false; q.case_is_core = false;
+  } else if (val === '__new__') {
+    q.case_group = _caseGroupNewId();
+    q.case_is_core = true; // the question that starts a group is its core by default
+    if (!q.case_context) q.case_context = q.question || '';
+  } else {
+    q.case_group = val;
+    q.case_is_core = false; // joining an existing group — it already has a core
+    const sibling = questions.find(o => o !== q && o.case_group === val && o.case_context && o.case_context.trim());
+    if (sibling) q.case_context = sibling.case_context;
+    if (!q.case_context) q.case_context = q.question || '';
+  }
+  // The group this question just left (if any) may now have no core left;
+  // the group it just joined/started must end up with exactly one.
+  if (prevGid && prevGid !== q.case_group) _caseGroupEnsureSingleCore(questions, prevGid);
+  if (q.case_group) _caseGroupEnsureSingleCore(questions, q.case_group);
+  ed.rerender();
+}
+
+function _caseGroupUnlink(editorKey, i) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const gid = questions[i].case_group;
+  questions[i].case_group = null;
+  questions[i].case_context = '';
+  questions[i].case_has_image = false;
+  questions[i].case_is_core = false;
+  if (gid) _caseGroupEnsureSingleCore(questions, gid); // promote a remaining member if the core just left
+  ed.rerender();
+}
+
+/* Manually promotes question `i` to be the core of its own case group,
+   demoting whichever question held that role before. */
+function _caseGroupSetCore(editorKey, i) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const gid = questions[i].case_group;
+  if (!gid) return;
+  questions.forEach(o => { if (o.case_group === gid) o.case_is_core = false; });
+  questions[i].case_is_core = true;
+  ed.rerender();
+}
+
+/* Edits case_context on this question and propagates the identical text
+   to every other member of the same group (they're meant to stay in sync —
+   this is the same invariant _cqNormalizeCaseGroups enforces for
+   auto-detected groups). Deliberately does NOT trigger a full re-render:
+   that would rebuild the DOM mid-keystroke and lose focus/caret position. */
+function _caseGroupEditContext(editorKey, i, val) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const gid = questions[i].case_group;
+  questions[i].case_context = val;
+  if (gid) questions.forEach(o => { if (o.case_group === gid) o.case_context = val; });
+}
+
+function _caseGroupToggleSharedImage(editorKey, i, checked) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const gid = questions[i].case_group;
+  if (!gid) return;
+  questions.forEach(o => { if (o.case_group === gid) o.case_has_image = checked; });
 }
 
 function _cqGroupAwareShuffle(arr) {
@@ -4768,6 +5001,18 @@ function _cqGroupAwareShuffle(arr) {
       blockByGroup[gid].push(q);
     } else {
       blocks.push([q]);
+    }
+  });
+  // Within each case-group block, the core question (the one holding the
+  // shared case/vignette/image) must always lead, with its dependents kept
+  // in their existing relative order behind it — regardless of how the
+  // group's members were ordered going in.
+  blocks.forEach(block => {
+    if (block.length < 2) return;
+    const coreIdx = block.findIndex(q => q.case_is_core);
+    if (coreIdx > 0) {
+      const [core] = block.splice(coreIdx, 1);
+      block.unshift(core);
     }
   });
   for (let i = blocks.length - 1; i > 0; i--) {
@@ -5498,11 +5743,13 @@ STRICT RULES — follow exactly, no exceptions:
 5. If a specific question has NO indicated correct answer anywhere in the document, set its "answer" to the special value "__NO_KEY__". Do NOT guess or infer an answer — use "__NO_KEY__" exactly.
 6. Do not invent, add, duplicate, or remove any questions or options that are not present in the source document.
 7. For each question, set "has_image" to true if THIS SPECIFIC question is accompanied by an image, diagram, figure, table, chart, graph, X-ray, CT scan, ECG, histology slide, or any other visual element that is part of it. Set it to false otherwise.
-8. CASE / VIGNETTE CLUSTERS: sometimes a shared clinical case, patient vignette, scenario, lab panel, or image is presented ONCE and then several questions that follow it all refer back to it (e.g. "A 45-year-old man presents with... Questions 12–15 refer to the scenario above."), without repeating that shared information in each question's own text. Whenever you detect this pattern:
-   - Give every question that belongs to that cluster the SAME "case_group" string (e.g. "case_1", "case_2", ...). Leave "case_group" empty/omitted for standalone questions that don't share context with any other question.
-   - Set "case_context" on EVERY question in the cluster (not just the first) to the FULL shared stem/vignette/case text, reproduced exactly as written — this is what lets each question be understood on its own later, even if it gets separated from its neighbors.
-   - If the shared case includes an image/figure that more than one question in the cluster relies on (not just the one question that visually displays it), set "case_has_image" to true on EVERY question in that cluster, and keep "has_image" true only on the one question the image is physically attached to in the document.
-   - Do not invent a cluster — only use "case_group" when the source document actually presents shared context that multiple questions depend on.
+8. CASE / VIGNETTE CLUSTERS: sometimes a shared clinical case, patient vignette, scenario, lab panel, or image is presented ONCE and then several questions that follow it all refer back to it (e.g. "A 45-year-old man presents with... Questions 12–15 refer to the scenario above."), without repeating that shared information in each question's own text. Whenever you detect this pattern, structure it as ONE core question plus its dependent questions:
+   - Identify the ONE question whose own text is where the shared case/vignette/scenario/lab panel/image actually appears — this is the CORE question. Set "case_is_core" to true on that question only. Set "case_is_core" to false (or omit it) on every other question — including every dependent question in the cluster.
+   - Give every question in the cluster — the core question AND every question that depends on it — the SAME "case_group" string (e.g. "case_1", "case_2", ...). Leave "case_group" empty/omitted for standalone questions that don't share context with any other question.
+   - Set "case_context" on EVERY question in the cluster (not just the core) to the FULL shared stem/vignette/case text, reproduced exactly as written — this is what lets each dependent question be understood on its own later, even if it gets separated from the core question.
+   - If the shared case includes an image/figure that the dependent questions rely on (not just the core question that visually displays it), set "case_has_image" to true on EVERY question in that cluster, and keep "has_image" true only on the one question the image is physically attached to in the document (normally the core question).
+   - Output the core question immediately followed by its dependent questions, in the same order they appear in the source document.
+   - Do not invent a cluster — only use "case_group"/"case_is_core" when the source document actually presents shared context that multiple questions depend on. A cluster always needs exactly one core question — never zero, never more than one.
 
 Return ONLY a JSON array, one object per question, in exactly this format:
 [
@@ -5513,7 +5760,8 @@ Return ONLY a JSON array, one object per question, in exactly this format:
     "has_image": false,
     "case_group": "",
     "case_context": "",
-    "case_has_image": false
+    "case_has_image": false,
+    "case_is_core": false
   }
 ]
 
@@ -5537,7 +5785,8 @@ const CQ_RESPONSE_SCHEMA = {
       has_image: { type: 'BOOLEAN' },
       case_group: { type: 'STRING' },
       case_context: { type: 'STRING' },
-      case_has_image: { type: 'BOOLEAN' }
+      case_has_image: { type: 'BOOLEAN' },
+      case_is_core: { type: 'BOOLEAN' }
     },
     required: ['question', 'options', 'answer']
   }
@@ -6139,7 +6388,8 @@ async function _extractQuestionsFromFile(file, apiKey, onProgress) {
       has_image: !!q.has_image, no_answer_key: noKey, _sourceFile: file,
       case_group: rawGroup ? `${groupPrefix}:${rawGroup}` : null,
       case_context: (typeof q.case_context === 'string') ? q.case_context.trim() : '',
-      case_has_image: !!q.case_has_image
+      case_has_image: !!q.case_has_image,
+      case_is_core: !!q.case_is_core
     };
   }).filter(Boolean);
 
@@ -6561,7 +6811,7 @@ function renderCQPreview() {
       ✏️ Review &amp; Edit — ${cqGeneratedQuestions.length} question${cqGeneratedQuestions.length !== 1 ? 's' : ''}
     </div>
     <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
-      Click any field to edit &nbsp;·&nbsp; 🔘 = correct answer &nbsp;·&nbsp; 🤖 = re-ask AI
+      Click any field to edit &nbsp;·&nbsp; 🔘 = correct answer &nbsp;·&nbsp; 🤖 = re-ask AI &nbsp;·&nbsp; 🔗 = linked case questions
     </div>
   </div>`;
   html += `<div class="cq-preview-list" id="cqPreviewList">`;
@@ -6643,6 +6893,9 @@ function renderCQPreview() {
       </label>`;
     }
     html += `</div>`; // end img-edit-row
+
+    /* ── Manual case-group link ── */
+    html += _renderCaseGroupBlock('cq', cqGeneratedQuestions, i);
 
     /* ── Options label ── */
     html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-muted);
@@ -6989,6 +7242,8 @@ async function saveGeneratedCustomQuiz() {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions.length) return;
   const titleInput = document.getElementById('cqTitleInput');
   const title = (titleInput && titleInput.value.trim()) || cqGeneratedTitle || 'Custom Quiz';
+
+  _cqNormalizeCaseGroups(cqGeneratedQuestions);
 
   const quizzes = loadCustomQuizzes();
   quizzes.unshift({
@@ -8592,7 +8847,7 @@ function renderAdminQuestionEditor(containerId) {
       ✏️ Editing — ${adminEditQuestions.length} question${adminEditQuestions.length !== 1 ? 's' : ''}
     </div>
     <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
-      🔘 = correct answer
+      🔘 = correct answer &nbsp;·&nbsp; 🔗 = linked case questions
     </div>
   </div>`;
   html += `<div class="cq-preview-list" id="adminEditList">`;
@@ -8642,6 +8897,9 @@ function renderAdminQuestionEditor(containerId) {
       </label>`;
     }
     html += `</div>`;
+
+    /* ── Manual case-group link ── */
+    html += _renderCaseGroupBlock('admin', adminEditQuestions, i);
 
     html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-muted);
       text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">
@@ -8706,6 +8964,15 @@ function renderAdminQuestionEditor(containerId) {
   }
 }
 
+/* Resolves the DOM container id currently hosting the inline question
+   editor — differs depending on whether we're editing a quiz before
+   publishing it, or editing one that's already published (per-lecture id). */
+function _adminEditorContainerId() {
+  return adminEditMode === 'published'
+    ? ('adminPublishedEditorArea_' + adminEditingPublishedId)
+    : 'adminEditorArea';
+}
+
 /* ── Edit helpers (mutate adminEditQuestions in place) ── */
 function adminEditQuestionText(idx, val) {
   if (!adminEditQuestions || !adminEditQuestions[idx]) return;
@@ -8747,8 +9014,7 @@ function adminEditDeleteQuestion(idx) {
   if (!adminEditQuestions) return;
   if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
   adminEditQuestions.splice(idx, 1);
-  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
-  renderAdminQuestionEditor(containerId);
+  renderAdminQuestionEditor(_adminEditorContainerId());
 }
 
 function adminEditAddBlankQuestion() {
@@ -8762,8 +9028,7 @@ function adminEditAddBlankQuestion() {
     ],
     answer: 'A'
   });
-  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
-  renderAdminQuestionEditor(containerId);
+  renderAdminQuestionEditor(_adminEditorContainerId());
   setTimeout(() => {
     const last = document.getElementById(`adminEditQ_${adminEditQuestions.length - 1}`);
     if (last) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -8780,8 +9045,7 @@ function adminEditDeleteOption(qIdx, key) {
   delete q.options[key];
   if (q.optionsOrder) q.optionsOrder = q.optionsOrder.filter(o => o.key !== key);
   if (q.answer === key) q.answer = Object.keys(q.options)[0] || '';
-  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
-  renderAdminQuestionEditor(containerId);
+  renderAdminQuestionEditor(_adminEditorContainerId());
 }
 
 function adminEditAddOption(qIdx) {
@@ -8794,8 +9058,7 @@ function adminEditAddOption(qIdx) {
   q.options[nextKey] = '';
   if (!q.optionsOrder) q.optionsOrder = usedKeys.map(k => ({ key: k, value: q.options[k] }));
   q.optionsOrder.push({ key: nextKey, value: '' });
-  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
-  renderAdminQuestionEditor(containerId);
+  renderAdminQuestionEditor(_adminEditorContainerId());
   setTimeout(() => {
     const input = document.querySelector(`#adminEditOptRow_${qIdx}_${nextKey} .cq-opt-text-input`);
     if (input) input.focus();
@@ -8805,8 +9068,7 @@ function adminEditAddOption(qIdx) {
 function adminEditRemoveImage(idx) {
   if (!adminEditQuestions || !adminEditQuestions[idx]) return;
   delete adminEditQuestions[idx].image;
-  const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
-  renderAdminQuestionEditor(containerId);
+  renderAdminQuestionEditor(_adminEditorContainerId());
 }
 
 function adminEditReplaceImage(idx, event) {
@@ -8820,8 +9082,7 @@ function adminEditReplaceImage(idx, event) {
     } catch (e) {
       adminEditQuestions[idx].image = dataUrl;
     }
-    const containerId = adminEditMode === 'published' ? 'adminPublishedEditorArea' : 'adminEditorArea';
-    renderAdminQuestionEditor(containerId);
+    renderAdminQuestionEditor(_adminEditorContainerId());
   };
   reader.readAsDataURL(file);
 }
@@ -8999,6 +9260,7 @@ async function adminSavePublishedEdits() {
   if (statusEl) statusEl.innerHTML = `<div class="cq-status">⏳ Saving…</div>`;
 
   try {
+    _cqNormalizeCaseGroups(adminEditQuestions);
     const cleanQuestions = JSON.parse(JSON.stringify(adminEditQuestions)).map(q => {
       delete q.imageUrl;
       delete q.sharedImageIdx;
@@ -9106,6 +9368,7 @@ async function adminPublishQuiz() {
     let questions;
     if (adminEditMode === 'publish' && adminEditQuestions) {
       // Use the admin-edited working copy as-is (images already inline as data URLs)
+      _cqNormalizeCaseGroups(adminEditQuestions);
       questions = adminEditQuestions;
     } else {
       // Restore options order if this quiz came from a shared/community doc
