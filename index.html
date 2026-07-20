@@ -3636,31 +3636,10 @@ function apiKeyLabelChanged(id, value) {
   renameApiKey(id, value);
 }
 
-/* Checks that a pasted key at least looks like a Gemini/Google AI Studio
-   API key, WITHOUT making any network call to Google. This is a format-only
-   guard: its purpose is to stop keys from other AI providers (OpenAI,
-   Anthropic, etc.) from being saved as if they were Gemini keys — this app
-   only ever talks to the Gemini API, so no other provider's key can work
-   here regardless of what checks are added. */
-function _isValidGeminiApiKeyFormat(key) {
-  // Google AI Studio keys are of the form "AIza" followed by 35 more
-  // URL-safe characters (39 chars total). Reject anything that doesn't
-  // match this shape — including keys from other providers, which use
-  // different, recognizably different prefixes (sk-, sk-ant-, etc).
-  return /^AIza[0-9A-Za-z_-]{35}$/.test(key);
-}
-
 function submitNewApiKey() {
   const valueInp = document.getElementById('apikeyValueInput');
-  const statusEl = document.getElementById('apikeyAddStatus');
   const key = (valueInp ? valueInp.value : '').trim();
   if (!key) { if (valueInp) valueInp.style.borderColor = '#C62828'; return; }
-
-  if (!_isValidGeminiApiKeyFormat(key)) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ That doesn't look like a Gemini API key — it should start with "AIza". Only Gemini keys are supported.</div>`;
-    if (valueInp) valueInp.style.borderColor = '#C62828';
-    return;
-  }
 
   // Name and colour are always auto-assigned — the user has no control over them.
   addApiKey(key, '', null);
@@ -3686,16 +3665,9 @@ function cancelEditApiKey() {
   renderApiKeyManager();
 }
 function submitEditApiKey(id) {
-  const inp      = document.getElementById('apikeyEditInput_' + id);
-  const statusEl = document.getElementById('apikeyEditStatus_' + id);
+  const inp    = document.getElementById('apikeyEditInput_' + id);
   const newKey = (inp ? inp.value : '').trim();
   if (!newKey) { if (inp) inp.style.borderColor = '#C62828'; return; }
-
-  if (!_isValidGeminiApiKeyFormat(newKey)) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ That doesn't look like a Gemini API key — it should start with "AIza". Only Gemini keys are supported.</div>`;
-    if (inp) inp.style.borderColor = '#C62828';
-    return;
-  }
 
   updateApiKeyValue(id, newKey);
   _apiKeyEditingId = null;
@@ -4271,11 +4243,10 @@ async function explainAllQuestions() {
    AI CHAT — per-question chat with attachments
 ══════════════════════════════════════════════════════════ */
 const CHAT_MODEL = 'gemini-2.5-flash';
-const CHAT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10MB
 
 // Conversation state, keyed by question index
-const _chatHistory     = {}; // { qIndex: [{role:'user'|'model', parts:[{text}|{inline_data,_name}]}] }
-const _chatPending     = {}; // { qIndex: [{name, mimeType, dataUrl, base64}] } — attachments staged but not yet sent
+const _chatHistory     = {}; // { qIndex: [{role:'user'|'model', parts:[{text}|{inline_data}|{file_data},_name]}] }
+const _chatPending     = {}; // { qIndex: [{file, name, mimeType, previewUrl}] } — attachments staged but not yet sent
 const _chatBusy        = {}; // { qIndex: bool }
 const _chatCancelToken = {}; // { qIndex: {cancelled:bool} }
 const _chatError       = {}; // { qIndex: errorMessage }
@@ -4360,6 +4331,8 @@ function renderChatPanel(i) {
           } else {
             bodyHTML += `<div class="ai-chat-file-chip">📎 ${escapeHtml(p._name || 'attachment')}</div>`;
           }
+        } else if (p.file_data) {
+          bodyHTML += `<div class="ai-chat-file-chip">📎 ${escapeHtml(p._name || 'attachment')}</div>`;
         }
       });
       msgsHTML += `<div class="ai-chat-msg ${isUser ? 'user' : 'model'}"><div class="ai-chat-bubble">${bodyHTML}</div></div>`;
@@ -4390,10 +4363,10 @@ function renderChatPanel(i) {
   let attachHTML = '';
   if (pending.length) {
     attachHTML = `<div class="ai-chat-pending">` + pending.map((a, idx) => {
-      if ((a.mimeType || '').startsWith('image/')) {
-        return `<div class="ai-chat-pending-item"><img src="${a.dataUrl}" alt="" /><button onclick="removeChatAttachment(${i},${idx})">✕</button></div>`;
+      if ((a.mimeType || '').startsWith('image/') && a.previewUrl) {
+        return `<div class="ai-chat-pending-item"><img src="${a.previewUrl}" alt="" /><button onclick="removeChatAttachment(${i},${idx})">✕</button></div>`;
       }
-      return `<div class="ai-chat-pending-item"><span>📎 ${escapeHtml(a.name)}</span><button onclick="removeChatAttachment(${i},${idx})">✕</button></div>`;
+      return `<div class="ai-chat-pending-item"><span>📎 ${escapeHtml(a.name)} <span style="opacity:.65;">(${formatBytes(a.file.size)})</span></span><button onclick="removeChatAttachment(${i},${idx})">✕</button></div>`;
     }).join('') + `</div>`;
   }
 
@@ -4421,32 +4394,28 @@ function handleChatFileSelect(i, inputEl) {
   if (!_chatPending[i]) _chatPending[i] = [];
 
   files.forEach(file => {
-    if (file.size > CHAT_MAX_ATTACHMENT_BYTES) {
-      alert(`"${file.name}" is too large (max 10MB).`);
+    if (file.size > GEMINI_MAX_FILE_BYTES) {
+      alert(`"${file.name}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API.`);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      const base64  = String(dataUrl).split(',')[1] || '';
-      _chatPending[i].push({
-        name: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        dataUrl,
-        base64
-      });
-      renderChatPanel(i);
-    };
-    reader.onerror = () => alert(`Failed to read "${file.name}".`);
-    reader.readAsDataURL(file);
+    const mimeType = file.type || 'application/octet-stream';
+    // Use a lightweight object URL for image previews instead of reading the
+    // whole file into a base64 data URL up front — keeps large attachments
+    // cheap to stage before they're actually sent.
+    const previewUrl = mimeType.startsWith('image/') ? URL.createObjectURL(file) : null;
+    _chatPending[i].push({ file, name: file.name, mimeType, previewUrl });
   });
 
+  renderChatPanel(i);
   inputEl.value = '';
 }
 
 /* ── Remove a staged (not-yet-sent) attachment ── */
 function removeChatAttachment(i, idx) {
-  if (_chatPending[i]) _chatPending[i].splice(idx, 1);
+  if (_chatPending[i]) {
+    const removed = _chatPending[i].splice(idx, 1)[0];
+    if (removed && removed.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+  }
   renderChatPanel(i);
 }
 
@@ -4459,7 +4428,11 @@ function stopChat(i) {
 function buildApiContents(history) {
   return history.map(m => ({
     role: m.role,
-    parts: m.parts.map(p => p.inline_data ? { inline_data: { mime_type: p.inline_data.mime_type, data: p.inline_data.data } } : { text: p.text })
+    parts: m.parts.map(p => {
+      if (p.inline_data) return { inline_data: { mime_type: p.inline_data.mime_type, data: p.inline_data.data } };
+      if (p.file_data)   return { file_data: { mime_type: p.file_data.mime_type, file_uri: p.file_data.file_uri } };
+      return { text: p.text };
+    })
   }));
 }
 
@@ -4486,9 +4459,32 @@ async function sendChatMessage(i) {
     return;
   }
 
+  // Attachments are converted to Gemini "parts" here — small ones inline as
+  // base64, larger ones streamed through the Files API — so staging stays
+  // instant regardless of file size and only the actual send does the work.
+  if (pending.length) {
+    _chatBusy[i] = true;
+    if (input) input.disabled = true;
+    renderChatPanel(i);
+    const loadingLabel = document.getElementById(`chatLoadingLabel_${i}`);
+    if (loadingLabel) loadingLabel.textContent = 'Uploading attachment…';
+  }
+
   const parts = [];
   if (text) parts.push({ text });
-  pending.forEach(a => parts.push({ inline_data: { mime_type: a.mimeType, data: a.base64 }, _name: a.name }));
+  try {
+    for (const a of pending) {
+      const part = await buildGeminiFilePart(a.file, apiKey, a.mimeType);
+      part._name = a.name;
+      parts.push(part);
+      if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+    }
+  } catch (e) {
+    _chatBusy[i] = false;
+    _chatError[i] = e.message || String(e);
+    renderChatPanel(i);
+    return;
+  }
 
   if (!_chatHistory[i]) _chatHistory[i] = [];
   _chatHistory[i].push({ role: 'user', parts });
@@ -5137,11 +5133,10 @@ function acceptLectureFile(file) {
     if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload a PDF, image (JPG/PNG/WEBP), or .txt file.</div>`;
     return;
   }
-  if (file.size > 19 * 1024 * 1024) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File is too large (max ~19MB).</div>`;
+  if (file.size > GEMINI_MAX_FILE_BYTES) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ "${escapeHtml(file.name)}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API.</div>`;
     return;
   }
-
   cqLectureFile = file;
   if (statusEl) statusEl.innerHTML = '';
   renderCustomQuizModal();
@@ -5156,8 +5151,8 @@ function acceptCQFile(file) {
     if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ Please upload an image (JPG/PNG/WEBP) or a PDF file.</div>`;
     return;
   }
-  if (file.size > 19 * 1024 * 1024) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ File is too large (max ~19MB).</div>`;
+  if (file.size > GEMINI_MAX_FILE_BYTES) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">⚠️ "${escapeHtml(file.name)}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API.</div>`;
     return;
   }
 
@@ -5173,6 +5168,99 @@ function fileToBase64(file) {
     reader.onerror = () => reject(new Error('Failed to read the file.'));
     reader.readAsDataURL(file);
   });
+}
+
+/* ══════════════════════════════════════════════════════════
+   GEMINI FILE UPLOADS — no size cap of our own.
+   Small files are sent inline as base64 (one request, no extra
+   round trip). Anything too big for a single inline request is
+   streamed straight to Google's Files API instead and referenced
+   by URI — the bytes are sent directly from the File/Blob, so a
+   large file never has to be fully base64-encoded in memory first.
+   The only real ceiling left is the one the Gemini API itself
+   enforces (2GB per file — included on the free tier), so this app
+   no longer imposes anything smaller on top of that.
+══════════════════════════════════════════════════════════ */
+const GEMINI_MAX_FILE_BYTES         = 2 * 1024 * 1024 * 1024; // Gemini Files API hard limit, per file (free tier included)
+const GEMINI_INLINE_THRESHOLD_BYTES = 15 * 1024 * 1024;       // stay safely under Gemini's ~20MB inline request cap once base64 (~33%) overhead is added
+
+function formatBytes(bytes) {
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + 'GB';
+  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+  if (bytes >= 1024) return (bytes / 1024).toFixed(0) + 'KB';
+  return bytes + 'B';
+}
+
+/* Throws a friendly error if a file exceeds Gemini's own per-file limit —
+   the only size restriction this app enforces. */
+function assertWithinGeminiFileLimit(file) {
+  if (file.size > GEMINI_MAX_FILE_BYTES) {
+    throw new Error(`"${file.name}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API, so it can't be uploaded.`);
+  }
+}
+
+/* Uploads a file to Gemini's resumable Files API and waits for it to
+   finish processing. Returns { mime_type, file_uri }. */
+async function uploadFileToGeminiFileAPI(file, apiKey, mimeType) {
+  mimeType = mimeType || file.type || 'application/octet-stream';
+
+  const startResp = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: {
+      'X-Goog-Upload-Protocol': 'resumable',
+      'X-Goog-Upload-Command': 'start',
+      'X-Goog-Upload-Header-Content-Length': String(file.size),
+      'X-Goog-Upload-Header-Content-Type': mimeType,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ file: { display_name: file.name } })
+  });
+  if (!startResp.ok) throw new Error(`Google rejected the upload of "${file.name}" — please check your connection and try again.`);
+  const uploadUrl = startResp.headers.get('x-goog-upload-url');
+  if (!uploadUrl) throw new Error(`Google didn't return an upload URL for "${file.name}" — please try again.`);
+
+  const uploadResp = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Length': String(file.size),
+      'X-Goog-Upload-Offset': '0',
+      'X-Goog-Upload-Command': 'upload, finalize'
+    },
+    body: file
+  });
+  if (!uploadResp.ok) throw new Error(`Uploading "${file.name}" to Google failed — please try again.`);
+  const info = await uploadResp.json();
+  let fileInfo = info && info.file;
+  if (!fileInfo || !fileInfo.uri) throw new Error(`Google didn't return a usable reference for "${file.name}".`);
+
+  // Large PDFs/videos can take a few seconds to finish processing server-side.
+  let attempts = 0;
+  while (fileInfo.state === 'PROCESSING' && attempts < 30) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const checkResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileInfo.name}?key=${encodeURIComponent(apiKey)}`);
+      if (checkResp.ok) fileInfo = await checkResp.json();
+    } catch (e) {}
+    attempts++;
+  }
+  if (fileInfo.state === 'FAILED') throw new Error(`Google failed to process "${file.name}" — try a different file.`);
+
+  return { mime_type: fileInfo.mimeType || mimeType, file_uri: fileInfo.uri };
+}
+
+/* Builds a Gemini request "part" for a file: inline base64 for small files,
+   automatic Files-API upload for anything bigger. This is the one place
+   that decides inline-vs-upload and enforces Gemini's own size ceiling, so
+   every upload path in the app behaves consistently and stays Gemini-only. */
+async function buildGeminiFilePart(file, apiKey, mimeTypeOverride) {
+  assertWithinGeminiFileLimit(file);
+  const mimeType = mimeTypeOverride || file.type || 'application/octet-stream';
+  if (file.size <= GEMINI_INLINE_THRESHOLD_BYTES) {
+    const base64 = await fileToBase64(file);
+    return { inline_data: { mime_type: mimeType, data: base64 } };
+  }
+  const { mime_type, file_uri } = await uploadFileToGeminiFileAPI(file, apiKey, mimeType);
+  return { file_data: { mime_type, file_uri } };
 }
 
 const CQ_EXTRACTION_PROMPT = `You are extracting multiple-choice quiz questions from an uploaded document (image or PDF).
@@ -5485,15 +5573,14 @@ async function extractImagesForQuestions(questions, sourceBase64, sourceMimeType
 async function handleCqAiSourceFiles(event) {
   const files = Array.from(event.target.files || []);
   for (const file of files) {
+    if (file.size > GEMINI_MAX_FILE_BYTES) {
+      alert(`"${file.name}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API, so it can't be used.`);
+      continue;
+    }
     const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
-    cqAiSourceFiles.push({ base64, mimeType, name: file.name });
+    cqAiSourceFiles.push({ file, mimeType, name: file.name });
   }
+  event.target.value = '';
   renderCustomQuizModal();
 }
 
@@ -5505,7 +5592,7 @@ function cqRemoveSourceFile(idx) {
 // General-purpose AI solver: solves questions at given indices using Gemini.
 // targetIdxs: array of question indices to solve (can be no-key or keyed questions)
 // sourceText: optional reference text
-// sourceFiles: optional array of {base64, mimeType, name}
+// sourceFiles: optional array of {file, mimeType, name}
 // onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
 async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl) {
   if (!targetIdxs || !targetIdxs.length) return;
@@ -5533,10 +5620,11 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
   }
   if (sourceFiles && sourceFiles.length > 0) {
     sourceParts.push({ text: '## Reference Source Material (Images/PDFs):' });
-    sourceFiles.forEach((sf, sfi) => {
+    for (let sfi = 0; sfi < sourceFiles.length; sfi++) {
+      const sf = sourceFiles[sfi];
       sourceParts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
-      sourceParts.push({ inline_data: { mime_type: sf.mimeType, data: sf.base64 } });
-    });
+      sourceParts.push(await buildGeminiFilePart(sf.file, apiKey, sf.mimeType));
+    }
     sourceParts.push({ text: '---' });
   }
 
@@ -5673,16 +5761,16 @@ async function generateQuizFromAI() {
   statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Reading your file and extracting all questions… this can take a moment for longer documents.</div>`;
 
   try {
-    const base64Data = await fileToBase64(cqSelectedFile);
     const mimeType = cqSelectedFile.type ||
       (cqSelectedFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    const filePart = await buildGeminiFilePart(cqSelectedFile, apiKey, mimeType);
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const data = await callGeminiWithRetry(url, {
       contents: [{
         parts: [
-          { inline_data: { mime_type: mimeType, data: base64Data } },
+          filePart,
           { text: CQ_EXTRACTION_PROMPT }
         ]
       }],
@@ -5727,10 +5815,14 @@ async function generateQuizFromAI() {
 
     if (!cleaned.length) throw new Error('The AI response did not contain any usable questions.');
 
-    // Extract embedded images for questions that have them
+    // Extract embedded images for questions that have them. This step renders
+    // PDF pages / crops regions locally in the browser, which needs the raw
+    // bytes as base64 regardless of how the file was sent to Gemini above —
+    // so it's read here, lazily, only when there's actually an image to pull.
     const imageQuestions = cleaned.filter(q => q.has_image);
     if (imageQuestions.length > 0) {
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Extracting images for ${imageQuestions.length} question${imageQuestions.length !== 1 ? 's' : ''}… please wait.</div>`;
+      const base64Data = await fileToBase64(cqSelectedFile);
       await extractImagesForQuestions(cleaned, base64Data, mimeType, apiKey);
     }
 
@@ -5874,8 +5966,8 @@ async function generateQuizFromLecture() {
 
     let requestBody;
 
-    if (isTxt) {
-      // Text file: send as plain text alongside the prompt
+    if (isTxt && cqLectureFile.size <= GEMINI_INLINE_THRESHOLD_BYTES) {
+      // Small text file: send as plain text alongside the prompt
       const lectureText = await fileToText(cqLectureFile);
       if (!lectureText.trim()) throw new Error('The text file appears to be empty.');
       requestBody = {
@@ -5891,14 +5983,16 @@ async function generateQuizFromLecture() {
         }
       };
     } else {
-      // PDF or image: send as base64
-      const base64Data = await fileToBase64(cqLectureFile);
+      // PDF, image, or a text file too big to inline — let buildGeminiFilePart
+      // decide between inline base64 and the Files API based on size.
       const mimeType = cqLectureFile.type ||
-        (cqLectureFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+        (cqLectureFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' :
+         isTxt ? 'text/plain' : 'image/jpeg');
+      const filePart = await buildGeminiFilePart(cqLectureFile, apiKey, mimeType);
       requestBody = {
         contents: [{
           parts: [
-            { inline_data: { mime_type: mimeType, data: base64Data } },
+            filePart,
             { text: generationPrompt }
           ]
         }],
