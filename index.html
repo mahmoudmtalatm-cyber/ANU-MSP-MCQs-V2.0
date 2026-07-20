@@ -2201,6 +2201,10 @@ const ADMIN_PERMISSION_LABELS = {
 // Shape: { [emailLower]: { permissions: string[], addedBy, addedAt } }
 window._adminRoster = window._adminRoster || {};
 
+// Unsubscribe handle for the current admin-roster listener, so loadAdminRoster()
+// can safely tear down and re-attach a fresh subscription on every auth change.
+window._adminRosterUnsub = window._adminRosterUnsub || null;
+
 function isSuperAdmin(user) {
   return !!(user && user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL);
 }
@@ -2223,23 +2227,46 @@ function isAdminUser(user) {
   return getAdminPermissions(user).length > 0;
 }
 
-/* Load the admin roster from Firestore. Called once at startup, before any
-   admin-gated UI needs to make a decision, and re-run after roster edits. */
-async function loadAdminRoster() {
-  if (!window._db) return;
-  try {
-    const ref  = window._doc(window._db, 'appConfig', 'adminRoster');
-    const snap = await window._getDoc(ref);
-    const data = snap.exists() ? (snap.data() || {}) : {};
-    window._adminRoster = data.admins || {};
-  } catch (e) {
-    console.warn('Failed to load admin roster:', e);
-    window._adminRoster = window._adminRoster || {};
-  } finally {
-    // Roster just changed (or finished loading) — refresh admin-button visibility
-    // in case a user was already signed in before this resolved.
-    updateAuthUI(window._currentUser);
+/* Live-subscribe to the admin roster in Firestore. Returns a promise that
+   resolves once the first snapshot arrives, but keeps listening after that —
+   so if someone grants (or revokes) a permission while this tab is open, the
+   change takes effect immediately here too, with no reload required. */
+function loadAdminRoster() {
+  if (!window._db) return Promise.resolve();
+  // Tear down any previous subscription first. This is what lets us safely call
+  // loadAdminRoster() again on every auth-state change (see onAuthStateChanged
+  // below) instead of only once at page load: on a brand-new sign-in, the very
+  // first subscription attempt can race ahead of Firebase Auth finishing restore
+  // of the session, get rejected with permission-denied, and — since onSnapshot
+  // never retries on its own — stay broken for the rest of that session until a
+  // manual reload. Re-attaching fresh right after auth actually settles fixes it.
+  if (window._adminRosterUnsub) {
+    try { window._adminRosterUnsub(); } catch (e) {}
+    window._adminRosterUnsub = null;
   }
+  return new Promise(resolve => {
+    let settled = false;
+    try {
+      const ref = window._doc(window._db, 'appConfig', 'adminRoster');
+      window._adminRosterUnsub = window._onSnapshot(ref, snap => {
+        const data = snap.exists() ? (snap.data() || {}) : {};
+        window._adminRoster = data.admins || {};
+        // Refresh admin-button visibility, and if the admin panel is currently
+        // open, re-render it so newly-granted/revoked permissions apply live.
+        updateAuthUI(window._currentUser);
+        refreshOpenAdminPanel();
+        if (!settled) { settled = true; resolve(); }
+      }, err => {
+        console.warn('Admin roster listener failed:', err);
+        window._adminRoster = window._adminRoster || {};
+        if (!settled) { settled = true; resolve(); }
+      });
+    } catch (e) {
+      console.warn('Failed to attach admin roster listener:', e);
+      window._adminRoster = window._adminRoster || {};
+      resolve();
+    }
+  });
 }
 
 async function saveAdminRoster() {
@@ -2325,6 +2352,23 @@ async function removeAdmin(actingUser, targetEmail) {
     const targetPerms = target.permissions || [];
     const exceeds = targetPerms.some(p => !actingPerms.includes(p));
     if (exceeds) throw new Error('You cannot remove an admin who has permissions you do not hold.');
+  }
+
+  // Splice the removed admin out of the chain: anyone they directly assigned
+  // gets re-parented to whoever assigned THEM, so the lineage above/below the
+  // gap stays intact, exactly as if the removed admin had never been there.
+  // Their own entry is then deleted outright. If this email is added again
+  // later, it comes back as a brand-new node — addedBy is whoever re-adds
+  // them now, with no automatic relink to the old descendants above.
+  const grandparent = target.addedBy ? target.addedBy.toLowerCase() : null;
+  for (const childEntry of Object.values(window._adminRoster)) {
+    if (childEntry && childEntry.addedBy && childEntry.addedBy.toLowerCase() === emailLower) {
+      if (grandparent) {
+        childEntry.addedBy = grandparent;
+      } else {
+        delete childEntry.addedBy;
+      }
+    }
   }
 
   delete window._adminRoster[emailLower];
@@ -9508,6 +9552,19 @@ function closeAdminPanel() {
   fsLoadingHide();
 }
 
+/* Re-render whatever admin panel tab is currently open (if the panel is
+   open at all). Called whenever the admin roster changes live, so a
+   permission grant/revoke or an assign/remove elsewhere takes effect
+   immediately instead of needing a reload. */
+function refreshOpenAdminPanel() {
+  const overlay = document.getElementById('adminOverlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  renderAdminPanelTabs();
+  if (adminActiveTab === 'admins') renderAdminManagePanel();
+  else if (adminActiveTab === 'curriculum') renderAdminCurriculumPanel();
+  else if (adminActiveTab === 'publish') renderAdminPanel();
+}
+
 function adminSwitchTab(tab) {
   // Refuse to switch into a tab this user doesn't hold permission for
   // (defends against stale buttons / direct calls, not just hides them).
@@ -12445,7 +12502,7 @@ async function saveCurriculumExtensionSubject(key, info) {
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc }
+  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 
@@ -12475,14 +12532,14 @@ const firebaseConfig = {
   window._collection       = collection;
   window._getDocs          = getDocs;
   window._deleteDoc        = deleteDoc;
+  window._onSnapshot       = onSnapshot;
   window._signInWithPopup  = signInWithPopup;
   window._signOut          = signOut;
 
-  // Load admin-created years/modules/subjects, then admin-published questions,
-  // plus the admin permission roster (needed before any admin-gated UI decides
-  // whether to show itself).
+  // Load admin-created years/modules/subjects, then admin-published questions.
+  // (The admin permission roster is loaded separately, inside onAuthStateChanged
+  // below, since it needs to be re-subscribed on every auth change — see there.)
   (async () => {
-    await loadAdminRoster();
     await loadCurriculumExtensions();
     await loadPublishedQuestionsIntoSubjects();
     loadCustomIconsFromServer();
@@ -12492,6 +12549,16 @@ const firebaseConfig = {
   onAuthStateChanged(auth, async user => {
     window._currentUser = user || null;
     updateAuthUI(user);
+
+    // Re-subscribe to the admin roster every time auth state settles (not just
+    // once at page load). onAuthStateChanged fires immediately with whatever
+    // stale/empty state is available, then fires again once Firebase Auth has
+    // actually finished restoring the session — that second firing is what a
+    // fresh sign-in needs in order to get a correctly-authenticated roster
+    // listener instead of being stuck with a permission-denied one forever.
+    await loadAdminRoster();
+    updateAuthUI(window._currentUser);
+
     if (user) {
       // Mark as loading before the async calls so fsAwaitIfNeeded shows the spinner
       _fsReady.stats         = false;
