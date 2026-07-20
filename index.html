@@ -2833,8 +2833,8 @@ if (prevTotal < threshold && newTotal >= threshold) {
 
 function buildResults() {
   // Cancel any in-progress explanations from a previous result view
-  if (_allCancelToken) { _allCancelToken.cancelled = true; _allCancelToken = null; }
-  Object.keys(_singleCancelToken).forEach(k => { if (_singleCancelToken[k]) _singleCancelToken[k].cancelled = true; delete _singleCancelToken[k]; });
+  if (_allCancelToken) { _cancelAiToken(_allCancelToken); _allCancelToken = null; }
+  Object.keys(_singleCancelToken).forEach(k => { _cancelAiToken(_singleCancelToken[k]); delete _singleCancelToken[k]; });
   // Clear explanation cache for new results
   for (const k in _explainCache) delete _explainCache[k];
   for (const k in _explainRawText) delete _explainRawText[k];
@@ -2842,7 +2842,7 @@ function buildResults() {
   // instantly instead of re-generated, and so newly-generated ones can be shared too.
   _explainPoolLoadPromise = _loadExplainPool(currentQuestions);
   // Cancel and clear any in-progress/previous chats
-  Object.keys(_chatCancelToken).forEach(k => { if (_chatCancelToken[k]) _chatCancelToken[k].cancelled = true; delete _chatCancelToken[k]; });
+  Object.keys(_chatCancelToken).forEach(k => { _cancelAiToken(_chatCancelToken[k]); delete _chatCancelToken[k]; });
   for (const k in _chatHistory) delete _chatHistory[k];
   for (const k in _chatPending) delete _chatPending[k];
   for (const k in _chatBusy) delete _chatBusy[k];
@@ -3651,6 +3651,19 @@ function closeApiKeyManager() {
   }
 }
 function useApiKey(id) {
+  // Switching keys is always safe if it's already the active one, or if
+  // nothing AI-related is actually running right now.
+  if (id !== getActiveApiKeyId()) {
+    const activeLabel = _activeAiProcessLabel();
+    if (activeLabel) {
+      const confirmed = confirm(
+        `You're currently ${activeLabel}. Switching your active API key now will forcibly abort that process immediately — anything not already completed will be lost.\n\nAbort it and switch keys?`
+      );
+      if (!confirmed) return;
+      _stopAllAiProcesses();
+    }
+  }
+
   setActiveApiKeyId(id);
   renderApiKeyManager();
   // Refresh any inline "manage keys" widgets that might be open behind the modal
@@ -3824,6 +3837,69 @@ let   _explainAllBusy = false;
 const _singleCancelToken = {};   // { [qIndex]: { cancelled: bool } }
 let   _allCancelToken    = null; // { cancelled: bool } | null
 
+/* Marks a cancel token as cancelled AND aborts its in-flight fetch (if any)
+   right away via AbortController, instead of just letting the request run
+   to completion and discarding the result. Use this everywhere a token
+   gets cancelled instead of setting `.cancelled = true` directly. */
+function _cancelAiToken(token) {
+  if (!token) return;
+  token.cancelled = true;
+  if (token.controller) {
+    try { token.controller.abort(); } catch (e) {}
+    token.controller = null;
+  }
+}
+
+/* ── Guarding API key switches while an AI process is actively running ──
+   Switching the active key mid-request isn't safe for most in-flight AI
+   calls (only the custom-quiz extractor/generator has a real pause-and-
+   resume checkpoint system — everything else would just be cut off). So
+   before the key actually changes, warn the user that doing so forcibly
+   aborts whatever's running, and only proceed if they confirm. */
+function _activeAiProcessLabel() {
+  // Custom-quiz extraction/generation — only warn if it's actively running,
+  // not if it's already sitting paused at a checkpoint (that's the intended
+  // way to switch keys mid-run without losing anything).
+  if (typeof cqBusy !== 'undefined' && cqBusy && !cqIsPaused) {
+    return 'extracting/generating your quiz questions';
+  }
+  if (typeof _explainAllBusy !== 'undefined' && _explainAllBusy) {
+    return 'generating AI explanations for this quiz';
+  }
+  if (Object.values(_explainCache).includes('loading')) {
+    return 'generating an AI explanation';
+  }
+  if (typeof _chatBusy !== 'undefined' && Object.values(_chatBusy).some(Boolean)) {
+    return 'an AI chat response';
+  }
+  return null;
+}
+
+/* Forcibly aborts whatever _activeAiProcessLabel() detected, once the user
+   has confirmed — this is a hard, immediate abort (via AbortController on
+   the in-flight fetch), not a graceful "finish this step then stop". The
+   custom-quiz loop doesn't get its own AbortController (it makes several
+   different requests across its run), so it gets a hard-stop flag instead,
+   checked immediately after its current request is aborted and errors out. */
+function _stopAllAiProcesses() {
+  if (typeof cqBusy !== 'undefined' && cqBusy) {
+    cqStopRequested = true;
+    if (typeof cqCancelToken !== 'undefined' && cqCancelToken) _cancelAiToken(cqCancelToken);
+    cqPauseRequested = false;
+    // If it's sitting paused, wake it up so it can see the stop flag and exit.
+    if (cqIsPaused && cqResumeResolve) {
+      const resolve = cqResumeResolve;
+      cqResumeResolve = null;
+      resolve();
+    }
+  }
+  _cancelAiToken(_allCancelToken);
+  Object.keys(_singleCancelToken).forEach(k => { _cancelAiToken(_singleCancelToken[k]); });
+  if (typeof _chatCancelToken !== 'undefined') {
+    Object.keys(_chatCancelToken).forEach(k => { _cancelAiToken(_chatCancelToken[k]); });
+  }
+}
+
 // ── Shared explanation pool (Firestore-backed, session-isolated) ──
 // At the start of each result session we snapshot the pool so concurrent users
 // don't interfere with each other while reviewing.  New generations update
@@ -3949,7 +4025,7 @@ function renderExplainKeyPrompt(panelEl, onSave, errorMsg) {
 
 /* ── Stop a single in-progress explanation ── */
 function stopExplainQuestion(i) {
-  if (_singleCancelToken[i]) _singleCancelToken[i].cancelled = true;
+  _cancelAiToken(_singleCancelToken[i]);
 }
 
 /* ── Render an explanation (own or shared) into its panel, with a Regenerate control ── */
@@ -4193,9 +4269,9 @@ function escapeRegex(str) {
 
 /* ── Stop the explain-all batch ── */
 function stopExplainAll() {
-  if (_allCancelToken) _allCancelToken.cancelled = true;
+  _cancelAiToken(_allCancelToken);
   // Also cancel any currently-running single explanation that the batch started
-  Object.values(_singleCancelToken).forEach(t => { if (t) t.cancelled = true; });
+  Object.values(_singleCancelToken).forEach(t => { _cancelAiToken(t); });
   _explainAllBusy = false;
   const btn = document.getElementById('explainAllBtn');
   if (btn) { btn.disabled = false; btn.innerHTML = '🤖 Explain All'; }
@@ -4460,7 +4536,7 @@ function removeChatAttachment(i, idx) {
 
 /* ── Stop an in-progress chat request ── */
 function stopChat(i) {
-  if (_chatCancelToken[i]) _chatCancelToken[i].cancelled = true;
+  _cancelAiToken(_chatCancelToken[i]);
 }
 
 /* ── Strip our internal display-only fields before sending to the API ── */
@@ -4685,6 +4761,12 @@ let cqBusy              = false;
 let cqPauseRequested = false; // user clicked Pause, take effect at next safe checkpoint
 let cqIsPaused        = false; // actually sitting paused right now
 let cqResumeResolve   = null;  // resolves the in-flight "await" that's holding the loop
+
+// ── Hard stop (used when the user confirms switching API keys mid-run —
+//    unlike Pause, this actually ends the run instead of just holding it) ──
+let cqStopRequested = false;  // set true to end the run at the next checkpoint / in-flight request
+let cqCancelToken    = null;  // { cancelled: bool } | null — passed to callGeminiWithRetry so an
+                               // in-flight request also stops as soon as it comes back
 
 // ── NEW: Generate from lecture state ──
 let cqMode              = 'extract'; // 'extract' | 'generate'
@@ -5062,11 +5144,18 @@ function _cqGroupAwareShuffle(arr) {
    an extra AI call; it's purely a visual reflection of work already tracked. */
 function _cqProgressStatusHTML(message, percent) {
   const pct = Math.max(0, Math.min(100, Math.round(percent)));
+  // If the user has clicked Pause but the loop hasn't reached a safe
+  // checkpoint yet, keep reminding them it's on its way there — this is
+  // rebuilt on every progress tick, so it survives the frequent innerHTML
+  // overwrites that happen while a pause is pending.
+  const pausingNote = (typeof cqPauseRequested !== 'undefined' && cqPauseRequested)
+    ? `<div class="cq-status warning cq-pausing-banner" style="margin-top:6px;">⏳ Waiting for the nearest checkpoint to pause safely — this finishes the current step first so nothing already done is lost.</div>`
+    : '';
   return `<div class="cq-status info with-progress">
     <div class="cq-status-row"><div class="cq-spinner"></div> ${message}</div>
     <div class="cq-progress-track"><div class="cq-progress-fill" style="width:${pct}%;"></div></div>
     <div class="cq-progress-label">${pct}%</div>
-  </div>`;
+  </div>${pausingNote}`;
 }
 
 /* ── Pause / resume for the extraction & generation loops ──
@@ -5091,6 +5180,17 @@ function cqRequestPause() {
   cqPauseRequested = true;
   const pauseBtn = document.getElementById('cqPauseBtn');
   if (pauseBtn) { pauseBtn.disabled = true; pauseBtn.textContent = '⏳ Pausing…'; }
+
+  // Let the user know right away — pausing isn't instant, it takes effect at
+  // the next safe checkpoint (between files/batches), so tell them what's
+  // happening instead of leaving them wondering. This note also gets baked
+  // into every progress update via _cqProgressStatusHTML() below, so it
+  // survives the frequent innerHTML overwrites that happen while waiting.
+  const statusEl = document.getElementById('cqStatus');
+  if (statusEl && !statusEl.querySelector('.cq-pausing-banner')) {
+    statusEl.insertAdjacentHTML('beforeend',
+      `<div class="cq-status warning cq-pausing-banner" style="margin-top:6px;">⏳ Waiting for the nearest checkpoint to pause safely — this finishes the current step first so nothing already done is lost.</div>`);
+  }
 }
 
 function cqResumeGeneration() {
@@ -5124,6 +5224,10 @@ async function _cqEnterPause(statusEl, message) {
   if (genBtn) genBtn.textContent = '⏸️ Paused';
 
   if (statusEl) {
+    // The "waiting for checkpoint" note has done its job now that we've
+    // actually reached one — swap it for the real paused banner.
+    const pausingBanner = statusEl.querySelector('.cq-pausing-banner');
+    if (pausingBanner) pausingBanner.remove();
     statusEl.insertAdjacentHTML('beforeend',
       `<div class="cq-status warning cq-pause-banner" style="margin-top:6px;">${message}</div>`);
   }
@@ -5135,6 +5239,15 @@ async function _cqEnterPause(statusEl, message) {
     const banner = statusEl.querySelector('.cq-pause-banner');
     if (banner) banner.remove();
   }
+
+  // The user may have confirmed switching API keys while this was paused —
+  // that ends the run instead of resuming it.
+  if (typeof cqStopRequested !== 'undefined' && cqStopRequested) {
+    const e = new Error('Aborted — the active API key was switched while paused.');
+    e._cqStopped = true;
+    throw e;
+  }
+
   return getActiveApiKey();
 }
 
@@ -5142,6 +5255,11 @@ async function _cqEnterPause(statusEl, message) {
    currently-active API key — refreshed in case the user switched keys
    while paused, so the very next request already uses it. */
 async function cqCheckPause(statusEl) {
+  if (typeof cqStopRequested !== 'undefined' && cqStopRequested) {
+    const e = new Error('Aborted — the active API key was switched, which forcibly ends this run.');
+    e._cqStopped = true;
+    throw e;
+  }
   if (cqPauseRequested) {
     return _cqEnterPause(statusEl,
       `⏸️ Paused — everything done so far is safe. Open 🔑 Manage APIs to switch keys, then press ▶️ Resume to continue right where this left off.`);
@@ -5906,12 +6024,22 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
       const e = new Error('cancelled'); e._cancelled = true; throw e;
     }
     attempt++;
+
+    // Real abort — not just "ignore the result once it comes back". Stashing
+    // the controller on the token means whoever cancels it (e.g. the user
+    // confirming they want to switch API keys mid-request) can call
+    // controller.abort() and the actual network request is killed immediately.
+    const controller = new AbortController();
+    if (cancelToken) cancelToken.controller = controller;
+
     try {
       const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyObj)
+        body: JSON.stringify(bodyObj),
+        signal: controller.signal
       });
+      if (cancelToken) cancelToken.controller = null;
       const data = await resp.json();
 
       if (!resp.ok) {
@@ -5944,6 +6072,11 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
 
       return data; // success
     } catch (err) {
+      if (cancelToken) cancelToken.controller = null;
+      // fetch() rejects with an AbortError the instant controller.abort() is called
+      if (err.name === 'AbortError' || (cancelToken && cancelToken.cancelled)) {
+        const e = new Error('cancelled'); e._cancelled = true; throw e;
+      }
       if (err._keyError || err._cancelled || err._rateLimitPauseFallback) throw err; // propagate immediately
       consecutive429 = 0; // a non-HTTP-429 failure (network error etc.) resets the streak
       if (onRetry) onRetry(attempt);
@@ -6318,7 +6451,7 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
         system_instruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: 'user', parts }],
         generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
-      }, { pauseCheck: () => cqPauseRequested });
+      }, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken });
 
       const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
       const cleanText = textOut.replace(/```json|```/g, '').trim();
@@ -6425,7 +6558,7 @@ async function _extractQuestionsFromFile(file, apiKey, onProgress) {
       temperature: 0,
       maxOutputTokens: 65536
     }
-  }, { pauseCheck: () => cqPauseRequested });
+  }, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken });
 
   const candidate = data && data.candidates && data.candidates[0];
   if (!candidate) throw new Error(`Gemini returned no result for "${file.name}". The file may be unsupported or blocked — try a clearer image or PDF.`);
@@ -6510,6 +6643,8 @@ async function generateQuizFromAI() {
   cqBusy = true;
   cqPauseRequested = false;
   cqIsPaused = false;
+  cqStopRequested = false;
+  cqCancelToken = { cancelled: false };
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
   if (pauseRow)  pauseRow.style.display  = 'flex';
   if (pauseBtn)  { pauseBtn.style.display = 'inline-flex'; pauseBtn.disabled = false; pauseBtn.textContent = '⏸️ Pause'; }
@@ -6601,7 +6736,9 @@ async function generateQuizFromAI() {
   } catch (err) {
     const isKeyErr = err._keyError ||
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
-    if (isKeyErr) {
+    if (err._cqStopped || err._cancelled) {
+      statusEl.innerHTML = `<div class="cq-status warning">⏹️ Aborted — you switched the active API key, which forcibly ended this run. Nothing extracted before the abort was lost, but you'll need to click <strong>Extract Questions</strong> again to continue.</div>`;
+    } else if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
         <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Choose or Add a Different Key</button>
       </div>`;
@@ -6612,6 +6749,8 @@ async function generateQuizFromAI() {
     cqBusy = false;
     cqPauseRequested = false;
     cqIsPaused = false;
+    cqStopRequested = false;
+    cqCancelToken = null;
     cqResumeResolve = null;
     if (pauseRow) pauseRow.style.display = 'none';
     const btn = document.getElementById('cqGenerateBtn');
@@ -6719,7 +6858,7 @@ async function _generateQuestionsFromLectureFile(file, generationPrompt, apiKey,
   }
 
   report(0.15, `Generating questions from "${escapeHtml(file.name)}"…`);
-  const data = await callGeminiWithRetry(url, requestBody, { pauseCheck: () => cqPauseRequested });
+  const data = await callGeminiWithRetry(url, requestBody, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken });
 
   const candidate = data && data.candidates && data.candidates[0];
   if (!candidate) throw new Error(`Gemini returned no result for "${file.name}". The file may be unsupported or too large — try splitting it into smaller sections.`);
@@ -6785,6 +6924,8 @@ async function generateQuizFromLecture() {
   cqBusy = true;
   cqPauseRequested = false;
   cqIsPaused = false;
+  cqStopRequested = false;
+  cqCancelToken = { cancelled: false };
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
   if (pauseRow)  pauseRow.style.display  = 'flex';
   if (pauseBtn)  { pauseBtn.style.display = 'inline-flex'; pauseBtn.disabled = false; pauseBtn.textContent = '⏸️ Pause'; }
@@ -6850,7 +6991,9 @@ async function generateQuizFromLecture() {
   } catch (err) {
     const isKeyErr = err._keyError ||
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
-    if (isKeyErr) {
+    if (err._cqStopped || err._cancelled) {
+      statusEl.innerHTML = `<div class="cq-status warning">⏹️ Aborted — you switched the active API key, which forcibly ended this run. Nothing generated before the abort was lost, but you'll need to click <strong>Generate Questions</strong> again to continue.</div>`;
+    } else if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
         <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Choose or Add a Different Key</button>
       </div>`;
@@ -6861,6 +7004,8 @@ async function generateQuizFromLecture() {
     cqBusy = false;
     cqPauseRequested = false;
     cqIsPaused = false;
+    cqStopRequested = false;
+    cqCancelToken = null;
     cqResumeResolve = null;
     if (pauseRow) pauseRow.style.display = 'none';
     const btn = document.getElementById('cqLectureGenBtn');
