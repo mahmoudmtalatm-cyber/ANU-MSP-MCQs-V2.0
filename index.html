@@ -4706,6 +4706,13 @@ let cqSplitState = null;
 //   visualCuts: Set of question indices (0-based) after which to cut,
 //   visualLabels: {cutIndex: string} — label for each resulting part }
 
+// ── Inline editing of an already-saved custom quiz ──
+let cqEditingQuizId = null; // id of the saved quiz currently being edited, or null
+let cqEditQuestions = null; // working copy of that quiz's questions while the editor is open
+
+// ── Taking multiple saved custom quizzes together in one sitting ──
+let cqMultiSelected = new Set(); // ids of saved quizzes checked for a combined run
+
 function setCQMode(mode) {
   cqMode = mode;
   renderCustomQuizModal();
@@ -4834,6 +4841,10 @@ const _caseGroupEditors = {
   admin: {
     getQuestions: () => adminEditQuestions,
     rerender: () => renderAdminQuestionEditor(_adminEditorContainerId())
+  },
+  customQuiz: {
+    getQuestions: () => cqEditQuestions,
+    rerender: () => renderCustomQuizEditor()
   }
 };
 
@@ -5336,6 +5347,9 @@ function openCustomQuizzes() {
   cqLectureFiles = [];
   cqCustomPrompt = '';
   cqQuestionCount = '';
+  cqEditingQuizId = null;
+  cqEditQuestions = null;
+  cqMultiSelected = new Set();
   document.getElementById('customQuizOverlay').classList.remove('hidden');
   renderCustomQuizModal();
 }
@@ -5378,12 +5392,43 @@ function renderCustomQuizModal() {
       No custom quizzes yet — create one below using AI.
     </div>`;
   } else {
+    // Prune selections for quizzes that no longer exist (deleted, etc.)
+    const liveIds = new Set(quizzes.map(q => q.id));
+    Array.from(cqMultiSelected).forEach(id => { if (!liveIds.has(id)) cqMultiSelected.delete(id); });
+
+    if (cqMultiSelected.size > 0) {
+      const totalQs = quizzes
+        .filter(q => cqMultiSelected.has(q.id))
+        .reduce((sum, q) => sum + q.questions.length, 0);
+      const defMins = Math.max(5, totalQs);
+      html += `<div class="cq-quiz-item" style="background:#F0F8FF;border:1.5px solid var(--accent);">
+        <div class="cq-quiz-info">
+          <div class="cq-quiz-name">🧩 ${cqMultiSelected.size} quiz${cqMultiSelected.size !== 1 ? 'zes' : ''} selected — ${totalQs} question${totalQs !== 1 ? 's' : ''} total</div>
+          <div class="cq-quiz-meta">Start them together in one sitting, in the order checked below.</div>
+        </div>
+        <div class="cq-quiz-actions">
+          <input type="number" id="cqMultiMins" value="${defMins}" min="1" max="480" title="Duration (minutes)" />
+          <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Shuffle questions">
+            <input type="checkbox" id="cqMultiShuffle" style="width:14px;height:14px;accent-color:var(--accent);" /> 🔀
+          </label>
+          <button class="cq-btn" onclick="startCustomQuizzesMulti()">&#9654; Start Selected</button>
+          <button class="cq-btn cq-btn-secondary" onclick="clearCqMultiSelect()">✖ Clear</button>
+        </div>
+      </div>`;
+    }
+
     quizzes.forEach(q => {
       const defMins = Math.max(5, q.questions.length);
+      const isEditing = cqEditingQuizId === q.id;
+      const isChecked = cqMultiSelected.has(q.id);
       html += `<div class="cq-quiz-item">
-        <div class="cq-quiz-info">
-          <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
-          <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} &middot; created ${new Date(q.createdAt).toLocaleDateString()}${q.sharedAt ? ' &middot; <span class="share-chip">&#127758; Shared</span>' : ''}</div>
+        <div class="cq-quiz-info" style="display:flex;align-items:flex-start;gap:8px;">
+          <input type="checkbox" title="Select for a combined quiz" style="margin-top:3px;width:15px;height:15px;accent-color:var(--accent);flex-shrink:0;"
+            ${isChecked ? 'checked' : ''} onchange="toggleCqMultiSelect('${q.id}', this.checked)" />
+          <div>
+            <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
+            <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} &middot; created ${new Date(q.createdAt).toLocaleDateString()}${q.sharedAt ? ' &middot; <span class="share-chip">&#127758; Shared</span>' : ''}</div>
+          </div>
         </div>
         <div class="cq-quiz-actions">
           <input type="number" id="cqMins_${q.id}" value="${defMins}" min="1" max="180" title="Duration (minutes)" />
@@ -5391,11 +5436,13 @@ function renderCustomQuizModal() {
             <input type="checkbox" id="cqShuffle_${q.id}" style="width:14px;height:14px;accent-color:var(--accent);" /> 🔀
           </label>
           <button class="cq-btn" onclick="startCustomQuiz('${q.id}')">&#9654; Start</button>
+          <button class="cq-btn cq-btn-secondary" onclick="${isEditing ? 'closeCustomQuizEditor()' : `openCustomQuizEditor('${q.id}')`}" style="background:#1B8AC4;color:#fff;">${isEditing ? '✖ Close Editor' : '✏️ Edit'}</button>
           <button class="cq-share-btn" onclick="shareCustomQuiz('${q.id}')" title="Share with community">&#128279; Share</button>
           <button class="cq-btn cq-btn-secondary" onclick="openSplitPanel('saved','${q.id}')" title="Split into multiple quizzes" style="background:#7B1FA2;color:#fff;">✂️ Split</button>
           <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">&#128465;</button>
         </div>
         ${renderSplitPanel('saved', q.id, q.questions.length)}
+        ${isEditing ? `<div class="cq-inline-editor" id="cqCustomEditorArea_${q.id}" style="margin-top:10px;"></div>` : ''}
       </div>`;
     });
   }
@@ -5553,6 +5600,7 @@ function renderCustomQuizModal() {
   body.innerHTML = html;
 
   if (cqGeneratedQuestions) renderCQPreview();
+  if (cqEditingQuizId && cqEditQuestions) renderCustomQuizEditor();
   setupCQDropzone();
   setupLectureDropzone();
   setupSourceDropzone();
@@ -7796,6 +7844,63 @@ function startCustomQuiz(id) {
   startTimer();
 }
 
+/* ── Taking several saved custom quizzes together in one sitting ── */
+function toggleCqMultiSelect(id, checked) {
+  if (checked) cqMultiSelected.add(id); else cqMultiSelected.delete(id);
+  renderCustomQuizModal();
+}
+
+function clearCqMultiSelect() {
+  cqMultiSelected = new Set();
+  renderCustomQuizModal();
+}
+
+function startCustomQuizzesMulti() {
+  const quizzes  = loadCustomQuizzes();
+  const selected = quizzes.filter(q => cqMultiSelected.has(q.id));
+  if (!selected.length) return;
+
+  const minsInput    = document.getElementById('cqMultiMins');
+  const shuffleInput = document.getElementById('cqMultiShuffle');
+  const totalQs = selected.reduce((sum, q) => sum + q.questions.length, 0);
+  let mins = minsInput ? parseInt(minsInput.value, 10) : NaN;
+  if (!mins || mins <= 0) mins = Math.max(5, totalQs);
+  const shuffle = shuffleInput ? shuffleInput.checked : false;
+
+  // Each saved quiz's case-group ids are only guaranteed unique *within
+  // that quiz* — two different quizzes could coincidentally reuse the same
+  // group id (e.g. both had it as their first extracted file). Namespace
+  // every group id by its source quiz here, on this ephemeral combined
+  // copy only, so a case cluster from one quiz can never accidentally
+  // merge with an unrelated one from another quiz.
+  let combined = [];
+  selected.forEach(quiz => {
+    const qs = JSON.parse(JSON.stringify(quiz.questions));
+    qs.forEach(q => { if (q.case_group) q.case_group = quiz.id + '::' + q.case_group; });
+    combined = combined.concat(qs);
+  });
+
+  if (shuffle) {
+    combined = _cqGroupAwareShuffle(combined);
+  }
+
+  selectedSubject  = 'Custom Quizzes';
+  currentLecture   = selected.length === 1
+    ? selected[0].title
+    : `${selected.length} quizzes (${selected.map(q => q.title).join(', ')})`;
+  currentQuestions = combined;
+  currentIndex = 0; userAnswers = {}; markedSet = new Set();
+  questionTimes = {}; correctToWrong = 0; wrongToCorrect = 0; changeLog = [];
+  timeLeft = mins * 60;
+  currentQuizSource = 'custom';
+
+  cqMultiSelected = new Set();
+  closeCustomQuizzes();
+  showScreen('quiz');
+  renderQuestion();
+  startTimer();
+}
+
 function goHome() {
   stopTimer();
   showScreen('home');
@@ -9090,6 +9195,314 @@ function adminEditReplaceImage(idx, event) {
     renderAdminQuestionEditor(_adminEditorContainerId());
   };
   reader.readAsDataURL(file);
+}
+
+/* ══════════════════════════════════════════════════════════
+   INLINE EDITOR FOR SAVED CUSTOM QUIZZES
+   Same editing experience as the admin question editor above —
+   case links, images, options, add/delete questions — scoped to one
+   of the user's own saved quizzes instead of admin-published content.
+   Operates on `cqEditQuestions`, a working copy of the quiz being
+   edited; nothing is written back until "Save Changes" is clicked.
+══════════════════════════════════════════════════════════ */
+function openCustomQuizEditor(id) {
+  const quizzes = loadCustomQuizzes();
+  const quiz = quizzes.find(q => q.id === id);
+  if (!quiz) return;
+  cqEditingQuizId = id;
+  cqEditQuestions = JSON.parse(JSON.stringify(quiz.questions || []));
+  renderCustomQuizModal();
+  const area = document.getElementById('cqCustomEditorArea_' + id);
+  if (area) area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeCustomQuizEditor() {
+  cqEditingQuizId = null;
+  cqEditQuestions = null;
+  renderCustomQuizModal();
+}
+
+function renderCustomQuizEditor() {
+  const id = cqEditingQuizId;
+  const containerId = 'cqCustomEditorArea_' + id;
+  const area = document.getElementById(containerId);
+  if (!area || !cqEditQuestions) { if (area) area.innerHTML = ''; return; }
+
+  // Preserve scroll position across re-renders (image change, option edit, etc.)
+  const _prevList = document.getElementById('cqCustomEditList_' + id);
+  const _prevScrollTop = _prevList ? _prevList.scrollTop : null;
+
+  const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 0 10px;">
+    <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;">
+      ✏️ Editing — ${cqEditQuestions.length} question${cqEditQuestions.length !== 1 ? 's' : ''}
+    </div>
+    <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
+      🔘 = correct answer &nbsp;·&nbsp; 🔗 = linked case questions
+    </div>
+  </div>`;
+  html += `<div class="cq-preview-list" id="cqCustomEditList_${id}">`;
+
+  cqEditQuestions.forEach((q, i) => {
+    const optEntries = getOptionEntries(q);
+    const usedKeys   = optEntries.map(([k]) => k);
+    const nextKey    = ALL_KEYS.find(k => !usedKeys.includes(k));
+
+    html += `<div class="cq-preview-q cq-editable-q" id="cqCustomEditQ_${i}">`;
+
+    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+      <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
+        border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;">Q${i + 1}</span>
+      <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
+      <button class="cq-edit-reask-btn" title="Delete this question"
+        onclick="cqEditDeleteQuestion(${i})"
+        style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
+    </div>`;
+
+    html += `<textarea class="cq-edit-textarea" rows="2"
+      oninput="cqEditQuestionText(${i}, this.value)"
+      style="width:100%;resize:vertical;margin-bottom:8px;">${escapeHtml(q.question)}</textarea>`;
+
+    /* Image area */
+    html += `<div class="cq-img-edit-row" style="margin-bottom:8px;">`;
+    if (q.image) {
+      html += `<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;
+        background:#F0F8FF;border:1.5px solid #B0D4F0;border-radius:8px;padding:8px 10px;">
+        <div style="flex-shrink:0;border-radius:5px;overflow:hidden;border:1px solid #D8EAF7;background:#fff;">
+          <img src="${q.image}" alt="Question image"
+            style="max-width:200px;max-height:130px;object-fit:contain;display:block;" />
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;justify-content:center;">
+          <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">📷 Question Image</div>
+          <label class="cq-img-action-btn" title="Upload a different image">
+            🔄 Change Image
+            <input type="file" accept="image/*" style="display:none;" onchange="cqEditReplaceImage(${i}, event)" />
+          </label>
+          <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqEditRemoveImage(${i})" type="button">🗑️ Remove Image</button>
+        </div>
+      </div>`;
+    } else {
+      html += `<label class="cq-img-upload-label" title="Attach an image to this question">
+        🖼️ Add Image (optional)
+        <input type="file" accept="image/*" style="display:none;" onchange="cqEditReplaceImage(${i}, event)" />
+      </label>`;
+    }
+    html += `</div>`;
+
+    /* ── Manual case-group link ── */
+    html += _renderCaseGroupBlock('customQuiz', cqEditQuestions, i);
+
+    html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-muted);
+      text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">
+      Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with 🔘</span>
+    </div>`;
+
+    html += `<div style="display:flex;flex-direction:column;gap:5px;" id="cqCustomEditOpts_${i}">`;
+    optEntries.forEach(([k, v]) => {
+      const isCorrect = k === q.answer;
+      html += `<div class="cq-opt-edit-row${isCorrect ? ' cq-opt-correct' : ''}" id="cqCustomEditOptRow_${i}_${k}">
+        <label class="cq-opt-correct-radio" title="Set as correct answer">
+          <input type="radio" name="cqCustomEditAnswer_${i}" value="${k}" ${isCorrect ? 'checked' : ''}
+            onchange="cqEditSetAnswer(${i}, '${k}')" />
+          <span class="cq-radio-dot"></span>
+        </label>
+        <span class="cq-opt-key">${k}.</span>
+        <input type="text" class="cq-opt-text-input" value="${escapeHtml(v)}"
+          oninput="cqEditOptionText(${i}, '${k}', this.value)"
+          placeholder="Option ${k} text…" />
+        ${isCorrect ? '<span class="cq-correct-badge">✔ Correct</span>' : ''}
+        <button onclick="cqEditDeleteOption(${i}, '${k}')" type="button" title="Remove this option"
+          style="background:none;border:none;cursor:pointer;color:#EF9A9A;font-size:.9rem;
+          padding:2px 4px;border-radius:4px;flex-shrink:0;line-height:1;transition:color .15s;"
+          onmouseover="this.style.color='#C62828'" onmouseout="this.style.color='#EF9A9A'">✕</button>
+      </div>`;
+    });
+    html += `</div>`;
+
+    if (nextKey) {
+      html += `<button onclick="cqEditAddOption(${i})" type="button"
+        style="margin-top:5px;background:#F0F8FF;color:var(--accent);border:1.5px dashed #B0D4F0;
+        border-radius:7px;padding:5px 12px;font-family:var(--font);font-size:.78rem;font-weight:700;
+        cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.background='#EEF7FF';"
+        onmouseout="this.style.borderColor='#B0D4F0';this.style.background='#F0F8FF';">
+        ＋ Add Option ${nextKey}
+      </button>`;
+    }
+
+    html += `</div>`; // end .cq-editable-q
+  });
+
+  html += `</div>`;
+
+  html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <button class="cq-btn cq-btn-secondary" onclick="cqEditAddBlankQuestion()" style="background:#4CAF50;">＋ Add Question</button>
+    <button class="cq-btn" onclick="saveCustomQuizEdits()">💾 Save Changes</button>
+    <button class="cq-btn cq-btn-secondary" onclick="closeCustomQuizEditor()">✖ Cancel</button>
+  </div>
+  <div class="admin-status" id="cqCustomEditStatus_${id}"></div>`;
+
+  area.innerHTML = html;
+
+  if (_prevScrollTop !== null) {
+    const _newList = document.getElementById('cqCustomEditList_' + id);
+    if (_newList) _newList.scrollTop = _prevScrollTop;
+  }
+}
+
+/* ── Edit helpers (mutate cqEditQuestions in place) ── */
+function cqEditQuestionText(idx, val) {
+  if (!cqEditQuestions || !cqEditQuestions[idx]) return;
+  cqEditQuestions[idx].question = val;
+}
+
+function cqEditOptionText(idx, key, val) {
+  if (!cqEditQuestions || !cqEditQuestions[idx]) return;
+  cqEditQuestions[idx].options[key] = val;
+  const order = cqEditQuestions[idx].optionsOrder;
+  if (order) {
+    const entry = order.find(o => o.key === key);
+    if (entry) entry.value = val;
+  }
+}
+
+function cqEditSetAnswer(idx, key) {
+  if (!cqEditQuestions || !cqEditQuestions[idx]) return;
+  const q = cqEditQuestions[idx];
+  q.answer = key;
+  getOptionEntries(q).forEach(([k]) => {
+    const row = document.getElementById(`cqCustomEditOptRow_${idx}_${k}`);
+    if (!row) return;
+    const isNowCorrect = k === key;
+    row.classList.toggle('cq-opt-correct', isNowCorrect);
+    let badge = row.querySelector('.cq-correct-badge');
+    if (isNowCorrect && !badge) {
+      badge = document.createElement('span');
+      badge.className = 'cq-correct-badge';
+      badge.textContent = '✔ Correct';
+      row.insertBefore(badge, row.querySelector('button'));
+    } else if (!isNowCorrect && badge) {
+      badge.remove();
+    }
+  });
+}
+
+function cqEditDeleteQuestion(idx) {
+  if (!cqEditQuestions) return;
+  if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
+  const [deleted] = cqEditQuestions.splice(idx, 1);
+  _caseGroupOnQuestionDeleted(cqEditQuestions, deleted);
+  renderCustomQuizEditor();
+}
+
+function cqEditAddBlankQuestion() {
+  if (!cqEditQuestions) cqEditQuestions = [];
+  cqEditQuestions.push({
+    question: '',
+    options: { A: '', B: '', C: '', D: '' },
+    optionsOrder: [
+      { key: 'A', value: '' }, { key: 'B', value: '' },
+      { key: 'C', value: '' }, { key: 'D', value: '' }
+    ],
+    answer: 'A'
+  });
+  renderCustomQuizEditor();
+  setTimeout(() => {
+    const last = document.getElementById(`cqCustomEditQ_${cqEditQuestions.length - 1}`);
+    if (last) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
+}
+
+function cqEditDeleteOption(qIdx, key) {
+  if (!cqEditQuestions || !cqEditQuestions[qIdx]) return;
+  const q = cqEditQuestions[qIdx];
+  if (Object.keys(q.options).length <= 2) {
+    alert('A question must have at least 2 options.');
+    return;
+  }
+  delete q.options[key];
+  if (q.optionsOrder) q.optionsOrder = q.optionsOrder.filter(o => o.key !== key);
+  if (q.answer === key) q.answer = Object.keys(q.options)[0] || '';
+  renderCustomQuizEditor();
+}
+
+function cqEditAddOption(qIdx) {
+  const ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
+  if (!cqEditQuestions || !cqEditQuestions[qIdx]) return;
+  const q = cqEditQuestions[qIdx];
+  const usedKeys = Object.keys(q.options);
+  const nextKey = ALL_KEYS.find(k => !usedKeys.includes(k));
+  if (!nextKey) return;
+  q.options[nextKey] = '';
+  if (!q.optionsOrder) q.optionsOrder = usedKeys.map(k => ({ key: k, value: q.options[k] }));
+  q.optionsOrder.push({ key: nextKey, value: '' });
+  renderCustomQuizEditor();
+  setTimeout(() => {
+    const input = document.querySelector(`#cqCustomEditOptRow_${qIdx}_${nextKey} .cq-opt-text-input`);
+    if (input) input.focus();
+  }, 60);
+}
+
+function cqEditRemoveImage(idx) {
+  if (!cqEditQuestions || !cqEditQuestions[idx]) return;
+  delete cqEditQuestions[idx].image;
+  delete cqEditQuestions[idx].imageUrl;
+  renderCustomQuizEditor();
+}
+
+function cqEditReplaceImage(idx, event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file || !cqEditQuestions || !cqEditQuestions[idx]) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const dataUrl = reader.result;
+    try {
+      cqEditQuestions[idx].image = await compressImageDataUrl(dataUrl);
+    } catch (e) {
+      cqEditQuestions[idx].image = dataUrl;
+    }
+    delete cqEditQuestions[idx].imageUrl; // stale pointer — a fresh image is (re)uploaded on save
+    renderCustomQuizEditor();
+  };
+  reader.readAsDataURL(file);
+}
+
+/* Validates the working copy, then writes it back into the saved quiz
+   list via the normal save path (handles Firestore image upload / local
+   storage the same way every other custom-quiz save already does). */
+async function saveCustomQuizEdits() {
+  if (!cqEditQuestions || !cqEditingQuizId) return;
+
+  for (let i = 0; i < cqEditQuestions.length; i++) {
+    const q = cqEditQuestions[i];
+    if (!q.question || !q.question.trim()) { alert(`Q${i + 1} needs question text.`); return; }
+    const filledOpts = getOptionEntries(q).filter(([, v]) => v && v.trim());
+    if (filledOpts.length < 2) { alert(`Q${i + 1} needs at least 2 filled-in options.`); return; }
+    if (!q.answer || !q.options[q.answer] || !q.options[q.answer].trim()) {
+      alert(`Q${i + 1} needs a correct answer selected.`);
+      return;
+    }
+  }
+
+  _cqNormalizeCaseGroups(cqEditQuestions);
+
+  const statusEl = document.getElementById('cqCustomEditStatus_' + cqEditingQuizId);
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info">💾 Saving…</div>`;
+
+  const quizzes = loadCustomQuizzes();
+  const quiz = quizzes.find(q => q.id === cqEditingQuizId);
+  if (!quiz) return;
+  quiz.questions = JSON.parse(JSON.stringify(cqEditQuestions));
+
+  try {
+    await saveCustomQuizzesList(quizzes);
+    cqEditingQuizId = null;
+    cqEditQuestions = null;
+    renderCustomQuizModal();
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status warning">⚠️ Save failed: ${escapeHtml(e.message || String(e))}</div>`;
+  }
 }
 
 /* Swap a published lecture's position with its immediate neighbor (up/down)
