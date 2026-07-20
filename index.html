@@ -2013,10 +2013,7 @@
         <h2>🛠️&nbsp; Admin Panel</h2>
         <button onclick="closeAdminPanel()">✕</button>
       </div>
-      <div class="admin-panel-tabs" id="adminPanelTabs">
-        <button class="admin-panel-tab active" id="adminTabPublish" onclick="adminSwitchTab('publish')">📤 Publish Quizzes</button>
-        <button class="admin-panel-tab" id="adminTabCurriculum" onclick="adminSwitchTab('curriculum')">📚 Manage Curriculum</button>
-      </div>
+      <div class="admin-panel-tabs" id="adminPanelTabs"></div>
       <div class="admin-body" id="adminBody"></div>
     </div>
   </div>
@@ -2180,14 +2177,158 @@
 <script src="data/research2_module.js"></script>
 <script>
   /* ══════════════════════════════════════════════════════════
-   ADMIN CONFIG
+   ADMIN CONFIG — permission-based admin system
+   ─────────────────────────────────────────────
+   • SUPER_ADMIN_EMAIL is hardcoded, always has every permission,
+     and can never be removed or demoted by anyone.
+   • All other admins live in Firestore at appConfig/adminRoster,
+     doc shape: { admins: { [emailLower]: { permissions:[...], addedBy, addedAt } } }
+   • An admin can only grant permissions they themselves currently
+     hold, and can only remove another admin whose permissions are
+     fully covered by their own (so nobody can promote around, or
+     demote/remove, an admin more powerful than themselves).
 ══════════════════════════════════════════════════════════ */
-const ADMIN_EMAILS = [
-  "mahmoudmtalatm@gmail.com"
-];
+const SUPER_ADMIN_EMAIL = "mahmoudmtalatm@gmail.com";
 
+const ADMIN_PERMISSIONS = ['curriculum', 'community', 'admins'];
+const ADMIN_PERMISSION_LABELS = {
+  curriculum: 'Manage Curriculum & Publish Quizzes',
+  community:  'Manage Community Quizzes',
+  admins:     'Assign / Remove Admins'
+};
+
+// In-memory copy of the Firestore admin roster, populated by loadAdminRoster().
+// Shape: { [emailLower]: { permissions: string[], addedBy, addedAt } }
+window._adminRoster = window._adminRoster || {};
+
+function isSuperAdmin(user) {
+  return !!(user && user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL);
+}
+
+/* Returns the array of permissions this user currently holds (empty array if none). */
+function getAdminPermissions(user) {
+  if (!user || !user.email) return [];
+  const email = user.email.toLowerCase();
+  if (email === SUPER_ADMIN_EMAIL) return ADMIN_PERMISSIONS.slice();
+  const entry = window._adminRoster && window._adminRoster[email];
+  return (entry && Array.isArray(entry.permissions)) ? entry.permissions.slice() : [];
+}
+
+function hasAdminPermission(user, perm) {
+  return getAdminPermissions(user).includes(perm);
+}
+
+/* "Is an admin at all" — true if the user holds any permission. */
 function isAdminUser(user) {
-  return !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
+  return getAdminPermissions(user).length > 0;
+}
+
+/* Load the admin roster from Firestore. Called once at startup, before any
+   admin-gated UI needs to make a decision, and re-run after roster edits. */
+async function loadAdminRoster() {
+  if (!window._db) return;
+  try {
+    const ref  = window._doc(window._db, 'appConfig', 'adminRoster');
+    const snap = await window._getDoc(ref);
+    const data = snap.exists() ? (snap.data() || {}) : {};
+    window._adminRoster = data.admins || {};
+  } catch (e) {
+    console.warn('Failed to load admin roster:', e);
+    window._adminRoster = window._adminRoster || {};
+  } finally {
+    // Roster just changed (or finished loading) — refresh admin-button visibility
+    // in case a user was already signed in before this resolved.
+    updateAuthUI(window._currentUser);
+  }
+}
+
+async function saveAdminRoster() {
+  if (!window._db) return;
+  const ref = window._doc(window._db, 'appConfig', 'adminRoster');
+  await window._setDoc(ref, cleanForFirestore({ admins: window._adminRoster }));
+}
+
+/* Grant `permissions` to `targetEmail`. `actingUser` must hold 'admins' permission,
+   and can only grant permissions they themselves currently hold. */
+async function assignAdmin(actingUser, targetEmail, permissions) {
+  if (!hasAdminPermission(actingUser, 'admins')) {
+    throw new Error('You do not have permission to manage admins.');
+  }
+  const emailLower = String(targetEmail || '').trim().toLowerCase();
+  if (!emailLower || !emailLower.includes('@')) throw new Error('Enter a valid email address.');
+  if (emailLower === SUPER_ADMIN_EMAIL) throw new Error('That account is already the permanent super admin.');
+  if (!Array.isArray(permissions) || !permissions.length) throw new Error('Select at least one permission to grant.');
+
+  const actingPerms = isSuperAdmin(actingUser) ? ADMIN_PERMISSIONS.slice() : getAdminPermissions(actingUser);
+  const invalid = permissions.filter(p => !actingPerms.includes(p));
+  if (invalid.length) {
+    throw new Error('You cannot grant permissions you do not hold yourself: ' + invalid.join(', '));
+  }
+
+  window._adminRoster[emailLower] = {
+    permissions: permissions.slice(),
+    addedBy: actingUser.email.toLowerCase(),
+    addedAt: Date.now()
+  };
+  await saveAdminRoster();
+}
+
+/* ── Chain of command ──────────────────────────────────────
+   Every admin (other than the super admin) was added by someone,
+   recorded as `addedBy`. Walking that link repeatedly traces the
+   full lineage of assigners back to the super admin. An admin can
+   never remove anyone in their own lineage — i.e. whoever assigned
+   them, or whoever assigned that person, and so on — regardless of
+   permissions, so authority can only flow downward. */
+function getAdminAssignerChain(emailLower) {
+  const roster  = window._adminRoster || {};
+  const chain   = [];
+  const visited = new Set([emailLower]);
+  let current = emailLower;
+  while (true) {
+    const entry = roster[current];
+    if (!entry || !entry.addedBy) break;
+    const parent = entry.addedBy.toLowerCase();
+    if (visited.has(parent)) break; // cycle guard — shouldn't happen, but never loop forever
+    chain.push(parent);
+    visited.add(parent);
+    if (parent === SUPER_ADMIN_EMAIL) break; // chain always terminates at the super admin
+    current = parent;
+  }
+  return chain;
+}
+
+function isInAssignerChain(actingEmailLower, targetEmailLower) {
+  return getAdminAssignerChain(actingEmailLower).includes(targetEmailLower);
+}
+
+/* Remove an admin. The super admin can never be removed, but the super admin
+   can remove anyone else. A non-super admin can only remove another admin
+   whose permissions are fully covered by their own, AND who is not above
+   them in the assignment chain (i.e. didn't assign them, directly or
+   transitively) — authority only flows downward. */
+async function removeAdmin(actingUser, targetEmail) {
+  const emailLower = String(targetEmail || '').trim().toLowerCase();
+  if (emailLower === SUPER_ADMIN_EMAIL) throw new Error('The super admin cannot be removed.');
+  if (!hasAdminPermission(actingUser, 'admins')) {
+    throw new Error('You do not have permission to manage admins.');
+  }
+  const target = window._adminRoster[emailLower];
+  if (!target) throw new Error('That admin was not found.');
+
+  if (!isSuperAdmin(actingUser)) {
+    const actingEmailLower = actingUser.email.toLowerCase();
+    if (isInAssignerChain(actingEmailLower, emailLower)) {
+      throw new Error('You cannot remove an admin who is above you in the assignment chain (they assigned you, directly or indirectly).');
+    }
+    const actingPerms = getAdminPermissions(actingUser);
+    const targetPerms = target.permissions || [];
+    const exceeds = targetPerms.some(p => !actingPerms.includes(p));
+    if (exceeds) throw new Error('You cannot remove an admin who has permissions you do not hold.');
+  }
+
+  delete window._adminRoster[emailLower];
+  await saveAdminRoster();
 }
 
   /* ══════════════════════════════════════════════════════════
@@ -9310,23 +9451,56 @@ let adminEditingPublishedName = '';   // its lecture name
 // re-hit Firestore every keystroke.
 let adminAssignedEntries = [];
 
-let adminActiveTab = 'publish'; // 'publish' | 'curriculum'
+let adminActiveTab = 'publish'; // 'publish' | 'curriculum' | 'admins'
+
+/* Build the admin panel tab bar to match exactly what this user is allowed to see. */
+function renderAdminPanelTabs() {
+  const user = window._currentUser;
+  const canCurriculum = hasAdminPermission(user, 'curriculum');
+  const canCommunity  = hasAdminPermission(user, 'community');
+  const canAdmins     = hasAdminPermission(user, 'admins');
+
+  let html = '';
+  if (canCurriculum || canCommunity) {
+    html += `<button class="admin-panel-tab ${adminActiveTab === 'publish' ? 'active' : ''}" id="adminTabPublish" onclick="adminSwitchTab('publish')">📤 Publish Quizzes</button>`;
+  }
+  if (canCurriculum) {
+    html += `<button class="admin-panel-tab ${adminActiveTab === 'curriculum' ? 'active' : ''}" id="adminTabCurriculum" onclick="adminSwitchTab('curriculum')">📚 Manage Curriculum</button>`;
+  }
+  if (canAdmins) {
+    html += `<button class="admin-panel-tab ${adminActiveTab === 'admins' ? 'active' : ''}" id="adminTabAdmins" onclick="adminSwitchTab('admins')">👑 Manage Admins</button>`;
+  }
+  document.getElementById('adminPanelTabs').innerHTML = html;
+}
+
+/* Pick a sensible default tab given this user's permissions. */
+function adminDefaultTab() {
+  const user = window._currentUser;
+  if (hasAdminPermission(user, 'curriculum') || hasAdminPermission(user, 'community')) return 'publish';
+  if (hasAdminPermission(user, 'admins')) return 'admins';
+  return null;
+}
 
 function openAdminPanel() {
   if (!isAdminUser(window._currentUser)) {
     alert('You do not have admin access.');
     return;
   }
-  adminSourceTab    = 'custom';
+  adminSourceTab    = hasAdminPermission(window._currentUser, 'curriculum') ? 'custom' : 'community';
   adminSelectedQuiz = null;
   adminTargetYear   = '';
   adminTargetModule = '';
   adminTargetSubject= '';
   adminCommunityCache = null;
-  adminActiveTab    = 'publish';
   adminCurrNavLevel = 'years';
+  const defaultTab = adminDefaultTab();
+  if (!defaultTab) {
+    alert('You do not have admin access.');
+    return;
+  }
+  adminActiveTab = defaultTab;
   document.getElementById('adminOverlay').classList.remove('hidden');
-  adminSwitchTab('publish');
+  adminSwitchTab(defaultTab);
 }
 
 function closeAdminPanel() {
@@ -9335,12 +9509,126 @@ function closeAdminPanel() {
 }
 
 function adminSwitchTab(tab) {
+  // Refuse to switch into a tab this user doesn't hold permission for
+  // (defends against stale buttons / direct calls, not just hides them).
+  const user = window._currentUser;
+  if (tab === 'publish' && !hasAdminPermission(user, 'curriculum') && !hasAdminPermission(user, 'community')) return;
+  if (tab === 'curriculum' && !hasAdminPermission(user, 'curriculum')) return;
+  if (tab === 'admins' && !hasAdminPermission(user, 'admins')) return;
+
   adminActiveTab = tab;
-  document.querySelectorAll('.admin-panel-tab').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById(tab === 'publish' ? 'adminTabPublish' : 'adminTabCurriculum');
-  if (btn) btn.classList.add('active');
+  renderAdminPanelTabs();
   if (tab === 'publish') renderAdminPanel();
-  else renderAdminCurriculumPanel();
+  else if (tab === 'curriculum') renderAdminCurriculumPanel();
+  else if (tab === 'admins') renderAdminManagePanel();
+}
+
+/* ══════════════════════════════════════════════════════════
+   MANAGE ADMINS TAB
+══════════════════════════════════════════════════════════ */
+function renderAdminManagePanel() {
+  const body = document.getElementById('adminBody');
+  if (!body) return;
+  const user = window._currentUser;
+
+  if (!hasAdminPermission(user, 'admins')) {
+    body.innerHTML = `<div style="padding:20px;color:var(--text-muted);">You do not have permission to manage admins.</div>`;
+    return;
+  }
+
+  const actingPerms = isSuperAdmin(user) ? ADMIN_PERMISSIONS.slice() : getAdminPermissions(user);
+  const roster = window._adminRoster || {};
+
+  let rows = `
+    <div class="admin-quiz-item" style="cursor:default;">
+      <div class="admin-quiz-item-info">
+        <div class="admin-quiz-item-title">👑 ${escapeHtml(SUPER_ADMIN_EMAIL)}</div>
+        <div class="admin-quiz-item-meta">Super Admin — full access, permanent, cannot be removed</div>
+      </div>
+    </div>`;
+
+  const emails = Object.keys(roster).sort();
+  const actingEmailLower = user.email ? user.email.toLowerCase() : '';
+  if (!emails.length) {
+    rows += `<div style="color:var(--text-muted);font-size:.85rem;padding:10px;">No other admins yet.</div>`;
+  } else {
+    emails.forEach(email => {
+      const info  = roster[email] || {};
+      const perms = Array.isArray(info.permissions) ? info.permissions : [];
+      const permLabel = perms.map(p => ADMIN_PERMISSION_LABELS[p] || p).join(' · ') || '—';
+      const isAncestor   = !isSuperAdmin(user) && isInAssignerChain(actingEmailLower, email);
+      const exceedsPerms = !isSuperAdmin(user) && perms.some(p => !actingPerms.includes(p));
+      const canRemove = isSuperAdmin(user) || (!isAncestor && !exceedsPerms);
+      let blockedReason = '';
+      if (!canRemove) blockedReason = isAncestor ? "assigned you — can't remove" : "outranks you — can't remove";
+      rows += `
+        <div class="admin-quiz-item" style="cursor:default;">
+          <div class="admin-quiz-item-info">
+            <div class="admin-quiz-item-title">${escapeHtml(email)}</div>
+            <div class="admin-quiz-item-meta">${escapeHtml(permLabel)}${info.addedBy ? ' · added by ' + escapeHtml(info.addedBy) : ''}</div>
+          </div>
+          ${canRemove
+            ? `<button class="admin-remove-btn" onclick="adminRemoveAdminUI('${escapeHtml(email)}')">🗑 Remove</button>`
+            : `<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap;">${escapeHtml(blockedReason)}</span>`}
+        </div>`;
+    });
+  }
+
+  const permCheckboxesHtml = ADMIN_PERMISSIONS.map(p => {
+    const allowed = actingPerms.includes(p);
+    return `
+      <label style="display:flex;align-items:center;gap:7px;font-size:.85rem;padding:4px 0;${allowed ? '' : 'opacity:.4;cursor:not-allowed;'}">
+        <input type="checkbox" id="adminNewPerm_${p}" ${allowed ? '' : 'disabled'} />
+        ${escapeHtml(ADMIN_PERMISSION_LABELS[p])}
+      </label>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="padding:14px;">
+      <h3 style="margin:0 0 10px;font-size:1rem;">Current Admins</h3>
+      <div class="admin-quiz-list">${rows}</div>
+
+      <h3 style="margin:22px 0 10px;font-size:1rem;">Add New Admin</h3>
+      <input type="email" id="adminNewEmail" placeholder="admin-email@gmail.com"
+             style="width:100%;box-sizing:border-box;padding:9px 10px;border:1.5px solid #ccc;border-radius:8px;margin-bottom:10px;font-family:inherit;font-size:.9rem;" />
+      <div style="display:flex;flex-direction:column;margin-bottom:6px;">${permCheckboxesHtml}</div>
+      <div style="font-size:.76rem;color:var(--text-muted);margin-bottom:12px;">You can only grant permissions you hold yourself.</div>
+      <button class="admin-assign-btn" id="adminAddAdminBtn" onclick="adminAssignAdminUI()">➕ Add Admin</button>
+      <div class="admin-status" id="adminManageStatus"></div>
+    </div>`;
+}
+
+async function adminAssignAdminUI() {
+  const statusEl   = document.getElementById('adminManageStatus');
+  const emailInput = document.getElementById('adminNewEmail');
+  const email = (emailInput ? emailInput.value : '').trim();
+  const perms = ADMIN_PERMISSIONS.filter(p => {
+    const box = document.getElementById('adminNewPerm_' + p);
+    return box && !box.disabled && box.checked;
+  });
+
+  const btn = document.getElementById('adminAddAdminBtn');
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info">⏳ Adding admin…</div>`;
+
+  try {
+    await assignAdmin(window._currentUser, email, perms);
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ ${escapeHtml(email.trim().toLowerCase())} added as admin.</div>`;
+    setTimeout(() => renderAdminManagePanel(), 600);
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(e.message || String(e))}</div>`;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function adminRemoveAdminUI(email) {
+  if (!confirm(`Remove admin access for ${email}?`)) return;
+  try {
+    await removeAdmin(window._currentUser, email);
+    renderAdminManagePanel();
+  } catch (e) {
+    alert('Failed to remove admin: ' + (e.message || e));
+  }
 }
 
 function adminSetSourceTab(tab) {
@@ -9350,7 +9638,14 @@ function adminSetSourceTab(tab) {
 }
 
 async function renderAdminPanel() {
+  const user = window._currentUser;
+  const canCurriculum = hasAdminPermission(user, 'curriculum');
+  const canCommunity  = hasAdminPermission(user, 'community');
   const body = document.getElementById('adminBody');
+
+  // Force onto a source tab this user is actually allowed to see.
+  if (adminSourceTab === 'custom' && !canCurriculum) adminSourceTab = 'community';
+  if (adminSourceTab === 'community' && !canCommunity) adminSourceTab = 'custom';
 
   let listHtml = '';
   if (adminSourceTab === 'custom') {
@@ -9375,16 +9670,26 @@ async function renderAdminPanel() {
     listHtml = `<div style="text-align:center;padding:20px;color:var(--text-muted);">⏳ Loading community quizzes…</div>`;
   }
 
-  body.innerHTML = `
+  const sourceTabsHtml = `
     <div class="admin-quiz-source-tabs">
-      <button class="admin-source-tab ${adminSourceTab === 'custom' ? 'active' : ''}" onclick="adminSetSourceTab('custom')">🤖 My Custom Quizzes</button>
-      <button class="admin-source-tab ${adminSourceTab === 'community' ? 'active' : ''}" onclick="adminSetSourceTab('community')">🌐 Community Quizzes</button>
-    </div>
+      ${canCurriculum ? `<button class="admin-source-tab ${adminSourceTab === 'custom' ? 'active' : ''}" onclick="adminSetSourceTab('custom')">🤖 My Custom Quizzes</button>` : ''}
+      ${canCommunity ? `<button class="admin-source-tab ${adminSourceTab === 'community' ? 'active' : ''}" onclick="adminSetSourceTab('community')">🌐 Community Quizzes</button>` : ''}
+    </div>`;
+
+  const moderationHint = (!canCurriculum && canCommunity)
+    ? `<div style="padding:10px 4px;color:var(--text-muted);font-size:.82rem;">You have community moderation access: browse and delete community quizzes below. Publishing quizzes into the curriculum requires curriculum permission.</div>`
+    : '';
+
+  body.innerHTML = `
+    ${sourceTabsHtml}
+    ${moderationHint}
     <div class="admin-quiz-list" id="adminQuizList">${listHtml}</div>
     <div id="adminAssignArea"></div>
   `;
 
-  renderAdminAssignForm();
+  // Only curriculum-permitted admins get the "assign to curriculum" workflow;
+  // a community-only admin just browses/moderates the list above.
+  if (canCurriculum) renderAdminAssignForm();
 
   if (adminSourceTab === 'community') {
     if (!adminCommunityCache) {
@@ -9463,6 +9768,15 @@ function adminSelectQuiz(sourceType, sourceId) {
 
 /* Delete a source quiz (custom quiz of the admin's own account, or any community/shared quiz) */
 async function adminDeleteSourceQuiz(sourceType, sourceId) {
+  const user = window._currentUser;
+  if (sourceType === 'community' && !hasAdminPermission(user, 'community')) {
+    alert('You do not have permission to manage community quizzes.');
+    return;
+  }
+  if (sourceType === 'custom' && !hasAdminPermission(user, 'curriculum')) {
+    alert('You do not have permission to manage curriculum content.');
+    return;
+  }
   if (!confirm('Delete this quiz permanently? This cannot be undone.')) return;
   try {
     if (sourceType === 'custom') {
@@ -11347,6 +11661,11 @@ function renderAdminCurriculumPanel() {
   const body = document.getElementById('adminBody');
   if (!body) return;
 
+  if (!hasAdminPermission(window._currentUser, 'curriculum')) {
+    body.innerHTML = `<div style="padding:20px;color:var(--text-muted);">You do not have permission to manage the curriculum.</div>`;
+    return;
+  }
+
   // Guard against a stale deeper level if its parent selection got cleared
   if (adminCurrNavLevel === 'modules' && !adminTargetYear) adminCurrNavLevel = 'years';
   if (adminCurrNavLevel === 'subjects' && (!adminTargetYear || !adminTargetModule)) adminCurrNavLevel = 'modules';
@@ -12159,8 +12478,11 @@ const firebaseConfig = {
   window._signInWithPopup  = signInWithPopup;
   window._signOut          = signOut;
 
-  // Load admin-created years/modules/subjects, then admin-published questions
+  // Load admin-created years/modules/subjects, then admin-published questions,
+  // plus the admin permission roster (needed before any admin-gated UI decides
+  // whether to show itself).
   (async () => {
+    await loadAdminRoster();
     await loadCurriculumExtensions();
     await loadPublishedQuestionsIntoSubjects();
     loadCustomIconsFromServer();
