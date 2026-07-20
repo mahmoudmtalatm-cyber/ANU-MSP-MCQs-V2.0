@@ -3880,7 +3880,7 @@ async function _getExplainFromPool(questionText) {
 }
 
 /* ── Build Gemini prompt for one question ── */
-function buildExplainPrompt(q, userAnswer) {
+function buildExplainPrompt(questions, q, userAnswer) {
   const optLines = getOptionEntries(q)
     .map(([k, v]) => `  ${k}. ${v}`)
     .join('\n');
@@ -3894,13 +3894,16 @@ function buildExplainPrompt(q, userAnswer) {
 WRONG — ${k}. ${v}:
 [1–2 sentences: why this option is incorrect and what makes it a plausible distractor]`).join('');
 
-  const imageNote = q.image
+  const hasImage = !!(q.image || _cqFindCaseGroupImage(questions, q));
+  const imageNote = hasImage
     ? '\nA visual element (image/diagram/figure) associated with this question is attached — refer to it in your explanation as needed.\n'
     : '';
 
+  const caseBlock = _cqCaseContextBlock(questions, q);
+
   return `You are a medical education expert. Explain this MCQ question clearly for a medical student.
 ${imageNote}
-QUESTION:
+${caseBlock}QUESTION:
 ${q.question}
 
 OPTIONS:
@@ -4034,14 +4037,17 @@ async function explainQuestion(i, forceRegenerate = false) {
 
   try {
     const userAnswer = userAnswers[i] || '';
-    const prompt     = buildExplainPrompt(q, userAnswer);
+    const prompt     = buildExplainPrompt(currentQuestions, q, userAnswer);
     const url        = `https://generativelanguage.googleapis.com/v1beta/models/${AI_EXPLAIN_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-    // Build parts — prepend the question image if this question has one
+    // Build parts — prepend the question's image if it has one, or fall back
+    // to the case group's shared image (i.e. the core question's image) when
+    // this is a dependent question in a case cluster.
     const parts = [];
-    if (q.image) {
-      const base64 = q.image.split(',')[1] || '';
-      const mime   = q.image.match(/^data:([^;]+)/)?.[1] || 'image/png';
+    const explainImg = q.image || _cqFindCaseGroupImage(currentQuestions, q);
+    if (explainImg) {
+      const base64 = explainImg.split(',')[1] || '';
+      const mime   = explainImg.match(/^data:([^;]+)/)?.[1] || 'image/png';
       parts.push({ inline_data: { mime_type: mime, data: base64 } });
     }
     parts.push({ text: prompt });
@@ -4309,9 +4315,11 @@ function buildChatSystemInstruction(i) {
     ? `The student answered: ${userAnswer}. ${q.options[userAnswer] || ''}`
     : 'The student did not answer this question.';
 
+  const caseBlock = _cqCaseContextBlock(currentQuestions, q);
+
   let ctx = `You are a friendly, knowledgeable medical education tutor chatting with a student about one MCQ question. Stay focused on this question and related concepts unless the student clearly asks something else.
 
-QUESTION:
+${caseBlock}QUESTION:
 ${q.question}
 
 OPTIONS:
@@ -4320,7 +4328,7 @@ ${optLines}
 CORRECT ANSWER: ${q.answer}. ${q.options[q.answer] || ''}
 ${userLine}`;
 
-  if (q.image) {
+  if (q.image || _cqFindCaseGroupImage(currentQuestions, q)) {
     ctx += `\n\nThis question includes a visual element (image, diagram, figure, X-ray, ECG, histology slide, etc.) that has been provided to you alongside this conversation. Use it when answering questions about the image or any visual findings.`;
   }
 
@@ -4555,13 +4563,16 @@ async function runChatRequest(i) {
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${CHAT_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-    // If this question has an embedded image, inject it as the first part of the
-    // first user turn so Gemini can see it throughout the conversation.
+    // If this question has an embedded image — or, for a dependent question
+    // in a case cluster, if the core question has one — inject it as the
+    // first part of the first user turn so Gemini can see it throughout the
+    // conversation.
     const q = currentQuestions[i];
     let apiContents = buildApiContents(history);
-    if (q.image && apiContents.length > 0) {
-      const base64 = q.image.split(',')[1] || '';
-      const mime   = q.image.match(/^data:([^;]+)/)?.[1] || 'image/png';
+    const chatImg = q.image || _cqFindCaseGroupImage(currentQuestions, q);
+    if (chatImg && apiContents.length > 0) {
+      const base64 = chatImg.split(',')[1] || '';
+      const mime   = chatImg.match(/^data:([^;]+)/)?.[1] || 'image/png';
       const imagePart = { inline_data: { mime_type: mime, data: base64 } };
       // Prepend image to the first user turn's parts
       apiContents = apiContents.map((m, idx) =>
@@ -4724,13 +4735,47 @@ function escapeHtml(str) {
 
 /* -- Case / vignette clusters --
    Some source documents present one shared stem/case/image and then several
-   questions that all refer back to it without repeating that context. These
-   helpers keep that link intact end-to-end: through AI-solving (so the
-   solver actually sees the case) and through shuffling (so the group never
-   gets torn apart or separated from its shared context/image). */
+   questions that all refer back to it without repeating that context. The
+   question whose own text/image actually presents that case is the "core"
+   question of the group; every other member is a "dependent" that just
+   points at it via case_group. There is deliberately no separate/duplicated
+   case-text field to keep in sync — the core question's own "question" and
+   "image" fields ARE the case, so editing the case just means editing the
+   core question itself, and there's only ever one place that can drift. */
 
 let _cqGroupPrefixCounter = 0;
 function _cqNextGroupPrefixId() { return ++_cqGroupPrefixCounter; }
+
+/* Returns the core question object for whichever group `q` belongs to
+   (could be `q` itself if it IS the core), or null if `q` isn't grouped or
+   its group currently has no core assigned. */
+function _cqFindCoreQuestion(questions, q) {
+  if (!q || !q.case_group) return null;
+  if (q.case_is_core) return q;
+  return questions.find(o => o.case_group === q.case_group && o.case_is_core) || null;
+}
+
+/* The shared image for a case cluster is simply the core question's own
+   image — nothing is duplicated onto siblings (which would bypass the
+   Firestore image-subcollection pipeline used for saved/shared/published
+   quizzes and could bloat those documents). */
+function _cqFindCaseGroupImage(questions, q) {
+  const core = _cqFindCoreQuestion(questions, q);
+  return (core && core.image) ? core.image : null;
+}
+
+/* Shared helper for every AI feature (solve, explain, chat) that needs to
+   give the model the case/vignette a dependent question belongs to. Returns
+   '' for standalone questions and for the core question itself (its own
+   "question" text already IS the case, so it needs no prefix). For a
+   dependent, returns the core's live question text wrapped with a label,
+   ready to prepend to that dependent's own prompt text. */
+function _cqCaseContextBlock(questions, q) {
+  if (!q || !q.case_group || q.case_is_core) return '';
+  const core = _cqFindCoreQuestion(questions, q);
+  if (!core || !core.question || !core.question.trim()) return '';
+  return 'Shared case/vignette this question belongs to:\n' + core.question.trim() + '\n\n';
+}
 
 function _cqNormalizeCaseGroups(questions) {
   const byGroup = {};
@@ -4739,16 +4784,14 @@ function _cqNormalizeCaseGroups(questions) {
   });
   Object.entries(byGroup).forEach(([gid, members]) => {
     if (members.length < 2) {
-      members.forEach(q => { q.case_group = null; q.case_context = ''; q.case_has_image = false; q.case_is_core = false; });
-      return;
+      members.forEach(q => { q.case_group = null; q.case_is_core = false; });
+      delete byGroup[gid];
     }
-    const sharedContext = members.map(q => q.case_context).find(t => t && t.trim()) || '';
-    members.forEach(q => { q.case_context = sharedContext; });
   });
   // Every surviving group must have EXACTLY one core question (the one that
   // holds the case/image the others depend on) — never zero, never more
   // than one, so shuffling and display always know which question to lead
-  // the group with.
+  // the group with and which question's text/image to pull as context.
   Object.keys(byGroup).forEach(gid => _caseGroupEnsureSingleCore(questions, gid));
 }
 
@@ -4768,30 +4811,18 @@ function _caseGroupEnsureSingleCore(questions, gid) {
   members[0].case_is_core = true;
 }
 
-/* Finds the shared image for a case cluster by looking at the other member
-   of the same case_group that actually carries the cropped image — rather
-   than duplicating the base64 onto every sibling (which would bypass the
-   Firestore image-subcollection pipeline used for saved/shared/published
-   quizzes and could bloat those documents). */
-function _cqFindCaseGroupImage(questions, q) {
-  if (!q.case_group) return null;
-  const core = questions.find(o => o.case_group === q.case_group && o.case_is_core && o.image);
-  if (core) return core.image;
-  const sibling = questions.find(o => o.case_group === q.case_group && o.image);
-  return sibling ? sibling.image : null;
-}
-
 /* -- Manual case-group linking --
    Auto-detection during extraction gets the shared case/vignette/image
    right most of the time, but not always — and grouping is also useful
    for quizzes that weren't extracted at all (typed by hand, or edited
    later). These helpers add a small "🔗 Case Link" control to every
    question card in BOTH inline editors (the extraction review screen and
-   the generic admin quiz editor) so the user can see which question
-   carries a case's shared context, see which other questions are linked
-   to it, and freely create/join/leave a group before saving — using the
-   exact same case_group / case_context / case_has_image fields the
-   automatic detection uses, so both paths stay fully compatible. */
+   the generic admin quiz editor) so the user can see which question is the
+   core case-holder, which questions depend on it, and freely create/join/
+   leave a group before saving — using the same case_group / case_is_core
+   fields the automatic detection uses, so both paths stay fully
+   compatible. There's nothing else to edit here: the case IS the core
+   question, so changing it just means editing that question directly. */
 
 // Registry so the shared functions below can operate on whichever
 // editor invoked them, without duplicating this logic per editor.
@@ -4834,6 +4865,15 @@ function _caseGroupSummarize(questions) {
 
 function _caseGroupNewId() {
   return 'manual_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+/* A short read-only preview of the core question's text, used on dependent
+   question cards so the user can see at a glance what context/image will
+   actually be sent to the AI solver — without a separate editable copy. */
+function _caseGroupCorePreviewText(core, maxLen) {
+  const t = (core && core.question || '').trim();
+  if (!t) return '(core question has no text yet)';
+  return t.length > maxLen ? t.slice(0, maxLen).trim() + '…' : t;
 }
 
 /* Renders the "🔗 Case Link" control block for one question card.
@@ -4883,7 +4923,7 @@ function _renderCaseGroupBlock(editorKey, questions, i) {
 
     html += `<div style="font-size:.72rem;color:${color};font-weight:700;margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">`;
     if (isCore) {
-      html += `<span>🧩 Core question — holds the case${(q.case_has_image || q.image) ? ' &amp; image' : ''} that the others depend on</span>`;
+      html += `<span>🧩 Core question — its own text${q.image ? ' &amp; image' : ''} above is the case every linked question depends on</span>`;
     } else if (coreIdx !== undefined) {
       html += `<span>↳ Depends on Q${coreIdx + 1}</span>
         <button type="button" class="cq-img-action-btn" style="padding:2px 8px;font-size:.68rem;"
@@ -4899,17 +4939,15 @@ function _renderCaseGroupBlock(editorKey, questions, i) {
       🔗 Linked with ${others.length ? others.map(idx => 'Q' + (idx + 1) + (idx === coreIdx ? ' ★' : '')).join(', ') : '(no other questions yet — link another question to this case)'}
     </div>`;
 
-    html += `<div style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:8px;margin-bottom:3px;">
-      Shared case / vignette text <span style="font-weight:500;text-transform:none;letter-spacing:0;">— shown to the AI, and kept identical across every linked question</span>
-    </div>`;
-    html += `<textarea rows="2" class="cq-edit-textarea" style="width:100%;resize:vertical;border-color:${color};"
-      oninput="_caseGroupEditContext('${editorKey}', ${i}, this.value)"
-      placeholder="Paste or write the shared case/vignette text here…">${escapeHtml(q.case_context || '')}</textarea>`;
-    if (q.case_has_image || q.image) {
-      html += `<label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.74rem;font-weight:700;color:${color};cursor:pointer;">
-        <input type="checkbox" ${q.case_has_image ? 'checked' : ''} onchange="_caseGroupToggleSharedImage('${editorKey}', ${i}, this.checked)" />
-        This case's image is shared context for every linked question
-      </label>`;
+    if (!isCore && coreIdx !== undefined) {
+      const core = questions[coreIdx];
+      html += `<div style="margin-top:8px;padding:8px 10px;background:#fff;border:1px solid ${color}55;border-radius:6px;">
+        <div style="font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">
+          Context used for solving (Q${coreIdx + 1}'s own text${core.image ? ' + image' : ''}) — edit Q${coreIdx + 1} directly to change it
+        </div>
+        <div style="font-size:.78rem;color:var(--text-main);font-style:italic;">${escapeHtml(_caseGroupCorePreviewText(core, 220))}</div>
+        ${core.image ? `<img src="${core.image}" alt="Core question image" style="max-width:140px;max-height:90px;object-fit:contain;display:block;margin-top:6px;border-radius:4px;border:1px solid #D8EAF7;" />` : ''}
+      </div>`;
     }
   }
   html += `</div>`;
@@ -4923,17 +4961,13 @@ function _caseGroupOnSelect(editorKey, i, val) {
   const q = questions[i];
   const prevGid = q.case_group;
   if (val === '') {
-    q.case_group = null; q.case_context = ''; q.case_has_image = false; q.case_is_core = false;
+    q.case_group = null; q.case_is_core = false;
   } else if (val === '__new__') {
     q.case_group = _caseGroupNewId();
     q.case_is_core = true; // the question that starts a group is its core by default
-    if (!q.case_context) q.case_context = q.question || '';
   } else {
     q.case_group = val;
     q.case_is_core = false; // joining an existing group — it already has a core
-    const sibling = questions.find(o => o !== q && o.case_group === val && o.case_context && o.case_context.trim());
-    if (sibling) q.case_context = sibling.case_context;
-    if (!q.case_context) q.case_context = q.question || '';
   }
   // The group this question just left (if any) may now have no core left;
   // the group it just joined/started must end up with exactly one.
@@ -4948,8 +4982,6 @@ function _caseGroupUnlink(editorKey, i) {
   if (!questions || !questions[i]) return;
   const gid = questions[i].case_group;
   questions[i].case_group = null;
-  questions[i].case_context = '';
-  questions[i].case_has_image = false;
   questions[i].case_is_core = false;
   if (gid) _caseGroupEnsureSingleCore(questions, gid); // promote a remaining member if the core just left
   ed.rerender();
@@ -4968,27 +5000,13 @@ function _caseGroupSetCore(editorKey, i) {
   ed.rerender();
 }
 
-/* Edits case_context on this question and propagates the identical text
-   to every other member of the same group (they're meant to stay in sync —
-   this is the same invariant _cqNormalizeCaseGroups enforces for
-   auto-detected groups). Deliberately does NOT trigger a full re-render:
-   that would rebuild the DOM mid-keystroke and lose focus/caret position. */
-function _caseGroupEditContext(editorKey, i, val) {
-  const ed = _caseGroupEditors[editorKey];
-  const questions = ed && ed.getQuestions();
-  if (!questions || !questions[i]) return;
-  const gid = questions[i].case_group;
-  questions[i].case_context = val;
-  if (gid) questions.forEach(o => { if (o.case_group === gid) o.case_context = val; });
-}
-
-function _caseGroupToggleSharedImage(editorKey, i, checked) {
-  const ed = _caseGroupEditors[editorKey];
-  const questions = ed && ed.getQuestions();
-  if (!questions || !questions[i]) return;
-  const gid = questions[i].case_group;
-  if (!gid) return;
-  questions.forEach(o => { if (o.case_group === gid) o.case_has_image = checked; });
+/* If the question being deleted was the core of a case group, promote a
+   remaining member so the group doesn't lose its shared context entirely.
+   Called by both editors right after splicing a question out. */
+function _caseGroupOnQuestionDeleted(questions, deletedQuestion) {
+  if (deletedQuestion && deletedQuestion.case_group) {
+    _caseGroupEnsureSingleCore(questions, deletedQuestion.case_group);
+  }
 }
 
 function _cqGroupAwareShuffle(arr) {
@@ -5744,10 +5762,9 @@ STRICT RULES — follow exactly, no exceptions:
 6. Do not invent, add, duplicate, or remove any questions or options that are not present in the source document.
 7. For each question, set "has_image" to true if THIS SPECIFIC question is accompanied by an image, diagram, figure, table, chart, graph, X-ray, CT scan, ECG, histology slide, or any other visual element that is part of it. Set it to false otherwise.
 8. CASE / VIGNETTE CLUSTERS: sometimes a shared clinical case, patient vignette, scenario, lab panel, or image is presented ONCE and then several questions that follow it all refer back to it (e.g. "A 45-year-old man presents with... Questions 12–15 refer to the scenario above."), without repeating that shared information in each question's own text. Whenever you detect this pattern, structure it as ONE core question plus its dependent questions:
-   - Identify the ONE question whose own text is where the shared case/vignette/scenario/lab panel/image actually appears — this is the CORE question. Set "case_is_core" to true on that question only. Set "case_is_core" to false (or omit it) on every other question — including every dependent question in the cluster.
+   - Identify the ONE question that is paired with the shared case/vignette/scenario/lab panel/image in the source document — this is the CORE question. Its "question" field MUST include the FULL case/vignette text verbatim (reproduced exactly as written, same as any other question text) followed by that question's own actual question — the case must live IN the core question's own text, never only in a separate field. Set "case_is_core" to true on this question. If the image is part of the case, set "has_image" true on this question.
+   - For every OTHER question in the cluster (the dependents), keep its "question" field as ONLY that question's own specific wording — do NOT repeat the shared case text inside it, exactly as the source document itself doesn't repeat it. Set "case_is_core" to false (or omit it) on these.
    - Give every question in the cluster — the core question AND every question that depends on it — the SAME "case_group" string (e.g. "case_1", "case_2", ...). Leave "case_group" empty/omitted for standalone questions that don't share context with any other question.
-   - Set "case_context" on EVERY question in the cluster (not just the core) to the FULL shared stem/vignette/case text, reproduced exactly as written — this is what lets each dependent question be understood on its own later, even if it gets separated from the core question.
-   - If the shared case includes an image/figure that the dependent questions rely on (not just the core question that visually displays it), set "case_has_image" to true on EVERY question in that cluster, and keep "has_image" true only on the one question the image is physically attached to in the document (normally the core question).
    - Output the core question immediately followed by its dependent questions, in the same order they appear in the source document.
    - Do not invent a cluster — only use "case_group"/"case_is_core" when the source document actually presents shared context that multiple questions depend on. A cluster always needs exactly one core question — never zero, never more than one.
 
@@ -5759,8 +5776,6 @@ Return ONLY a JSON array, one object per question, in exactly this format:
     "answer": "A",
     "has_image": false,
     "case_group": "",
-    "case_context": "",
-    "case_has_image": false,
     "case_is_core": false
   }
 ]
@@ -5784,8 +5799,6 @@ const CQ_RESPONSE_SCHEMA = {
       answer: { type: 'STRING' },
       has_image: { type: 'BOOLEAN' },
       case_group: { type: 'STRING' },
-      case_context: { type: 'STRING' },
-      case_has_image: { type: 'BOOLEAN' },
       case_is_core: { type: 'BOOLEAN' }
     },
     required: ['question', 'options', 'answer']
@@ -6216,12 +6229,7 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
       const q = questions[qi];
       const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
       let qText = 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n';
-      if (q.case_group && q.case_context && q.case_context.trim()) {
-        // This question is part of a case/vignette cluster — include the
-        // shared stem so the AI can actually use it, even though it isn't
-        // repeated in the question's own text.
-        qText += 'Shared case/vignette this question belongs to:\n' + q.case_context.trim() + '\n\n';
-      }
+      qText += _cqCaseContextBlock(questions, q);
       qText += q.question + '\n' + opts;
       parts.push({ text: qText });
       const imgForThis = q.image || _cqFindCaseGroupImage(questions, q);
@@ -6387,18 +6395,15 @@ async function _extractQuestionsFromFile(file, apiKey, onProgress) {
       question: q.question, options: opts, optionsOrder, answer,
       has_image: !!q.has_image, no_answer_key: noKey, _sourceFile: file,
       case_group: rawGroup ? `${groupPrefix}:${rawGroup}` : null,
-      case_context: (typeof q.case_context === 'string') ? q.case_context.trim() : '',
-      case_has_image: !!q.case_has_image,
       case_is_core: !!q.case_is_core
     };
   }).filter(Boolean);
 
   if (!cleaned.length) throw new Error(`The AI response for "${file.name}" did not contain any usable questions.`);
 
-  // Make sure every member of a case cluster actually carries the shared
-  // context, even if the model only put it on the first question, and that
-  // stray single-member "groups" don't stay a real group (nothing to keep
-  // together / no shared context to protect).
+  // Make sure every surviving case cluster has exactly one core question
+  // (the one whose own text/image IS the shared case), and that stray
+  // single-member "groups" don't stay a real group (nothing to share).
   _cqNormalizeCaseGroups(cleaned);
 
   // Extract embedded images for questions that have them. This step renders
