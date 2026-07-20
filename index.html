@@ -1764,6 +1764,10 @@
   min-width: 0; flex: 1;
 }
 .apikey-label-input:focus { background: #EEF7FF; outline: none; }
+.apikey-label-display {
+  font-weight: 800; font-size: .92rem; color: var(--text-main);
+  padding: 2px 4px; min-width: 0;
+}
 .apikey-active-chip {
   font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
   background: var(--apikey-color, var(--accent)); color: #fff; padding: 2px 8px; border-radius: 20px;
@@ -1782,7 +1786,21 @@
 .apikey-use-btn { background: var(--apikey-color, var(--accent)); color: #fff; }
 .apikey-use-btn:disabled { opacity: .55; cursor: default; }
 .apikey-view-btn { background: #ECEFF1; color: var(--text-main); }
+.apikey-edit-btn { background: #EDE7F6; color: #4527A0; }
 .apikey-del-btn { background: #FFEBEE; color: #C62828; }
+.apikey-edit-row { margin-top: 4px; }
+.apikey-edit-row input {
+  width: 100%; padding: 8px 10px; border: 1.5px solid #B0D4F0; border-radius: 7px;
+  font-family: var(--font); font-size: .85rem; color: var(--text-main);
+  background: #F7FBFF; outline: none; box-sizing: border-box;
+}
+.apikey-edit-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.15); }
+.apikey-edit-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.apikey-edit-actions button {
+  border: none; border-radius: 7px; cursor: pointer; font-family: var(--font);
+  font-weight: 700; font-size: .78rem; padding: 7px 10px; transition: filter .15s;
+}
+.apikey-edit-actions button:hover { filter: brightness(1.08); }
 .apikey-add-form {
   background: var(--bg-card); border: 1.5px dashed #B0D4F0; border-radius: 10px;
   padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
@@ -1794,14 +1812,7 @@
   background: #F7FBFF; outline: none;
 }
 .apikey-add-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(27,138,196,.15); }
-#apikeyLabelInput { flex: 0 0 150px; min-width: 120px; }
 #apikeyValueInput { flex: 1; min-width: 180px; }
-.apikey-swatches { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.apikey-swatch {
-  width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
-  transition: transform .1s, border-color .1s;
-}
-.apikey-swatch.selected { border-color: var(--text-main); transform: scale(1.15); }
 .apikey-empty {
   text-align: center; padding: 22px 16px; color: var(--text-muted); font-size: .88rem;
 }
@@ -1817,7 +1828,6 @@
   .apikey-item { padding: 12px; }
   .apikey-info { flex-basis: 100%; min-width: 0; }
   .apikey-item-actions { flex-basis: 100%; margin-left: 0; justify-content: flex-end; }
-  #apikeyLabelInput { flex-basis: 100%; }
 }
   </style>
 </head>
@@ -2265,6 +2275,34 @@ let selectedLectures = {}; // { subjectName: Set of lecture names }
 let correctToWrong   = 0;
 let wrongToCorrect   = 0;
 let currentQuizSource = 'curriculum'; // 'curriculum' | 'custom' | 'community'
+
+/* ══════════════════════════════════════════════════════════
+   UNLOAD GUARD — warn before refresh/close if progress could
+   be lost: an active quiz timer, or a background process
+   (AI generation, admin publish/split, syncing, explain-all).
+══════════════════════════════════════════════════════════ */
+function _hasUnsavedProgress() {
+  // Quiz in progress: timer running and the quiz screen is showing
+  const quizScreen = document.getElementById('quiz');
+  if (timerInterval && quizScreen && !quizScreen.classList.contains('hidden')) return true;
+
+  // Background processes that would be interrupted mid-flight
+  if (typeof cqBusy !== 'undefined' && cqBusy) return true;
+  if (typeof adminBusy !== 'undefined' && adminBusy) return true;
+  if (typeof _explainAllBusy !== 'undefined' && _explainAllBusy) return true;
+
+  // A Firestore sync/loading operation is in flight
+  const toast = document.getElementById('fsLoadingToast');
+  if (toast && toast.classList.contains('visible')) return true;
+
+  return false;
+}
+window.addEventListener('beforeunload', (e) => {
+  if (!_hasUnsavedProgress()) return;
+  e.preventDefault();
+  e.returnValue = ''; // required by Chrome to show the confirmation dialog
+  return '';
+});
 /* ══════════════════════════════════════════════════════════
    INIT — build subject grid
 ══════════════════════════════════════════════════════════ */
@@ -3523,6 +3561,11 @@ function renameApiKey(id, label) {
   const k = keys.find(x => x.id === id);
   if (k) { k.label = (label || '').trim() || k.label; saveApiKeys(keys); }
 }
+function updateApiKeyValue(id, newKey) {
+  const keys = loadApiKeys();
+  const k = keys.find(x => x.id === id);
+  if (k) { k.key = newKey; saveApiKeys(keys); }
+}
 function maskApiKey(key) {
   if (!key) return '';
   if (key.length <= 8) return '•'.repeat(key.length);
@@ -3557,6 +3600,7 @@ function openApiKeyManager(pendingCallback) {
 }
 function closeApiKeyManager() {
   document.getElementById('apiKeyOverlay').classList.add('hidden');
+  _apiKeyEditingId = null;
   // If something was waiting on a key becoming available, resume it now.
   if (_apiKeyPendingCallback && getActiveApiKey()) {
     const cb = _apiKeyPendingCallback;
@@ -3582,22 +3626,85 @@ function deleteApiKeyPrompt(id, label) {
 function apiKeyLabelChanged(id, value) {
   renameApiKey(id, value);
 }
-function apiKeySelectColor(color) {
-  document.querySelectorAll('.apikey-swatch').forEach(el => {
-    el.classList.toggle('selected', el.dataset.color === color);
-  });
-  const holder = document.getElementById('apiKeyAddForm');
-  if (holder) holder.dataset.color = color;
+
+/* Verifies a Gemini API key actually works before it's saved, using a
+   lightweight models-list call (no generation quota consumed). */
+async function _validateGeminiApiKey(key) {
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+    if (resp.ok) return { valid: true };
+    let msg = 'This key was rejected by Google — please check it and try again.';
+    try {
+      const data = await resp.json();
+      if (data && data.error && data.error.message) msg = data.error.message;
+    } catch (e) {}
+    return { valid: false, error: msg };
+  } catch (e) {
+    return { valid: false, error: "Couldn't reach Google's API to verify this key — check your connection and try again." };
+  }
 }
-function submitNewApiKey() {
-  const labelInp = document.getElementById('apikeyLabelInput');
+
+async function submitNewApiKey() {
   const valueInp = document.getElementById('apikeyValueInput');
-  const key   = (valueInp ? valueInp.value : '').trim();
-  const label = (labelInp ? labelInp.value : '').trim();
+  const statusEl = document.getElementById('apikeyAddStatus');
+  const btn      = document.getElementById('apikeyAddBtn');
+  const key = (valueInp ? valueInp.value : '').trim();
   if (!key) { if (valueInp) valueInp.style.borderColor = '#C62828'; return; }
-  const holder = document.getElementById('apiKeyAddForm');
-  const color  = holder ? holder.dataset.color : null;
-  addApiKey(key, label, color);
+
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Verifying key with Google…</div>`;
+
+  const result = await _validateGeminiApiKey(key);
+  if (!result.valid) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(result.error)}</div>`;
+    if (valueInp) valueInp.style.borderColor = '#C62828';
+    if (btn) btn.disabled = false;
+    return;
+  }
+
+  // Name and colour are always auto-assigned — the user has no control over them.
+  addApiKey(key, '', null);
+  renderApiKeyManager();
+}
+
+// Which key (if any) is currently in inline edit mode
+let _apiKeyEditingId = null;
+
+/* Switches a key's row into edit mode — always reachable via the ✏️ button
+   so an existing key's value can be updated any time, without deleting and
+   re-adding it. */
+function startEditApiKey(id) {
+  _apiKeyEditingId = id;
+  renderApiKeyManager();
+  setTimeout(() => {
+    const inp = document.getElementById('apikeyEditInput_' + id);
+    if (inp) { inp.focus(); inp.select(); }
+  }, 30);
+}
+function cancelEditApiKey() {
+  _apiKeyEditingId = null;
+  renderApiKeyManager();
+}
+async function submitEditApiKey(id) {
+  const inp      = document.getElementById('apikeyEditInput_' + id);
+  const statusEl = document.getElementById('apikeyEditStatus_' + id);
+  const btn      = document.getElementById('apikeyEditSaveBtn_' + id);
+  const newKey = (inp ? inp.value : '').trim();
+  if (!newKey) { if (inp) inp.style.borderColor = '#C62828'; return; }
+
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Verifying key with Google…</div>`;
+
+  const result = await _validateGeminiApiKey(newKey);
+  if (!result.valid) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(result.error)}</div>`;
+    if (inp) inp.style.borderColor = '#C62828';
+    if (btn) btn.disabled = false;
+    return;
+  }
+
+  updateApiKeyValue(id, newKey);
+  _apiKeyEditingId = null;
   renderApiKeyManager();
 }
 function toggleApiKeyVisibility(btn, id) {
@@ -3646,46 +3753,55 @@ function renderApiKeyManager() {
   } else {
     keys.forEach((k, idx) => {
       const isActive = k.id === activeId;
+      const isEditing = _apiKeyEditingId === k.id;
       const color = k.color || API_KEY_COLORS[idx % API_KEY_COLORS.length];
       html += `<div class="apikey-item ${isActive ? 'active' : ''}" style="--apikey-color:${color};">
         <div class="apikey-num">${idx + 1}</div>
         <div class="apikey-info">
           <div class="apikey-label-row">
-            <input class="apikey-label-input" value="${escapeHtml(k.label)}" maxlength="30"
-                   onchange="apiKeyLabelChanged('${k.id}', this.value)" />
+            <div class="apikey-label-display">${escapeHtml(k.label)}</div>
             ${isActive ? `<span class="apikey-active-chip">Active</span>` : ''}
           </div>
+          ${isEditing ? `
+          <div class="apikey-edit-row">
+            <input type="password" id="apikeyEditInput_${k.id}" value="${escapeHtml(k.key)}"
+              oninput="this.style.borderColor='#B0D4F0'" placeholder="Paste new Gemini API key" />
+          </div>
+          <div id="apikeyEditStatus_${k.id}"></div>
+          <div class="apikey-edit-actions">
+            <button class="apikey-use-btn" id="apikeyEditSaveBtn_${k.id}" onclick="submitEditApiKey('${k.id}')" type="button">✅ Verify &amp; Save</button>
+            <button class="apikey-view-btn" onclick="cancelEditApiKey()" type="button">Cancel</button>
+          </div>
+          ` : `
           <div style="display:flex;align-items:center;gap:6px;">
             <span class="apikey-masked" id="apikeyMasked_${k.id}" data-shown="0">${maskApiKey(k.key)}</span>
             <button class="apikey-view-btn" style="padding:2px 6px;font-size:.7rem;" onclick="toggleApiKeyVisibility(this,'${k.id}')" type="button">👁</button>
           </div>
+          `}
         </div>
+        ${isEditing ? '' : `
         <div class="apikey-item-actions">
           <button class="apikey-use-btn" ${isActive ? 'disabled' : ''} onclick="useApiKey('${k.id}')">${isActive ? '✓ In use' : 'Use'}</button>
+          <button class="apikey-edit-btn" onclick="startEditApiKey('${k.id}')" title="Edit this key's value">✏️ Edit</button>
           <button class="apikey-del-btn" onclick="deleteApiKeyPrompt('${k.id}', '${escapeHtml(k.label).replace(/'/g, "&#39;")}')">🗑️</button>
         </div>
+        `}
       </div>`;
     });
   }
   html += `</div>`;
 
   const nextColor = _pickRandomApiKeyColor(keys.map(k => k.color));
-  const usedNums = keys
-    .map(k => /^API (\d+)$/.exec(k.label))
-    .filter(Boolean)
-    .map(m => parseInt(m[1], 10));
-  const nextLabel = `API ${usedNums.length ? Math.max(...usedNums) + 1 : keys.length + 1}`;
   html += `<div class="apikey-add-form" id="apiKeyAddForm" data-color="${nextColor}">
     <div class="cq-section-title" style="margin-bottom:0;">➕ Add a New API Key</div>
+    <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;">
+      Its name and colour are assigned automatically — just paste the key below. We'll verify it with Google before saving.
+    </div>
     <div class="apikey-add-row">
-      <input type="text" id="apikeyLabelInput" placeholder="Label (e.g. Personal, Backup)" maxlength="30" value="${escapeHtml(nextLabel)}" />
-      <input type="password" id="apikeyValueInput" placeholder="Paste your Gemini API key here" oninput="this.style.borderColor='#B0D4F0'" />
+      <input type="password" id="apikeyValueInput" placeholder="Paste your Gemini API key here" oninput="this.style.borderColor='#B0D4F0'" style="flex:1;min-width:180px;" />
     </div>
-    <div class="apikey-swatches">
-      <span style="font-size:.78rem;color:var(--text-muted);font-weight:700;margin-right:2px;">Colour:</span>
-      ${API_KEY_COLORS.map(c => `<div class="apikey-swatch ${c === nextColor ? 'selected' : ''}" data-color="${c}" style="background:${c};" onclick="apiKeySelectColor('${c}')"></div>`).join('')}
-    </div>
-    <button class="cq-btn" onclick="submitNewApiKey()" type="button">💾 Save Key</button>
+    <div id="apikeyAddStatus"></div>
+    <button class="cq-btn" id="apikeyAddBtn" onclick="submitNewApiKey()" type="button">💾 Verify &amp; Save Key</button>
   </div>`;
 
   body.innerHTML = html;
@@ -6747,49 +6863,38 @@ async function executeSplitQuiz() {
 
   // ── Admin-published curriculum lectures split off into new Firestore
   //    lecture docs (rather than into the user's local custom-quiz list) ──
+  // ── Admin-published curriculum lectures are split into the admin's own
+  //    Custom Quizzes — NOT published directly to the subject — so the admin
+  //    can review/edit each part before publishing it themselves. ──
   if (cqSplitState.context === 'adminPublished') {
-    try {
-      for (let i = 0; i < chunks.length; i++) {
-        const c = chunks[i];
-        const partQuestions = JSON.parse(JSON.stringify(srcQuestions.slice(c.start - 1, c.end)));
-        const lectureName = ((cqSplitState.mode === 'custom' || cqSplitState.mode === 'visual') && c.label)
+    const customQuizzes = loadCustomQuizzes();
+    const newCustomQuizzes = chunks.map((c, i) => {
+      const partQuestions = JSON.parse(JSON.stringify(srcQuestions.slice(c.start - 1, c.end)));
+      // Strip published-lecture-specific image sentinels; images are already
+      // hydrated inline as q.image at this point (see openAdminSplitPanel),
+      // and custom quizzes manage their own image storage separately.
+      partQuestions.forEach(q => { delete q.imageUrl; delete q.sharedImageIdx; delete q.pubImageIdx; });
+      return {
+        id: 'cq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '_' + i,
+        title: ((cqSplitState.mode === 'custom' || cqSplitState.mode === 'visual') && c.label)
           ? c.label
-          : `${baseTitle} — Part ${i + 1} (Q${c.start}–Q${Math.min(c.end, total)})`;
-        const cleanQuestions = partQuestions.map(q => {
-          delete q.imageUrl;
-          delete q.sharedImageIdx;
-          delete q.pubImageIdx; // will be re-assigned after upload
-          return q;
-        });
+          : `${baseTitle} — Part ${i + 1} (Q${c.start}–Q${Math.min(c.end, total)})`,
+        questions: partQuestions,
+        createdAt: Date.now() + i
+      };
+    });
 
-        const lectureId = 'pub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '_' + i;
-        await uploadPublishedLectureImages(adminTargetSubject, lectureId, cleanQuestions);
-
-        const publishedAt = Date.now() + i;
-        const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
-        await window._setDoc(ref, cleanForFirestore({
-          id: lectureId,
-          lectureName,
-          questions: cleanQuestions,
-          sourceTitle: baseTitle,
-          publishedBy: window._currentUser ? window._currentUser.uid : null,
-          publishedAt,
-          order: publishedAt
-        }));
-
-        const hydratedForMemory = JSON.parse(JSON.stringify(cleanQuestions));
-        await hydratePublishedLectureImages(adminTargetSubject, lectureId, hydratedForMemory);
-        if (!subjects[adminTargetSubject].lectures) subjects[adminTargetSubject].lectures = {};
-        subjects[adminTargetSubject].lectures[lectureName] = hydratedForMemory;
-      }
+    try {
+      newCustomQuizzes.reverse().forEach(q => customQuizzes.unshift(q));
+      await saveCustomQuizzesList(customQuizzes);
     } catch (e) {
       alert('Failed to create split quizzes: ' + (e.message || e));
       return;
     }
 
     cqSplitState = null;
-    await renderAdminAssignedList();
-    if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
+    _renderAdminAssignedListHTML();
+    alert(`✅ Created ${newCustomQuizzes.length} split quiz${newCustomQuizzes.length !== 1 ? 'zes' : ''} from "${baseTitle}".\n\nThese were NOT published directly to students — they've been added to your Custom Quizzes, where you can review and publish each one individually when ready.`);
     return;
   }
 
