@@ -7145,8 +7145,6 @@ function renderCQPreview() {
       <button class="cq-edit-reask-btn" title="Ask AI to solve this question using the configured source"
         onclick="cqAiSolveOne(${i})"
         style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 AI Solve</button>
-      ${q._notExtractable ? '' : `<button class="cq-edit-reask-btn" title="Re-ask AI to re-extract this specific question"
-        onclick="cqReaskQuestion(${i})">🔄 Re-extract</button>`}
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="cqDeleteQuestion(${i})"
         style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
@@ -7173,8 +7171,6 @@ function renderCQPreview() {
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
           <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqRemoveImage(${i})" type="button">🗑️ Remove Image</button>
-          ${(!q._notExtractable && (cqSelectedFiles.length || cqLectureFiles.length)) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
-            style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
         </div>
       </div>`;
     } else if (q.has_image) {
@@ -7188,8 +7184,6 @@ function renderCQPreview() {
             📎 Upload Image Manually
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
-          ${(!q._notExtractable && (cqSelectedFiles.length || cqLectureFiles.length)) ? `<button class="cq-img-action-btn" onclick="cqReExtractImage(${i})" type="button"
-            style="background:#EDE7F6;color:#4527A0;border-color:#B39DDB;">🤖 Re-extract from Source</button>` : ''}
         </div>
       </div>`;
     } else {
@@ -7361,12 +7355,9 @@ function cqAddBlankQuestion() {
     ],
     answer: 'A',
     has_image: false,
-    // This question has no counterpart in the source document — it was
-    // typed in by hand, not extracted. It must never offer "Re-extract"
-    // controls, and it must be skipped entirely when numbering/targeting
-    // other questions for AI re-extraction (see _cqSourceOrdinal), so that
-    // adding/reordering it never shifts what re-extraction does to
-    // genuinely-extracted questions around it.
+    // Marks this question as having no counterpart in the source document
+    // (it was typed in by hand, not extracted). Kept for provenance/future
+    // use even though the preview's re-extract controls have been removed.
     _notExtractable: true
   });
   renderCQPreview();
@@ -7409,159 +7400,6 @@ function cqAddOption(qIdx) {
     const input = document.querySelector(`#cqOptRow_${qIdx}_${nextKey} .cq-opt-text-input`);
     if (input) input.focus();
   }, 60);
-}
-
-/* ── Re-extract just the image for a single question from the source file ── */
-async function cqReExtractImage(idx) {
-  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
-  if (cqGeneratedQuestions[idx]._notExtractable) return; // no source to re-extract from
-  const apiKey = getGeminiKey();
-  if (!apiKey) { openApiKeyManager(); return; }
-  const sourceFile = cqGeneratedQuestions[idx]._sourceFile || cqSelectedFiles[0] || cqLectureFiles[0];
-  if (!sourceFile) { alert('The original source file is no longer available. Please re-upload the file first.'); return; }
-
-  const statusEl = document.getElementById(`cqReaskStatus_${idx}`);
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="padding:7px 11px;font-size:.8rem;"><div class="cq-spinner"></div> Re-extracting image for Q${idx + 1}…</div>`;
-
-  try {
-    const questionCopy = JSON.parse(JSON.stringify(cqGeneratedQuestions[idx]));
-    questionCopy.has_image = true;
-    questionCopy.image = undefined;
-    await extractImagesForQuestions([questionCopy], sourceFile, apiKey);
-    if (questionCopy.image) {
-      cqGeneratedQuestions[idx].image = questionCopy.image;
-      cqGeneratedQuestions[idx].has_image = true;
-      renderCQPreview();
-      setTimeout(() => {
-        const st = document.getElementById(`cqReaskStatus_${idx}`);
-        if (st) { st.innerHTML = `<div class="cq-status success" style="padding:7px 11px;font-size:.8rem;">✅ Image extracted for Q${idx + 1}</div>`; setTimeout(() => { if(st) st.innerHTML=''; }, 3000); }
-      }, 80);
-    } else {
-      if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="padding:7px 11px;font-size:.8rem;">⚠️ Could not extract image — try uploading it manually.</div>`;
-    }
-  } catch(e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="padding:7px 11px;font-size:.8rem;">❌ ${escapeHtml(e.message || String(e))}</div>`;
-  }
-}
-
-/* Returns the 1-based position of list[idx] counting ONLY questions that
-   actually came from the source document (i.e. skipping any question
-   flagged _notExtractable, such as manually-added or merged-in ones).
-   This is what gets told to the AI during re-extraction, so inserting or
-   reordering a manual/merged question never shifts the "question number"
-   context used to re-extract a genuinely-extracted question — it behaves
-   exactly as if the non-extractable question was never there. */
-function _cqSourceOrdinal(list, idx) {
-  let n = 0;
-  for (let i = 0; i <= idx && i < list.length; i++) {
-    if (!list[i]._notExtractable) n++;
-  }
-  return n;
-}
-
-async function cqReaskQuestion(idx) {
-  if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
-  if (cqGeneratedQuestions[idx]._notExtractable) return; // no source to re-extract from
-  const apiKey = getGeminiKey();
-  if (!apiKey) {
-    openApiKeyManager();
-    return;
-  }
-  if (!cqSelectedFiles.length && !cqLectureFiles.length) {
-    alert('The original source file is no longer available. Please re-upload the file first.');
-    return;
-  }
-  const statusEl = document.getElementById(`cqReaskStatus_${idx}`);
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="padding:7px 11px;font-size:.8rem;"><div class="cq-spinner"></div> Re-asking AI for Q${idx + 1}…</div>`;
-
-  const q = cqGeneratedQuestions[idx];
-  const sourceQNum = _cqSourceOrdinal(cqGeneratedQuestions, idx);
-  const reaskPrompt = `The following is a single MCQ question that was already extracted. Please re-examine the source document and re-extract this specific question (question number ${sourceQNum}) with perfect accuracy.
-
-Current extraction:
-Question: ${q.question}
-Options: ${Object.entries(q.options).map(([k,v]) => `${k}: ${v}`).join(' | ')}
-Answer: ${q.answer}
-
-STRICT RULES: Same rules as before — reproduce text exactly, preserve correct answer if marked, set has_image appropriately.
-
-Return ONLY a JSON array with ONE object in the same format:
-[{"question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"answer":"A","has_image":false}]`;
-
-  try {
-    const sourceFile = cqGeneratedQuestions[idx]._sourceFile || cqSelectedFiles[0] || cqLectureFiles[0];
-    const mimeType   = sourceFile.type ||
-      (sourceFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-    const isTxt = sourceFile.type === 'text/plain' || sourceFile.name.toLowerCase().endsWith('.txt');
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    let requestBody;
-    let filePart = null;
-    if (isTxt) {
-      const lectureText = await fileToText(sourceFile);
-      requestBody = {
-        contents: [{ parts: [{ text: `SOURCE:\n\n${lectureText}\n\n---\n\n${reaskPrompt}` }] }],
-        generationConfig: { responseMimeType: 'application/json',
- temperature: 0, maxOutputTokens: 4096 }
-      };
-    } else {
-      // buildGeminiFilePart sends small files inline and automatically
-      // routes large ones through Gemini's Files API instead, so re-asking
-      // a question works the same regardless of source file size.
-      filePart = await buildGeminiFilePart(sourceFile, apiKey, mimeType);
-      requestBody = {
-        contents: [{ parts: [filePart, { text: reaskPrompt }] }],
-        generationConfig: { responseMimeType: 'application/json',
- temperature: 0, maxOutputTokens: 4096 }
-      };
-    }
-
-    const data = await callGeminiWithRetry(url, requestBody, {});
-    const textOut = ((data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || []).map(p => p.text || '').join('');
-    if (!textOut.trim()) throw new Error('AI returned empty response.');
-    const parsed = JSON.parse(textOut);
-    if (!Array.isArray(parsed) || !parsed.length) throw new Error('No question returned.');
-
-    const newQ = parsed[0];
-    const opts = {};
-    Object.entries(newQ.options || {})
-      .filter(([k, v]) => typeof v === 'string' && v.trim())
-      .sort(([a], [b]) => a.toUpperCase().localeCompare(b.toUpperCase()))
-      .forEach(([k, v]) => { opts[k.toUpperCase()] = v; });
-    let answer = (typeof newQ.answer === 'string') ? newQ.answer.trim().toUpperCase() : '';
-    if (!opts[answer]) answer = Object.keys(opts)[0];
-
-    // Preserve existing image
-    const oldImage    = cqGeneratedQuestions[idx].image;
-    const oldHasImage = cqGeneratedQuestions[idx].has_image;
-    cqGeneratedQuestions[idx] = {
-      question: newQ.question,
-      options: opts,
-      optionsOrder: Object.entries(opts).map(([key, value]) => ({ key, value })),
-      answer,
-      has_image: !!newQ.has_image || oldHasImage,
-      image: oldImage,
-      _sourceFile: sourceFile
-    };
-
-    // If new extraction says has_image and no image yet, try to extract it
-    if (newQ.has_image && !oldImage) {
-      if (statusEl) statusEl.innerHTML = `<div class="cq-status info" style="padding:7px 11px;font-size:.8rem;"><div class="cq-spinner"></div> Extracting image…</div>`;
-      await extractImagesForQuestions([cqGeneratedQuestions[idx]], sourceFile, apiKey, filePart);
-    }
-
-    renderCQPreview();
-    // Scroll to updated question
-    setTimeout(() => {
-      const el = document.getElementById(`cqQ_${idx}`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const st = document.getElementById(`cqReaskStatus_${idx}`);
-      if (st) { st.innerHTML = `<div class="cq-status success" style="padding:7px 11px;font-size:.8rem;">✅ Q${idx+1} updated by AI</div>`; setTimeout(() => { if(st) st.innerHTML=''; }, 3000); }
-    }, 80);
-
-  } catch(e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error" style="padding:7px 11px;font-size:.8rem;">❌ ${escapeHtml(e.message || String(e))}</div>`;
-  }
 }
 
 function discardGeneratedQuiz() {
