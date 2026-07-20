@@ -731,8 +731,8 @@
         display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
       }
       .subj-stat-name {
-        font-weight: 700; font-size: .83rem; min-width: 100px;
-        color: var(--text-main); white-space: nowrap;
+        font-weight: 700; font-size: .83rem; min-width: 70px; max-width: 100px; flex-shrink: 0;
+        color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
       .subj-bar-wrap {
         flex: 1; background: #E3F2FD; border-radius: 4px; height: 12px; overflow: hidden;
@@ -745,10 +745,11 @@
       .subj-quizzes { font-size: .75rem; color: var(--text-muted); min-width: 48px; text-align: right; }
       .history-list { display: flex; flex-direction: column; gap: 7px; }
       .history-item {
-        display: flex; align-items: center; justify-content: space-between;
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
         background: #F7FBFF; border: 1px solid #D8EAF7;
         border-radius: 8px; padding: 10px 14px;
       }
+      .history-item > div:first-child { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
       .h-subject { font-weight: 700; font-size: .88rem; color: var(--text-main); }
       .h-lecture { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
       .h-score { font-weight: 800; font-size: 1rem; white-space: nowrap; margin-left: 10px; }
@@ -777,7 +778,7 @@
       @media (max-width: 600px) {
         .stats-grid { grid-template-columns: repeat(3, 1fr); }
         .stat-tile .stat-val { font-size: 1.1rem; }
-        .subj-stat-name { min-width: 70px; font-size: .75rem; }
+        .subj-stat-name { min-width: 56px; max-width: 74px; font-size: .75rem; }
       }
 /* ── CUSTOM QUIZZES (AI) ── */
 .cq-section {
@@ -1496,6 +1497,10 @@
   background: #fff; border: 1.5px solid #B3E5FC; border-radius: 8px;
   padding: 4px 8px; gap: 6px; font-size: .78rem; font-weight: 700; color: var(--accent);
 }
+.ai-chat-pending-item { max-width: 100%; }
+.ai-chat-pending-item > span {
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .ai-chat-pending-item img { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
 .ai-chat-pending-item button {
   background: #C62828; color: #fff; border: none; border-radius: 50%;
@@ -1621,11 +1626,11 @@
 .admin-assigned-section { margin-top: 4px; }
 .admin-assigned-title { font-size: .8rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
 .admin-assigned-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
   background: #F7FBFF; border: 1px solid #D8EAF7; border-radius: 8px;
   padding: 10px 14px; margin-bottom: 7px;
 }
-.admin-assigned-info { flex: 1; }
+.admin-assigned-info { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
 .admin-assigned-name { font-weight: 700; font-size: .88rem; color: var(--text-main); }
 .admin-assigned-path { font-size: .74rem; color: var(--text-muted); margin-top: 2px; }
 .admin-remove-btn {
