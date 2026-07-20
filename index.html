@@ -1744,6 +1744,7 @@
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   background: #F7FBFF; border: 2px solid #D8EAF7; border-radius: 10px;
   padding: 12px 14px; transition: border-color .15s, box-shadow .15s;
+  min-width: 0;
 }
 .apikey-item.active {
   border-color: var(--apikey-color, var(--accent));
@@ -1756,8 +1757,8 @@
   display: flex; align-items: center; justify-content: center;
   font-weight: 800; font-size: .85rem;
 }
-.apikey-info { flex: 1 1 160px; min-width: 160px; display: flex; flex-direction: column; gap: 3px; }
-.apikey-label-row { display: flex; align-items: center; gap: 8px; }
+.apikey-info { flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.apikey-label-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .apikey-label-input {
   border: none; background: transparent; font-weight: 800; font-size: .92rem;
   color: var(--text-main); font-family: var(--font); padding: 2px 4px; border-radius: 4px;
@@ -1766,7 +1767,7 @@
 .apikey-label-input:focus { background: #EEF7FF; outline: none; }
 .apikey-label-display {
   font-weight: 800; font-size: .92rem; color: var(--text-main);
-  padding: 2px 4px; min-width: 0;
+  padding: 2px 4px; min-width: 0; overflow-wrap: anywhere;
 }
 .apikey-active-chip {
   font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
@@ -1775,7 +1776,9 @@
 }
 .apikey-masked {
   font-size: .78rem; color: var(--text-muted); font-family: monospace; letter-spacing: .5px;
+  min-width: 0; overflow-wrap: anywhere; word-break: break-all;
 }
+.apikey-masked-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .apikey-item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; margin-left: auto; }
 .apikey-item-actions button {
   border: none; border-radius: 7px; cursor: pointer; font-family: var(--font);
@@ -1828,6 +1831,11 @@
   .apikey-item { padding: 12px; }
   .apikey-info { flex-basis: 100%; min-width: 0; }
   .apikey-item-actions { flex-basis: 100%; margin-left: 0; justify-content: flex-end; }
+}
+@media (max-width: 360px) {
+  .apikey-item-actions { justify-content: stretch; }
+  .apikey-item-actions button { flex: 1 1 auto; justify-content: center; }
+  .apikey-edit-actions button { flex: 1 1 auto; justify-content: center; }
 }
   </style>
 </head>
@@ -3569,7 +3577,8 @@ function updateApiKeyValue(id, newKey) {
 function maskApiKey(key) {
   if (!key) return '';
   if (key.length <= 8) return '•'.repeat(key.length);
-  return key.slice(0, 4) + '•'.repeat(Math.max(4, key.length - 8)) + key.slice(-4);
+  const dots = Math.min(12, Math.max(4, key.length - 8));
+  return key.slice(0, 4) + '•'.repeat(dots) + key.slice(-4);
 }
 
 /* Small "🔑 API" button shown under each reviewed question, for quick
@@ -3627,38 +3636,29 @@ function apiKeyLabelChanged(id, value) {
   renameApiKey(id, value);
 }
 
-/* Verifies a Gemini API key actually works before it's saved, using a
-   lightweight models-list call (no generation quota consumed). */
-async function _validateGeminiApiKey(key) {
-  try {
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
-    if (resp.ok) return { valid: true };
-    let msg = 'This key was rejected by Google — please check it and try again.';
-    try {
-      const data = await resp.json();
-      if (data && data.error && data.error.message) msg = data.error.message;
-    } catch (e) {}
-    return { valid: false, error: msg };
-  } catch (e) {
-    return { valid: false, error: "Couldn't reach Google's API to verify this key — check your connection and try again." };
-  }
+/* Checks that a pasted key at least looks like a Gemini/Google AI Studio
+   API key, WITHOUT making any network call to Google. This is a format-only
+   guard: its purpose is to stop keys from other AI providers (OpenAI,
+   Anthropic, etc.) from being saved as if they were Gemini keys — this app
+   only ever talks to the Gemini API, so no other provider's key can work
+   here regardless of what checks are added. */
+function _isValidGeminiApiKeyFormat(key) {
+  // Google AI Studio keys are of the form "AIza" followed by 35 more
+  // URL-safe characters (39 chars total). Reject anything that doesn't
+  // match this shape — including keys from other providers, which use
+  // different, recognizably different prefixes (sk-, sk-ant-, etc).
+  return /^AIza[0-9A-Za-z_-]{35}$/.test(key);
 }
 
-async function submitNewApiKey() {
+function submitNewApiKey() {
   const valueInp = document.getElementById('apikeyValueInput');
   const statusEl = document.getElementById('apikeyAddStatus');
-  const btn      = document.getElementById('apikeyAddBtn');
   const key = (valueInp ? valueInp.value : '').trim();
   if (!key) { if (valueInp) valueInp.style.borderColor = '#C62828'; return; }
 
-  if (btn) btn.disabled = true;
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Verifying key with Google…</div>`;
-
-  const result = await _validateGeminiApiKey(key);
-  if (!result.valid) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(result.error)}</div>`;
+  if (!_isValidGeminiApiKeyFormat(key)) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ That doesn't look like a Gemini API key — it should start with "AIza". Only Gemini keys are supported.</div>`;
     if (valueInp) valueInp.style.borderColor = '#C62828';
-    if (btn) btn.disabled = false;
     return;
   }
 
@@ -3685,21 +3685,15 @@ function cancelEditApiKey() {
   _apiKeyEditingId = null;
   renderApiKeyManager();
 }
-async function submitEditApiKey(id) {
+function submitEditApiKey(id) {
   const inp      = document.getElementById('apikeyEditInput_' + id);
   const statusEl = document.getElementById('apikeyEditStatus_' + id);
-  const btn      = document.getElementById('apikeyEditSaveBtn_' + id);
   const newKey = (inp ? inp.value : '').trim();
   if (!newKey) { if (inp) inp.style.borderColor = '#C62828'; return; }
 
-  if (btn) btn.disabled = true;
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Verifying key with Google…</div>`;
-
-  const result = await _validateGeminiApiKey(newKey);
-  if (!result.valid) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(result.error)}</div>`;
+  if (!_isValidGeminiApiKeyFormat(newKey)) {
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ That doesn't look like a Gemini API key — it should start with "AIza". Only Gemini keys are supported.</div>`;
     if (inp) inp.style.borderColor = '#C62828';
-    if (btn) btn.disabled = false;
     return;
   }
 
@@ -3744,7 +3738,7 @@ function renderApiKeyManager() {
       <li>Click <strong>"Create API key"</strong> (choose or create a project if asked)</li>
       <li>Copy the generated key and paste it below</li>
     </ol>
-    You can add several keys — e.g. one per Google account — and switch between them any time. Your keys are saved only in this browser and are sent directly to Google's API, never through any other server.
+    You can add several keys — e.g. one per Google account — and switch between them any time. Your keys are saved only in this browser and are sent directly to Google's API, never through any other server. Only Gemini API keys are supported.
   </div>`;
 
   html += `<div class="apikey-list">`;
@@ -3769,11 +3763,11 @@ function renderApiKeyManager() {
           </div>
           <div id="apikeyEditStatus_${k.id}"></div>
           <div class="apikey-edit-actions">
-            <button class="apikey-use-btn" id="apikeyEditSaveBtn_${k.id}" onclick="submitEditApiKey('${k.id}')" type="button">✅ Verify &amp; Save</button>
+            <button class="apikey-use-btn" id="apikeyEditSaveBtn_${k.id}" onclick="submitEditApiKey('${k.id}')" type="button">💾 Save</button>
             <button class="apikey-view-btn" onclick="cancelEditApiKey()" type="button">Cancel</button>
           </div>
           ` : `
-          <div style="display:flex;align-items:center;gap:6px;">
+          <div class="apikey-masked-row">
             <span class="apikey-masked" id="apikeyMasked_${k.id}" data-shown="0">${maskApiKey(k.key)}</span>
             <button class="apikey-view-btn" style="padding:2px 6px;font-size:.7rem;" onclick="toggleApiKeyVisibility(this,'${k.id}')" type="button">👁</button>
           </div>
@@ -3795,13 +3789,13 @@ function renderApiKeyManager() {
   html += `<div class="apikey-add-form" id="apiKeyAddForm" data-color="${nextColor}">
     <div class="cq-section-title" style="margin-bottom:0;">➕ Add a New API Key</div>
     <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;">
-      Its name and colour are assigned automatically — just paste the key below. We'll verify it with Google before saving.
+      Its name and colour are assigned automatically — just paste your Gemini key below.
     </div>
     <div class="apikey-add-row">
       <input type="password" id="apikeyValueInput" placeholder="Paste your Gemini API key here" oninput="this.style.borderColor='#B0D4F0'" style="flex:1;min-width:180px;" />
     </div>
     <div id="apikeyAddStatus"></div>
-    <button class="cq-btn" id="apikeyAddBtn" onclick="submitNewApiKey()" type="button">💾 Verify &amp; Save Key</button>
+    <button class="cq-btn" id="apikeyAddBtn" onclick="submitNewApiKey()" type="button">💾 Save Key</button>
   </div>`;
 
   body.innerHTML = html;
