@@ -4190,10 +4190,8 @@ function renderApiKeyManager() {
     <div>
       <strong>🔁 Smart API Rotation</strong> ${rotationOn ? '<span class="apikey-active-chip">On</span>' : ''}
       <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;margin-top:2px;">
-        When on, every AI feature in the app automatically hands off to your next saved key instead of stalling —
-        after enough retries to be sure a key is genuinely rate limited (⏳), or immediately if a key is rejected as invalid (🚫).
-        Keys you add while something is running are picked up right away. If every key is rate limited or unusable,
-        you'll get a tip to add another key or wait.
+        Auto-switches to your next saved key when one gets rate limited (⏳) or rejected (🚫), instead of stalling. Adds a tip if every key runs out.
+        <br><em>Note: toggling this takes effect on the next request — a job already running finishes with whatever setting it started with.</em>
       </div>
     </div>
   </div>`;
