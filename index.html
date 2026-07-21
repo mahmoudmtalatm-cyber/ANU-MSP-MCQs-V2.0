@@ -6,21 +6,11 @@
   <title>ANU MSP Question Bank</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230A3F52'/%3E%3Ccircle cx='36' cy='54' r='16' fill='none' stroke='%236FE3F0' stroke-width='11'/%3E%3Cpath d='M46 65 L58 78' fill='none' stroke='%236FE3F0' stroke-width='11' stroke-linecap='round'/%3E%3Cpath d='M66 30 L66 74' fill='none' stroke='%236FE3F0' stroke-width='11' stroke-linecap='round'/%3E%3Cpath d='M66 30 L78 30 A11 10 0 0 1 78 50 L66 50' fill='none' stroke='%236FE3F0' stroke-width='11'/%3E%3Cpath d='M66 50 L80 50 A12 12 0 0 1 80 74 L66 74' fill='none' stroke='%236FE3F0' stroke-width='11'/%3E%3C/svg%3E" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&display=swap" rel="stylesheet" />
-  <script>
-    (function () {
-      try {
-        var saved = localStorage.getItem('meridian-theme');
-        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.setAttribute('data-theme', theme);
-      } catch (e) {
-        document.documentElement.setAttribute('data-theme', 'light');
-      }
-    })();
-  </script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root, [data-theme="light"] {
+    :root {
       /* ── Meridian design system — Day ── */
       --bg-main:        #E9EEF4;
       --bg-card:        #FFFFFF;
@@ -86,74 +76,7 @@
       color-scheme: light;
     }
 
-    [data-theme="dark"] {
-      /* ── Meridian design system — Night ── */
-      --bg-main:        #0A1017;
-      --bg-card:        #121B24;
-      --card:           #121B24;
-      --surface-2:      #16212B;
-      --surface-2-hover:#1C2934;
-      --surface-3:      #182430;
-      --border-soft:    #253645;
-      --border:         #253645;
-      --border-soft-2:  #1F303D;
 
-      --accent:         #35B4C7;
-      --accent-dark:    #1E8A9C;
-      --accent-glow:    #6FE3F0;
-      --accent-soft:    rgba(53,180,199,.16);
-      --gold:           #D8B36B;
-      --gold-bright:    #EACB8C;
-
-      --nav-default:    #2A3B48;
-      --nav-answered:   #2E8FA3;
-      --nav-marked:     #C24B5B;
-      --nav-current:    #6FE3F0;
-
-      --text-main:      #E7EEF3;
-      --text:           #E7EEF3;
-      --text-muted:     #8FA5B6;
-
-      --correct-bg:     #16302A;
-      --correct-fg:     #5FCB9B;
-      --wrong-bg:       #331C1E;
-      --wrong-fg:       #E38080;
-      --unanswered-bg:  #332A18;
-      --unanswered-fg:  #E3B25F;
-
-      --violet:         #A793D6;
-      --violet-dark:    #8A70C4;
-      --violet-darkest: #6C579E;
-      --violet-strong:  #9B7FD4;
-      --violet-pale:    #241B38;
-      --violet-pale-2:  #2A2040;
-      --violet-border:  #5B4785;
-      --violet-mid-border: #4E3D75;
-
-      --red-soft-border:#5C3436;
-      --red-pale:       #3A2224;
-      --red-deep:       #E38080;
-      --green-pale-border:#2E4A3B;
-      --green-mid:      #5FB683;
-      --chip-blue-bg:   #1C2C3A;
-      --amber-pale:     #362C19;
-      --amber-mid:      #E3B25F;
-      --amber-strong:   #D9A25F;
-      --amber-glow:     #E7B65C;
-      --blue-pale:      #1C2E38;
-      --slate:          #7C93A2;
-
-      --shadow-ambient: rgba(0, 0, 0, .45);
-      --sigil-line:     rgba(111,227,240,.55);
-      --carved-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%2335B4C7' stroke-width='1' opacity='.14'%3E%3Cpath d='M0 60 L60 0 L120 60 L60 120 Z'/%3E%3Cpath d='M60 0 L60 120 M0 60 L120 60'/%3E%3Ccircle cx='60' cy='60' r='19'/%3E%3Ccircle cx='60' cy='60' r='3'/%3E%3C/g%3E%3C/svg%3E");
-      color-scheme: dark;
-    }
-
-    html { transition: background-color .35s ease; }
-    body, .header, .card, .q-card, #home, #quiz, #results,
-    .home-hero, .home-footer, .navigator-wrap {
-      transition: background-color .35s ease, border-color .35s ease, color .35s ease;
-    }
 
     /* ── CARVED / AMBIENT SURFACE MOTIF ──
        Recessed line-engraving texture with a slow travelling sheen.
@@ -191,7 +114,7 @@
     #introScreen {
       position: fixed; inset: 0; z-index: 100000;
       display: flex; align-items: center; justify-content: center;
-      background: radial-gradient(circle at 50% 42%, #123043 0%, #060D13 78%);
+      background: radial-gradient(circle at 50% 42%, #E9EEF4 0%, #D3E0EA 78%);
       clip-path: circle(150% at 50% 50%);
       opacity: 1;
       transition: clip-path .7s cubic-bezier(.65,0,.35,1), opacity .5s ease .2s;
@@ -200,25 +123,25 @@
     .intro-inner { display: flex; flex-direction: column; align-items: center; gap: 20px; }
     #introSigilSvg { width: 156px; height: 156px; overflow: visible; }
     .sigil-path {
-      stroke: #6FE3F0;
+      stroke: #0E6E82;
       fill: none;
       stroke-linecap: round;
       stroke-dasharray: 1;
       stroke-dashoffset: 1;
       animation: sigilDraw .9s cubic-bezier(.4,0,.2,1) forwards;
     }
-    .sigil-ring     { stroke-width: .9; opacity: .5; animation-delay: 0s; }
-    .sigil-q        { stroke-width: 2.1; opacity: 1; animation-delay: .2s; }
-    .sigil-q-tail   { stroke-width: 2.1; opacity: 1; stroke-linecap: round; animation-delay: .55s; }
-    .sigil-b-stem   { stroke-width: 2.1; opacity: 1; stroke-linecap: round; animation-delay: .3s; }
-    .sigil-b-upper  { stroke-width: 2.1; opacity: 1; animation-delay: .45s; }
-    .sigil-b-lower  { stroke-width: 2.1; opacity: 1; animation-delay: .6s; }
+    .sigil-ring     { stroke-width: 1.4; opacity: .7; animation-delay: 0s; }
+    .sigil-q        { stroke-width: 3.2; opacity: 1; animation-delay: .2s; }
+    .sigil-q-tail   { stroke-width: 3.2; opacity: 1; stroke-linecap: round; animation-delay: .55s; }
+    .sigil-b-stem   { stroke-width: 3.2; opacity: 1; stroke-linecap: round; animation-delay: .3s; }
+    .sigil-b-upper  { stroke-width: 3.2; opacity: 1; animation-delay: .45s; }
+    .sigil-b-lower  { stroke-width: 3.2; opacity: 1; animation-delay: .6s; }
     .sigil-pulse-ring {
-      fill: none; stroke: #6FE3F0; stroke-width: 1;
+      fill: none; stroke: #0E6E82; stroke-width: 1.2;
       opacity: 0; transform-origin: 50px 50px;
     }
     .sigil-ring-spin {
-      fill: none; stroke: #6FE3F0; stroke-width: .8;
+      fill: none; stroke: #0E6E82; stroke-width: 1.1;
       stroke-dasharray: 3 7; opacity: 0; transform-origin: 50px 50px;
       transition: opacity .5s ease;
     }
@@ -233,7 +156,7 @@
       100% { opacity: 0; transform: scale(1.55); }
     }
     #introSigilSvg.sigil-glow {
-      filter: drop-shadow(0 0 8px rgba(111,227,240,.85)) drop-shadow(0 0 26px rgba(111,227,240,.45));
+      filter: drop-shadow(0 0 8px rgba(14,110,130,.65)) drop-shadow(0 0 26px rgba(14,110,130,.35));
       animation: sigilPulse 1s ease-in-out;
     }
     #introSigilSvg.sigil-glow .sigil-pulse-ring {
@@ -258,7 +181,7 @@
     .intro-word-main {
       display: block; font-family: var(--font-display);
       font-size: 1.05rem; font-weight: 600; letter-spacing: 2.5px;
-      color: #F2F8FA; max-width: 260px;
+      color: #0A3F52; max-width: 260px;
     }
     @media (prefers-reduced-motion: reduce) {
       #introScreen { transition: opacity .3s ease; clip-path: none !important; }
@@ -328,35 +251,6 @@
     .timer.urgent { color: #FF6B6B; animation: pulse 1s ease-in-out infinite; text-shadow: 0 0 14px rgba(255,107,107,.55); }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.55} }
 
-    /* ── THEME TOGGLE ── */
-    .theme-toggle {
-      position: relative;
-      width: 46px; height: 26px;
-      border-radius: 20px;
-      border: 1.5px solid rgba(255,255,255,.4);
-      background: rgba(0,0,0,.18);
-      cursor: pointer;
-      flex-shrink: 0;
-      display: inline-flex; align-items: center;
-      padding: 2px;
-      transition: background .25s, border-color .25s;
-    }
-    .theme-toggle:hover { border-color: rgba(255,255,255,.7); }
-    .theme-toggle .tt-knob {
-      width: 20px; height: 20px; border-radius: 50%;
-      background: #fff;
-      display: flex; align-items: center; justify-content: center;
-      transform: translateX(0);
-      transition: transform .3s cubic-bezier(.4,0,.2,1);
-      box-shadow: 0 1px 4px rgba(0,0,0,.35);
-    }
-    [data-theme="dark"] .theme-toggle .tt-knob { transform: translateX(20px); background: var(--nav-current); }
-    .theme-toggle svg { width: 13px; height: 13px; }
-    .theme-toggle .tt-sun { color: #C98D1F; }
-    .theme-toggle .tt-moon { color: var(--accent-glow); display: none; }
-    [data-theme="dark"] .theme-toggle .tt-sun { display: none; }
-    [data-theme="dark"] .theme-toggle .tt-moon { display: block; color: #0A1017; }
-
     /* ── HOME SCREEN ── */
     #home { flex: 1; display: flex; flex-direction: column; }
     .home-hero {
@@ -374,7 +268,6 @@
     }
     .home-hero h1 .brand-mark { width: 38px; height: 38px; }
     .home-hero p { font-size: 1rem; opacity: .82; margin-top: 8px; letter-spacing: .1px; }
-    .home-hero .theme-toggle { position: absolute; top: 18px; right: 20px; }
 
     .home-footer {
       background: linear-gradient(120deg, var(--accent-dark), var(--nav-current));
@@ -426,7 +319,6 @@
       box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 10px 34px var(--shadow-ambient);
       position: relative;
     }
-    [data-theme="dark"] .card { box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 10px 34px var(--shadow-ambient); }
 
     .field-label {
       font-size: .82rem; font-weight: 700;
@@ -2131,7 +2023,7 @@
 .apikey-item.active {
   border-color: var(--apikey-color, var(--accent));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--apikey-color, var(--accent)) 18%, transparent);
-  background: #FFFFFF;
+  background: var(--bg-card);
 }
 .apikey-num {
   width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
@@ -2169,8 +2061,13 @@
 }
 .apikey-item-actions button:hover { filter: brightness(1.08); }
 .apikey-use-btn { background: var(--apikey-color, var(--accent)); color: #fff; }
-.apikey-use-btn:disabled { opacity: .55; cursor: default; }
-.apikey-view-btn { background: #ECEFF1; color: var(--text-main); }
+button.apikey-use-btn:disabled {
+  opacity: 1; cursor: default;
+  background: color-mix(in srgb, var(--apikey-color, var(--accent)) 20%, transparent);
+  color: var(--apikey-color, var(--accent));
+  border: 1.5px solid var(--apikey-color, var(--accent));
+}
+button.apikey-view-btn { background: var(--surface-2-hover); color: var(--text-main); border: 1.5px solid var(--border-soft); }
 .apikey-edit-btn { background: var(--violet-pale); color: var(--violet-dark); }
 .apikey-del-btn { background: var(--wrong-bg); color: var(--wrong-fg); }
 .apikey-edit-row { margin-top: 4px; }
@@ -2290,13 +2187,7 @@
     }, 2000);
   })();
 
-  // ── Day / night theme toggle ──
-  function toggleMeridianTheme() {
-    var root = document.documentElement;
-    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    try { localStorage.setItem('meridian-theme', next); } catch (e) {}
-  }
+
 </script>
 
 <!-- FIRESTORE LOADING TOAST -->
@@ -2435,12 +2326,6 @@
   ══════════════════════════════════════════════ -->
   <div id="home">
     <div class="home-hero carved-surface">
-      <button class="theme-toggle" type="button" onclick="toggleMeridianTheme()" aria-label="Toggle day/night mode" title="Toggle day/night mode">
-        <span class="tt-knob">
-          <svg class="tt-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>
-          <svg class="tt-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/></svg>
-        </span>
-      </button>
       <h1>
         <svg class="brand-mark" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="50" cy="50" r="44" stroke-width="1.2" opacity=".35"/>
@@ -2565,12 +2450,6 @@
       <div id="authAreaQuiz" style="display:flex;align-items:center;gap:8px;"></div>
       <div style="display:flex;align-items:center;gap:14px;">
         <div class="timer" id="timerDisplay">00:00</div>
-        <button class="theme-toggle" type="button" onclick="toggleMeridianTheme()" aria-label="Toggle day/night mode" title="Toggle day/night mode">
-          <span class="tt-knob">
-            <svg class="tt-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>
-            <svg class="tt-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/></svg>
-          </span>
-        </button>
       </div>
     </div>
     <div class="quiz-body">
