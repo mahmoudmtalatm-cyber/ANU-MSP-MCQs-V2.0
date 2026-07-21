@@ -877,6 +877,12 @@
   animation: cqspin .8s linear infinite; flex-shrink: 0;
 }
 @keyframes cqspin { to { transform: rotate(360deg); } }
+.ai-btn-spinner {
+  display: inline-block; width: 11px; height: 11px; margin-right: 5px;
+  vertical-align: -1px; border-radius: 50%;
+  border: 2px solid rgba(0,0,0,.15); border-top-color: currentColor;
+  animation: cqspin .7s linear infinite;
+}
 .cq-quiz-item {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   background: #F7FBFF; border: 1px solid #D8EAF7; border-radius: 8px;
@@ -4986,11 +4992,14 @@ let cqLectureFiles      = []; // array of File — lecture material to generate 
 let cqCustomPrompt      = '';
 let cqQuestionCount     = '';
 
-// ── AI Answer for missing keys ──
-let cqAiAnswerToggle    = false;  // whether to let AI answer questions without a key
+// ── AI Answering (single menu: master switch + submenu picking exactly
+// one behavior — replaces the old separate "AI Answer Mode" / "AI Solve
+// All" toggles, which as two independent switches could be turned on
+// together and silently conflict) ──
+let cqAiAnsweringEnabled = false;    // master on/off for AI answering
+let cqAiAnswerSubmode   = 'missing'; // 'missing' (only fill no-key questions) | 'all' (solve/verify every question)
 let cqAiAnswerSource    = '';     // optional source text the AI should rely on
 let cqAiSourceFiles     = [];     // optional source images/PDFs (array of {base64, mimeType, name})
-let cqAiSolveAllToggle  = false;  // whether to also AI-solve questions that already have a key
 
 // ── Post-extraction AI polish (Refine Question / Fill Choices) ──
 // These reuse the exact same per-question AI tools available in the editor
@@ -5412,17 +5421,26 @@ function _aiToolsKey(editorKey, i) { return editorKey + '_' + i; }
    mutually exclusive per question (not per editor) — other questions, and
    other editors, are completely unaffected. */
 const _aiToolsBusy = {};
+// Tracks WHICH action is running per question (e.g. 'refine', 'fillChoices',
+// 'addChoice', 'solve') so the spinner can be shown on that one specific
+// button, while its siblings are merely disabled (see _aiToolsSyncButtons).
+const _aiToolsActiveAction = {};
 function _aiToolsIsBusy(editorKey, i) { return !!_aiToolsBusy[_aiToolsKey(editorKey, i)]; }
-function _aiToolsSetBusy(editorKey, i, busy) {
+function _aiToolsSetBusy(editorKey, i, busy, action) {
   const key = _aiToolsKey(editorKey, i);
-  if (busy) _aiToolsBusy[key] = true; else delete _aiToolsBusy[key];
-  _aiToolsSyncButtons(editorKey, i, busy);
+  if (busy) { _aiToolsBusy[key] = true; _aiToolsActiveAction[key] = action; }
+  else { delete _aiToolsBusy[key]; delete _aiToolsActiveAction[key]; }
+  _aiToolsSyncButtons(editorKey, i, busy, action);
 }
 /* Disables/enables every AI-tool button on this specific question card
    while a lock is held, so the user can see (and can't accidentally
    trigger) an overlapping action — success paths also re-render the whole
-   card, which naturally restores normal (enabled) buttons anyway. */
-function _aiToolsSyncButtons(editorKey, i, busy) {
+   card, which naturally restores normal (enabled) buttons anyway.
+   Additionally, whichever button actually triggered this run gets a small
+   spinning circle inserted into it (via `action`), so it's obvious AT A
+   GLANCE which of the several AI tools is the one currently working —
+   the other, merely-disabled buttons stay plain. */
+function _aiToolsSyncButtons(editorKey, i, busy, action) {
   const ids = [
     `aiRefineBtn_${editorKey}_${i}`,
     `aiCustomBtn_${editorKey}_${i}`,
@@ -5434,6 +5452,24 @@ function _aiToolsSyncButtons(editorKey, i, busy) {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
+
+  // Which button id corresponds to which action name.
+  const idMap = {
+    refine:      `aiRefineBtn_${editorKey}_${i}`,
+    addChoice:   `aiAddChoiceBtn_${editorKey}_${i}`,
+    fillChoices: `aiFillChoicesBtn_${editorKey}_${i}`,
+    solve:       `cqAiSolveBtn_${i}`
+  };
+  const activeId = action && idMap[action];
+  const activeEl = activeId && document.getElementById(activeId);
+  if (activeEl) {
+    const existingSpinner = activeEl.querySelector('.ai-btn-spinner');
+    if (busy && !existingSpinner) {
+      activeEl.insertAdjacentHTML('afterbegin', '<span class="ai-btn-spinner"></span>');
+    } else if (!busy && existingSpinner) {
+      existingSpinner.remove();
+    }
+  }
 }
 function _aiToolsStatusEl(editorKey, i) {
   return document.getElementById(`aiToolsStatus_${editorKey}_${i}`);
@@ -5594,7 +5630,7 @@ async function aiRefineQuestion(editorKey, i) {
   if (!apiKey) return;
 
   const custom = (_aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] || '').trim();
-  _aiToolsSetBusy(editorKey, i, true);
+  _aiToolsSetBusy(editorKey, i, true, 'refine');
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🪄 Refining question…'));
 
   try {
@@ -5603,7 +5639,7 @@ async function aiRefineQuestion(editorKey, i) {
   } catch (e) {
     _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not refine this question.'));
   } finally {
-    _aiToolsSetBusy(editorKey, i, false);
+    _aiToolsSetBusy(editorKey, i, false, 'refine');
   }
 }
 
@@ -5678,7 +5714,7 @@ async function aiFillChoices(editorKey, i) {
   // option is marked correct, only add new (incorrect) distractor text.
   const answerBefore = q.answer;
 
-  _aiToolsSetBusy(editorKey, i, true);
+  _aiToolsSetBusy(editorKey, i, true, 'fillChoices');
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(`🧩 Filling ${missing.length} more choice${missing.length !== 1 ? 's' : ''}…`));
 
   try {
@@ -5696,7 +5732,7 @@ async function aiFillChoices(editorKey, i) {
   } catch (e) {
     _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate choices.'));
   } finally {
-    _aiToolsSetBusy(editorKey, i, false);
+    _aiToolsSetBusy(editorKey, i, false, 'fillChoices');
   }
 }
 
@@ -5730,7 +5766,7 @@ async function aiAddChoice(editorKey, i) {
   // which option is marked correct, only append one new (incorrect) option.
   const answerBefore = q.answer;
 
-  _aiToolsSetBusy(editorKey, i, true);
+  _aiToolsSetBusy(editorKey, i, true, 'addChoice');
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is writing a new choice…'));
 
   try {
@@ -5745,7 +5781,7 @@ async function aiAddChoice(editorKey, i) {
   } catch (e) {
     _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate a new choice.'));
   } finally {
-    _aiToolsSetBusy(editorKey, i, false);
+    _aiToolsSetBusy(editorKey, i, false, 'addChoice');
   }
 }
 
@@ -6253,49 +6289,78 @@ function renderCustomQuizModal() {
       </div>
       <input type="file" id="cqFileInput" accept="image/*,application/pdf" multiple style="display:none;" onchange="handleCQFileSelect(event)" />
 
-      <!-- AI Answer Mode toggle -->
-      <div style="margin:10px 0 4px;padding:12px 14px;background:${cqAiAnswerToggle ? '#EDE7F6' : 'var(--card)'};border:1.5px solid ${cqAiAnswerToggle ? '#9C27B0' : 'var(--border)'};border-radius:10px;transition:all .2s;">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:200px;">
-            <div style="position:relative;width:42px;height:24px;flex-shrink:0;">
-              <input type="checkbox" id="cqAiAnswerToggleChk" ${cqAiAnswerToggle ? 'checked' : ''}
-                onchange="cqAiAnswerToggle = this.checked; renderCustomQuizModal()"
-                style="opacity:0;width:0;height:0;position:absolute;" />
-              <span style="position:absolute;inset:0;border-radius:24px;background:${cqAiAnswerToggle ? '#9C27B0' : '#ccc'};transition:background .2s;"></span>
-              <span style="position:absolute;top:3px;left:${cqAiAnswerToggle ? '21px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
-            </div>
-            <div>
-              <div style="font-size:.82rem;font-weight:800;color:${cqAiAnswerToggle ? '#6A1B9A' : 'var(--text)'};letter-spacing:.2px;">
-                🤖 AI Answer Mode
-              </div>
-              <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
-                When enabled, Gemini AI will automatically answer any questions that have no answer key in the PDF
-              </div>
-            </div>
-          </label>
-        </div>
-      </div>
-
-      <!-- AI Solve All toggle -->
-      <div style="margin:8px 0 4px;padding:11px 14px;background:${cqAiSolveAllToggle ? '#E8F5E9' : 'var(--card)'};border:1.5px solid ${cqAiSolveAllToggle ? '#388E3C' : 'var(--border)'};border-radius:10px;transition:all .2s;">
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+      <!-- AI Answering — single menu (master switch) + submenu (exactly one
+           behavior), so it's never ambiguous which one is actually active.
+           The Reference Source card sits directly below it since both
+           submenu options use it. -->
+      <div style="margin:10px 0 4px;padding:12px 14px;background:${cqAiAnsweringEnabled ? '#EDE7F6' : 'var(--card)'};border:1.5px solid ${cqAiAnsweringEnabled ? '#9C27B0' : 'var(--border)'};border-radius:10px;transition:all .2s;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
           <div style="position:relative;width:42px;height:24px;flex-shrink:0;">
-            <input type="checkbox" ${cqAiSolveAllToggle ? 'checked' : ''}
-              onchange="cqAiSolveAllToggle = this.checked; renderCustomQuizModal()"
+            <input type="checkbox" id="cqAiAnsweringChk" ${cqAiAnsweringEnabled ? 'checked' : ''}
+              onchange="cqAiAnsweringEnabled = this.checked; renderCustomQuizModal()"
               style="opacity:0;width:0;height:0;position:absolute;" />
-            <span style="position:absolute;inset:0;border-radius:24px;background:${cqAiSolveAllToggle ? '#388E3C' : '#ccc'};transition:background .2s;"></span>
-            <span style="position:absolute;top:3px;left:${cqAiSolveAllToggle ? '21px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+            <span style="position:absolute;inset:0;border-radius:24px;background:${cqAiAnsweringEnabled ? '#9C27B0' : '#ccc'};transition:background .2s;"></span>
+            <span style="position:absolute;top:3px;left:${cqAiAnsweringEnabled ? '21px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
           </div>
           <div>
-            <div style="font-size:.82rem;font-weight:800;color:${cqAiSolveAllToggle ? '#1B5E20' : 'var(--text)'};letter-spacing:.2px;">
-              ✅ AI Solve All Questions
+            <div style="font-size:.82rem;font-weight:800;color:${cqAiAnsweringEnabled ? '#6A1B9A' : 'var(--text)'};letter-spacing:.2px;">
+              🤖 AI Answering
             </div>
             <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
-              AI will also verify/solve questions that already have an answer key — uses the reference source below
+              Let Gemini AI determine correct answers during extraction
             </div>
           </div>
         </label>
+
+        ${cqAiAnsweringEnabled ? `
+        <div style="margin:11px 0 0 8px;padding-left:14px;border-left:2.5px solid #CE93D8;display:flex;flex-direction:column;gap:8px;">
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+            <input type="radio" name="cqAiAnswerSubmodeRadio" value="missing" ${cqAiAnswerSubmode === 'missing' ? 'checked' : ''}
+              onchange="cqAiAnswerSubmode = 'missing'; renderCustomQuizModal()"
+              style="margin-top:3px;width:16px;height:16px;accent-color:#9C27B0;flex-shrink:0;" />
+            <div>
+              <div style="font-size:.78rem;font-weight:700;color:#6A1B9A;">🤖 Only answer questions missing a key</div>
+              <div style="font-size:.71rem;color:var(--text-muted);margin-top:1px;">Fills in an answer only for questions that have no answer key in the source document</div>
+            </div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+            <input type="radio" name="cqAiAnswerSubmodeRadio" value="all" ${cqAiAnswerSubmode === 'all' ? 'checked' : ''}
+              onchange="cqAiAnswerSubmode = 'all'; renderCustomQuizModal()"
+              style="margin-top:3px;width:16px;height:16px;accent-color:#9C27B0;flex-shrink:0;" />
+            <div>
+              <div style="font-size:.78rem;font-weight:700;color:#6A1B9A;">✅ Solve / verify all questions</div>
+              <div style="font-size:.71rem;color:var(--text-muted);margin-top:1px;">Re-solves every question, including ones that already have an answer key in the source</div>
+            </div>
+          </label>
+        </div>
+        ` : ''}
       </div>
+
+      <!-- Reference Source — directly below the AI Answering menu (both
+           submenu options rely on it), so there's no confusion about
+           which control it belongs to. -->
+      ${cqAiAnsweringEnabled ? `
+      <div style="margin:8px 0 4px;padding:12px 14px;background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;">
+        <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+          📚 Reference Source (optional) — paste text and/or upload images/PDFs the AI should use to answer
+        </div>
+        <textarea class="cq-textarea" id="cqAiSourceInput" rows="3"
+          placeholder="Paste lecture notes, textbook excerpt, or any reference text here…"
+          oninput="cqAiAnswerSource = this.value"
+          style="border-color:#CE93D8;margin-bottom:8px;">${escapeHtml(cqAiAnswerSource)}</textarea>
+        <div style="font-size:.73rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+          🖼️ Source Images / PDFs (optional) — upload diagrams, charts, or reference PDFs the AI can see
+        </div>
+        <div class="cq-dropzone cq-dz-purple" id="cqSourceDropzone" onclick="document.getElementById('cqSourceFileInput').click()">
+          <div class="cq-dz-icon">🖼️📄</div>
+          <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more reference images or PDFs</div>
+          ${cqAiSourceFiles.length ? _cqFileListHTML(cqAiSourceFiles, 'cqRemoveSourceFile', sf => sf.file) : ''}
+          ${cqAiSourceFiles.length ? `<div class="cq-dz-add-more">➕ Click again to add more files</div>` : ''}
+        </div>
+        <input type="file" id="cqSourceFileInput" accept="image/*,application/pdf" multiple style="display:none;"
+          onchange="handleCqSourceFileSelect(event)" />
+      </div>
+      ` : ''}
 
       <!-- Fill Choices toggle -->
       <div style="margin:8px 0 4px;padding:11px 14px;background:${cqFillChoicesToggle ? '#FFF3E0' : 'var(--card)'};border:1.5px solid ${cqFillChoicesToggle ? '#FFB74D' : 'var(--border)'};border-radius:10px;transition:all .2s;">
@@ -6355,7 +6420,7 @@ function renderCustomQuizModal() {
            otherwise conflict if fired at once. -->
       ${(() => {
         const steps = [
-          (cqAiAnswerToggle || cqAiSolveAllToggle) ? 'Solve/Answer' : null,
+          cqAiAnsweringEnabled ? 'Solve/Answer' : null,
           cqFillChoicesToggle ? 'Fill Choices' : null,
           cqRefineToggle ? 'Refine Questions' : null
         ].filter(Boolean);
@@ -6368,29 +6433,6 @@ function renderCustomQuizModal() {
       </div>`;
       })()}
 
-      <!-- Shared source input — shown when either AI toggle is on -->
-      ${(cqAiAnswerToggle || cqAiSolveAllToggle) ? `
-      <div style="margin:8px 0 4px;padding:12px 14px;background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;">
-        <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
-          📚 Reference Source (optional) — paste text and/or upload images/PDFs the AI should use to answer
-        </div>
-        <textarea class="cq-textarea" id="cqAiSourceInput" rows="3"
-          placeholder="Paste lecture notes, textbook excerpt, or any reference text here…"
-          oninput="cqAiAnswerSource = this.value"
-          style="border-color:#CE93D8;margin-bottom:8px;">${escapeHtml(cqAiAnswerSource)}</textarea>
-        <div style="font-size:.73rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
-          🖼️ Source Images / PDFs (optional) — upload diagrams, charts, or reference PDFs the AI can see
-        </div>
-        <div class="cq-dropzone cq-dz-purple" id="cqSourceDropzone" onclick="document.getElementById('cqSourceFileInput').click()">
-          <div class="cq-dz-icon">🖼️📄</div>
-          <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more reference images or PDFs</div>
-          ${cqAiSourceFiles.length ? _cqFileListHTML(cqAiSourceFiles, 'cqRemoveSourceFile', sf => sf.file) : ''}
-          ${cqAiSourceFiles.length ? `<div class="cq-dz-add-more">➕ Click again to add more files</div>` : ''}
-        </div>
-        <input type="file" id="cqSourceFileInput" accept="image/*,application/pdf" multiple style="display:none;"
-          onchange="handleCqSourceFileSelect(event)" />
-      </div>
-      ` : ''}
 
       <div class="cq-input-row">
         <input type="text" id="cqTitleInput" placeholder="Quiz title (e.g. 'Cardio Lecture 3')"
@@ -7329,13 +7371,13 @@ async function cqAiSolveOne(i) {
     _aiToolsSetStatus('cq', i, _aiToolsErrorHTML('Another AI action is already running on this question — please wait for it to finish.'));
     return;
   }
-  _aiToolsSetBusy('cq', i, true);
+  _aiToolsSetBusy('cq', i, true, 'solve');
   const statusEl = document.getElementById('cqReaskStatus_' + i);
   if (statusEl) statusEl.innerHTML = '<div class="cq-status info" style="font-size:.75rem;padding:5px 10px;"><div class="cq-spinner" style="width:12px;height:12px;border-width:2px;"></div> 🤖 AI is solving this question…</div>';
   try {
     await cqAiSolveQuestions(cqGeneratedQuestions, [i], cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
   } finally {
-    _aiToolsSetBusy('cq', i, false);
+    _aiToolsSetBusy('cq', i, false, 'solve');
   }
   if (statusEl) statusEl.innerHTML = '';
   renderCQPreview();
@@ -7511,12 +7553,12 @@ async function generateQuizFromAI() {
 
     // Handle questions without answer keys
     const noKeyQs = cleaned.filter(q => q.no_answer_key);
-    if (cqAiSolveAllToggle) {
+    if (cqAiAnsweringEnabled && cqAiAnswerSubmode === 'all') {
       // Solve ALL questions (including those with existing keys)
       const allIdxs = cleaned.map((_, i) => i);
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is solving all ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}… please wait.</div>`;
       await cqAiSolveQuestions(cleaned, allIdxs, cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
-    } else if (noKeyQs.length > 0 && cqAiAnswerToggle) {
+    } else if (cqAiAnsweringEnabled && cqAiAnswerSubmode === 'missing' && noKeyQs.length > 0) {
       // Solve only no-key questions
       statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> 🤖 AI is answering ${noKeyQs.length} question${noKeyQs.length !== 1 ? 's' : ''} without an answer key… please wait.</div>`;
       await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
@@ -7552,9 +7594,9 @@ async function generateQuizFromAI() {
     const noKeyCount  = noKeyQs.length;
     const aiCount     = cleaned.filter(q => q.ai_answered).length;
     const guessCount  = cleaned.filter(q => q.ai_guessed).length;
-    const solveNote   = cqAiSolveAllToggle && aiCount > 0
+    const solveNote   = cqAiAnsweringEnabled && cqAiAnswerSubmode === 'all' && aiCount > 0
       ? ` · 🤖 ${aiCount} AI-solved${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
-      : noKeyCount > 0 && cqAiAnswerToggle && aiCount > 0
+      : noKeyCount > 0 && cqAiAnsweringEnabled && cqAiAnswerSubmode === 'missing' && aiCount > 0
       ? ` · 🤖 ${aiCount} AI-answered${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
       : noKeyCount > 0 ? ` · ⚠️ ${noKeyCount} without key` : '';
     const fileNote   = cqSelectedFiles.length > 1 ? ` from ${cqSelectedFiles.length} files` : '';
@@ -7575,9 +7617,9 @@ async function generateQuizFromAI() {
         );
       }
     });
-    if (noKeyCount > 0 && !cqAiAnswerToggle && !cqAiSolveAllToggle) {
+    if (noKeyCount > 0 && !cqAiAnsweringEnabled) {
       statusEl.insertAdjacentHTML('beforeend',
-        `<div class="cq-status warning" style="margin-top:6px;">⚠️ ${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong>⚠️ No Key</strong> badge. You can set the correct answer manually, or enable <strong>🤖 AI Answer Mode</strong> before extracting to let AI answer them automatically.</div>`
+        `<div class="cq-status warning" style="margin-top:6px;">⚠️ ${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong>⚠️ No Key</strong> badge. You can set the correct answer manually, or enable <strong>🤖 AI Answering</strong> before extracting to let AI answer them automatically.</div>`
       );
     }
     if (guessCount > 0) {
