@@ -5127,7 +5127,7 @@ let cqQuestionCount     = '';
 // together and silently conflict) ──
 let cqAiAnsweringEnabled = false;    // master on/off for AI answering
 let cqAiAnswerSubmode   = 'missing'; // 'missing' (only fill no-key questions) | 'all' (solve/verify every question)
-let cqAiAnswerSource    = '';     // optional source text the AI should rely on
+let cqAiAnswerSource    = '';     // kept for compatibility with cqAiSolveQuestions' signature — always '' now that reference sources are files-only (no more paste-text UI)
 let cqAiSourceFiles     = [];     // optional source images/PDFs (array of {base64, mimeType, name})
 
 // ── Post-extraction AI polish (Refine Question / Fill Choices) ──
@@ -5307,7 +5307,7 @@ const _editorBulkBusy = { admin: false, customQuiz: false };
 // One cancel token per editor, live only while a bulk pass is running —
 // see _stopAllAiProcesses() and the menu-close guard (_guardedClose).
 const _editorBulkCancelToken = { admin: null, customQuiz: null };
-const _editorBulkAiSource = { admin: '', customQuiz: '' };
+const _editorBulkAiSourceFiles = { admin: [], customQuiz: [] };
 const _editorBulkRefineInstructions = { admin: '', customQuiz: '' };
 
 function _editorBulkStatusEl(editorKey) {
@@ -5366,14 +5366,21 @@ function _renderBulkAiToolsPanel(editorKey, questions) {
           ${busy ? 'disabled' : ''} onclick="_editorBulkAiSolve('${editorKey}')"
           style="background:#1565C0;color:#fff;">🤖 AI Solve All</button>
       </div>
-      <details class="cq-bulk-ai-opts">
+      <details class="cq-bulk-ai-opts" open>
         <summary>⚙️ AI Solve settings</summary>
         <div style="margin-top:8px;">
-          <div class="cq-bulk-ai-label">📚 Reference source — leave blank to answer from general knowledge</div>
-          <textarea class="cq-textarea" rows="2" id="${editorKey}BulkSourceInput" ${busy ? 'disabled' : ''}
-            oninput="_editorBulkAiSource['${editorKey}'] = this.value"
-            placeholder="Paste lecture notes or reference text (optional)…">${escapeHtml(_editorBulkAiSource[editorKey] || '')}</textarea>
-          <div class="cq-bulk-ai-scope">Used only by 🤖 AI Solve All — no effect on Fill Choices or Refine Questions.</div>
+          <div class="cq-bulk-ai-label">📚 Reference source (optional) — upload images/PDFs for the AI to use, or leave empty to answer from general knowledge</div>
+          <div class="cq-dropzone cq-dz-purple" id="${editorKey}BulkSourceDropzone"
+            style="${busy ? 'pointer-events:none;opacity:.55;' : ''}"
+            onclick="document.getElementById('${editorKey}BulkSourceFileInput').click()">
+            <div class="cq-dz-icon">🖼️📄</div>
+            <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more reference images or PDFs</div>
+            ${_editorBulkSourceFileListHTML(editorKey, _editorBulkAiSourceFiles[editorKey])}
+            ${_editorBulkAiSourceFiles[editorKey].length ? `<div class="cq-dz-add-more">➕ Click again to add more files</div>` : ''}
+          </div>
+          <input type="file" id="${editorKey}BulkSourceFileInput" accept="image/*,application/pdf" multiple style="display:none;" ${busy ? 'disabled' : ''}
+            onchange="_editorBulkSourceFileSelect('${editorKey}', this)">
+          <div class="cq-bulk-ai-scope">Used only by 🤖 AI Solve All — no effect on Fill Choices or Refine Questions. Any source added here is also selectable per-question (as "Editor bulk source").</div>
         </div>
       </details>
     </div>
@@ -5430,6 +5437,64 @@ function _editorBulkGuard(editorKey) {
   return { ed, questions };
 }
 
+// Renders the staged reference files for a bulk panel's dropzone, with a
+// per-file remove button — same shape/markup as every other reference-
+// source dropzone in the app, just keyed by editor instead of by question.
+function _editorBulkSourceFileListHTML(editorKey, files) {
+  if (!files || !files.length) return '';
+  return `<div class="cq-dz-filelist">` + files.map((f, idx) => `
+    <div class="cq-dz-file-item">
+      <span>✅ ${escapeHtml(f.name)}</span>
+      <button type="button" onclick="event.stopPropagation();_editorBulkSourceRemoveFile('${editorKey}', ${idx})" title="Remove this file">✕</button>
+    </div>`).join('') + `</div>`;
+}
+// Shared validation with every other reference-source dropzone in the app
+// (extraction's cqSourceDropzone, the per-question source library form).
+function _editorBulkSourceAcceptFile(editorKey, file) {
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+  if (!isPdf && !isImage) { alert(`"${file.name}" isn't an image or PDF — please upload an image (JPG/PNG/WEBP) or a PDF file.`); return; }
+  if (file.size > GEMINI_MAX_FILE_BYTES) { alert(`"${file.name}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API, so it can't be used.`); return; }
+  const mimeType = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+  _editorBulkAiSourceFiles[editorKey].push({ file, mimeType, name: file.name });
+}
+function _editorBulkSourceFileSelect(editorKey, input) {
+  const files = Array.from((input && input.files) || []);
+  files.forEach(f => _editorBulkSourceAcceptFile(editorKey, f));
+  input.value = '';
+  _editorBulkRerender(editorKey);
+}
+function _editorBulkSourceRemoveFile(editorKey, idx) {
+  _editorBulkAiSourceFiles[editorKey].splice(idx, 1);
+  _editorBulkRerender(editorKey);
+}
+// Wires drag&drop on the bulk panel's reference dropzone. Called after
+// every full render of the editor (the panel is rebuilt via innerHTML
+// each time, same as every other dropzone in this file, so there's no
+// stale-listener risk).
+function _editorBulkSourceSetupDropzone(editorKey) {
+  const dz = document.getElementById(`${editorKey}BulkSourceDropzone`);
+  if (!dz) return;
+  ['dragenter', 'dragover'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.add('drag-over');
+  }));
+  ['dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag-over');
+  }));
+  dz.addEventListener('drop', e => {
+    const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+    files.forEach(f => _editorBulkSourceAcceptFile(editorKey, f));
+    _editorBulkRerender(editorKey);
+  });
+}
+// Re-renders the whole editor so the dropzone reflects the updated file
+// list — mirrors every other add/remove handler in these editors (reorder,
+// delete, image change, etc. all go through ed.rerender() too).
+function _editorBulkRerender(editorKey) {
+  const ed = _caseGroupEditors[editorKey];
+  if (ed && ed.rerender) ed.rerender();
+}
+
 async function _editorBulkAiSolve(editorKey) {
   const ctx = _editorBulkGuard(editorKey);
   if (!ctx) return;
@@ -5438,9 +5503,9 @@ async function _editorBulkAiSolve(editorKey) {
   const statusEl = _editorBulkStatusEl(editorKey);
   if (statusEl) statusEl.innerHTML = _cqProgressStatusHTML('🤖 AI is solving all questions…', 0);
   try {
-    const source = (_editorBulkAiSource[editorKey] || '').trim();
+    const sourceFiles = _editorBulkAiSourceFiles[editorKey] || [];
     const allIdxs = questions.map((q, i) => i).filter(i => questions[i] && questions[i].question && questions[i].question.trim());
-    await cqAiSolveQuestions(questions, allIdxs, source, [], statusEl);
+    await cqAiSolveQuestions(questions, allIdxs, '', sourceFiles, statusEl);
     if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ AI Solve finished — ${allIdxs.length} question${allIdxs.length !== 1 ? 's' : ''} checked.</div>`;
   } catch (e) {
     if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'AI Solve failed.');
@@ -6718,14 +6783,7 @@ function renderCustomQuizModal() {
       ${cqAiAnsweringEnabled ? `
       <div style="margin:8px 0 4px;padding:12px 14px;background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;">
         <div style="font-size:.75rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
-          📚 Reference Source (optional) — paste text and/or upload images/PDFs the AI should use to answer
-        </div>
-        <textarea class="cq-textarea" id="cqAiSourceInput" rows="3"
-          placeholder="Paste lecture notes, textbook excerpt, or any reference text here…"
-          oninput="cqAiAnswerSource = this.value"
-          style="border-color:#CE93D8;margin-bottom:8px;">${escapeHtml(cqAiAnswerSource)}</textarea>
-        <div style="font-size:.73rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
-          🖼️ Source Images / PDFs (optional) — upload diagrams, charts, or reference PDFs the AI can see
+          📚 Reference Source (optional) — upload images/PDFs the AI should use to answer
         </div>
         <div class="cq-dropzone cq-dz-purple" id="cqSourceDropzone" onclick="document.getElementById('cqSourceFileInput').click()">
           <div class="cq-dz-icon">🖼️📄</div>
@@ -7763,8 +7821,8 @@ const _aiSolveSourceChoice = {};
 const _aiSourceAddDraft = {};
 
 function _aiSolveBulkSourceHasContent(editorKey) {
-  if (editorKey === 'cq') return !!((cqAiAnswerSource && cqAiAnswerSource.trim()) || (cqAiSourceFiles && cqAiSourceFiles.length));
-  return !!((_editorBulkAiSource[editorKey] || '').trim());
+  if (editorKey === 'cq') return !!(cqAiSourceFiles && cqAiSourceFiles.length);
+  return !!(_editorBulkAiSourceFiles[editorKey] && _editorBulkAiSourceFiles[editorKey].length);
 }
 function _aiSolveBulkSourceLabel(editorKey) {
   return editorKey === 'cq' ? 'Bulk / extraction source' : 'Editor bulk source';
@@ -7954,11 +8012,7 @@ function _renderAiSourceAddFormHTML(editorKey, i) {
     <input type="text" placeholder="Source name (e.g. Lecture 4 slides)" value="${escapeHtml(draft.label)}"
       oninput="_aiSourceAddDraftChange('${editorKey}', ${i}, 'label', this.value)"
       style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid #B0D4F0;border-radius:5px;margin-bottom:8px;box-sizing:border-box;">
-    <div style="font-size:.72rem;font-weight:700;color:#6A1B9A;margin-bottom:4px;">📚 Reference text (optional)</div>
-    <textarea rows="2" placeholder="Paste lecture notes, textbook excerpt, or any reference text here…"
-      oninput="_aiSourceAddDraftChange('${editorKey}', ${i}, 'text', this.value)"
-      style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid #B0D4F0;border-radius:5px;margin-bottom:8px;resize:vertical;box-sizing:border-box;">${escapeHtml(draft.text)}</textarea>
-    <div style="font-size:.72rem;font-weight:700;color:#6A1B9A;margin-bottom:4px;">🖼️ Source images / PDFs (optional)</div>
+    <div style="font-size:.72rem;font-weight:700;color:#6A1B9A;margin-bottom:4px;">🖼️ Source images / PDFs</div>
     <div class="cq-dropzone cq-dz-purple ai-source-dz" id="aiSourceDropzone_${editorKey}_${i}"
       onclick="document.getElementById('aiSourceFileInput_${editorKey}_${i}').click()">
       <div class="cq-dz-icon">🖼️📄</div>
@@ -7982,12 +8036,11 @@ function _aiSourceAddSave(editorKey, i) {
   const dk = _aiToolsKey(editorKey, i);
   const draft = _aiSourceAddDraft[dk] || { label: '', text: '', files: [] };
   const label = (draft.label || '').trim();
-  const text = (draft.text || '').trim();
   const files = draft.files || [];
   if (!label) { alert('Give this source a name.'); return; }
-  if (!text && !files.length) { alert('Add some reference text or at least one file.'); return; }
+  if (!files.length) { alert('Add at least one reference image or PDF.'); return; }
   const id = 'src_' + (++_aiSourceLibraryCounter) + '_' + Date.now();
-  _aiSourceLibrary.push({ id, label, text, files });
+  _aiSourceLibrary.push({ id, label, text: '', files });
   delete _aiSourceAddDraft[dk];
   _aiSolvePickSource(editorKey, i, 'lib', id);
 }
@@ -8030,8 +8083,8 @@ async function aiSolveQuestion(editorKey, i) {
   const choice = _aiSolveGetChoice(editorKey, i);
   let sourceText = '', sourceFiles = [];
   if (choice.type === 'bulk') {
-    if (editorKey === 'cq') { sourceText = (cqAiAnswerSource || '').trim(); sourceFiles = cqAiSourceFiles || []; }
-    else { sourceText = (_editorBulkAiSource[editorKey] || '').trim(); }
+    if (editorKey === 'cq') { sourceFiles = cqAiSourceFiles || []; }
+    else { sourceFiles = _editorBulkAiSourceFiles[editorKey] || []; }
   } else if (choice.type === 'lib') {
     const src = _aiSourceLibrary.find(s => s.id === choice.id);
     if (src) { sourceText = src.text || ''; sourceFiles = src.files || []; }
@@ -11504,6 +11557,7 @@ function renderAdminQuestionEditor(containerId) {
   <div class="admin-status" id="adminEditStatus"></div>`;
 
   area.innerHTML = html;
+  _editorBulkSourceSetupDropzone('admin');
 
   // Restore scroll position (unless this is the very first render)
   if (_prevScrollTop !== null) {
@@ -11833,6 +11887,7 @@ function renderCustomQuizEditor() {
   <div class="admin-status" id="cqCustomEditStatus_${key}"></div>`;
 
   area.innerHTML = html;
+  _editorBulkSourceSetupDropzone('customQuiz');
 
   if (_prevScrollTop !== null) {
     const _newList = document.getElementById('cqCustomEditList_' + key);
