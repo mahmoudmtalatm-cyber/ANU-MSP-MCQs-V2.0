@@ -3135,22 +3135,31 @@ if (prevTotal < threshold && newTotal >= threshold) {
   showScreen('results');
 }
 
-function buildResults() {
-  // Cancel any in-progress explanations from a previous result view
+// Cancels any in-flight per-question explanations and chats from the results
+// screen and clears their busy/loading state. Shared by buildResults() (new
+// results view) and showScreen() (leaving results without a new view) — if
+// this never runs on the "leaving" path, a request abandoned mid-flight stays
+// marked busy forever, since nothing else would ever clear it, and every
+// later _guardedClose() confirm() would keep firing for a process the user
+// can no longer see or stop.
+function _cancelAndClearResultsAiState() {
   if (_allCancelToken) { _cancelAiToken(_allCancelToken); _allCancelToken = null; }
   Object.keys(_singleCancelToken).forEach(k => { _cancelAiToken(_singleCancelToken[k]); delete _singleCancelToken[k]; });
-  // Clear explanation cache for new results
   for (const k in _explainCache) delete _explainCache[k];
   for (const k in _explainRawText) delete _explainRawText[k];
-  // Snapshot any shared (Firestore) explanations for this quiz so they can be reused
-  // instantly instead of re-generated, and so newly-generated ones can be shared too.
-  _explainPoolLoadPromise = _loadExplainPool(currentQuestions);
-  // Cancel and clear any in-progress/previous chats
   Object.keys(_chatCancelToken).forEach(k => { _cancelAiToken(_chatCancelToken[k]); delete _chatCancelToken[k]; });
   for (const k in _chatHistory) delete _chatHistory[k];
   for (const k in _chatPending) delete _chatPending[k];
   for (const k in _chatBusy) delete _chatBusy[k];
   _explainAllBusy = false;
+}
+
+function buildResults() {
+  // Cancel any in-progress explanations from a previous result view
+  _cancelAndClearResultsAiState();
+  // Snapshot any shared (Firestore) explanations for this quiz so they can be reused
+  // instantly instead of re-generated, and so newly-generated ones can be shared too.
+  _explainPoolLoadPromise = _loadExplainPool(currentQuestions);
   const explainAllBtn = document.getElementById('explainAllBtn');
   if (explainAllBtn) { explainAllBtn.disabled = false; explainAllBtn.innerHTML = '🤖&nbsp; Explain All Questions'; explainAllBtn.onclick = explainAllQuestions; }
 
@@ -5500,16 +5509,25 @@ async function _editorBulkAiSolve(editorKey) {
   if (!ctx) return;
   const { ed, questions } = ctx;
   _editorBulkSetBusy(editorKey, true);
+  // Real per-run cancel token — this is what _stopAllAiProcesses() cancels via
+  // _editorBulkCancelToken[editorKey]. Without creating and passing this down,
+  // that cancel call had nothing to cancel: the loop below kept running for
+  // real in the background even after the user confirmed "stop it".
+  const token = { cancelled: false };
+  _editorBulkCancelToken[editorKey] = token;
   const statusEl = _editorBulkStatusEl(editorKey);
   if (statusEl) statusEl.innerHTML = _cqProgressStatusHTML('🤖 AI is solving all questions…', 0);
   try {
     const sourceFiles = _editorBulkAiSourceFiles[editorKey] || [];
     const allIdxs = questions.map((q, i) => i).filter(i => questions[i] && questions[i].question && questions[i].question.trim());
-    await cqAiSolveQuestions(questions, allIdxs, '', sourceFiles, statusEl);
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ AI Solve finished — ${allIdxs.length} question${allIdxs.length !== 1 ? 's' : ''} checked.</div>`;
+    await cqAiSolveQuestions(questions, allIdxs, '', sourceFiles, statusEl, token);
+    if (statusEl) statusEl.innerHTML = token.cancelled
+      ? `<div class="cq-status warning">⏹ AI Solve stopped.</div>`
+      : `<div class="cq-status success">✅ AI Solve finished — ${allIdxs.length} question${allIdxs.length !== 1 ? 's' : ''} checked.</div>`;
   } catch (e) {
     if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'AI Solve failed.');
   } finally {
+    _editorBulkCancelToken[editorKey] = null;
     _editorBulkSetBusy(editorKey, false);
     ed.rerender();
   }
@@ -5520,16 +5538,21 @@ async function _editorBulkFillChoices(editorKey) {
   if (!ctx) return;
   const { ed, questions } = ctx;
   _editorBulkSetBusy(editorKey, true);
+  const token = { cancelled: false };
+  _editorBulkCancelToken[editorKey] = token;
   const statusEl = _editorBulkStatusEl(editorKey);
   if (statusEl) statusEl.innerHTML = _cqProgressStatusHTML('🧩 Filling choices…', 0);
   try {
-    const { done, errors } = await cqBulkFillChoices(questions, statusEl);
-    let html = `<div class="cq-status success">✅ Fill Choices finished — topped up ${done} question${done !== 1 ? 's' : ''}.</div>`;
+    const { done, errors } = await cqBulkFillChoices(questions, statusEl, token);
+    let html = token.cancelled
+      ? `<div class="cq-status warning">⏹ Fill Choices stopped — topped up ${done} question${done !== 1 ? 's' : ''} so far.</div>`
+      : `<div class="cq-status success">✅ Fill Choices finished — topped up ${done} question${done !== 1 ? 's' : ''}.</div>`;
     if (errors.length) html += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;">⚠️ ${escapeHtml(e)}</div>`).join('');
     if (statusEl) statusEl.innerHTML = html;
   } catch (e) {
     if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'Fill Choices failed.');
   } finally {
+    _editorBulkCancelToken[editorKey] = null;
     _editorBulkSetBusy(editorKey, false);
     ed.rerender();
   }
@@ -5540,17 +5563,22 @@ async function _editorBulkRefineQuestions(editorKey) {
   if (!ctx) return;
   const { ed, questions } = ctx;
   _editorBulkSetBusy(editorKey, true);
+  const token = { cancelled: false };
+  _editorBulkCancelToken[editorKey] = token;
   const statusEl = _editorBulkStatusEl(editorKey);
   if (statusEl) statusEl.innerHTML = _cqProgressStatusHTML('🪄 Refining question wording…', 0);
   try {
     const custom = (_editorBulkRefineInstructions[editorKey] || '').trim();
-    const { done, errors } = await cqBulkRefineQuestions(questions, custom, statusEl);
-    let html = `<div class="cq-status success">✅ Refine finished — rewrote ${done} question${done !== 1 ? 's' : ''}.</div>`;
+    const { done, errors } = await cqBulkRefineQuestions(questions, custom, statusEl, token);
+    let html = token.cancelled
+      ? `<div class="cq-status warning">⏹ Refine stopped — rewrote ${done} question${done !== 1 ? 's' : ''} so far.</div>`
+      : `<div class="cq-status success">✅ Refine finished — rewrote ${done} question${done !== 1 ? 's' : ''}.</div>`;
     if (errors.length) html += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;">⚠️ ${escapeHtml(e)}</div>`).join('');
     if (statusEl) statusEl.innerHTML = html;
   } catch (e) {
     if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'Refine failed.');
   } finally {
+    _editorBulkCancelToken[editorKey] = null;
     _editorBulkSetBusy(editorKey, false);
     ed.rerender();
   }
@@ -6062,15 +6090,21 @@ async function aiRefineQuestion(editorKey, i) {
   if (!apiKey) return;
 
   const custom = (_aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] || '').trim();
+  const key = _aiToolsKey(editorKey, i);
+  const token = { cancelled: false };
+  _aiToolsCancelToken[key] = token;
   _aiToolsSetBusy(editorKey, i, true, 'refine');
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🪄 Refining question…'));
 
   try {
-    q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom);
+    q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom, token);
     ed.rerender(); // rebuilds this card fresh, which also naturally re-enables its buttons
   } catch (e) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not refine this question.'));
+    if (!(e && e._cancelled)) {
+      _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not refine this question.'));
+    }
   } finally {
+    if (_aiToolsCancelToken[key] === token) delete _aiToolsCancelToken[key];
     _aiToolsSetBusy(editorKey, i, false, 'refine');
   }
 }
@@ -6079,7 +6113,7 @@ async function aiRefineQuestion(editorKey, i) {
    Asks for exactly `count` new, plausible-but-incorrect answer choices that
    fit the question's subject, style, and difficulty — distinct from every
    existing choice and from each other, and not generic filler. */
-async function _aiGenerateDistractors(apiKey, questions, q, optEntries, count) {
+async function _aiGenerateDistractors(apiKey, questions, q, optEntries, count, token) {
   const existingText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none)';
   const correctVal = (optEntries.find(([k]) => k === q.answer) || [])[1] || '';
   const { textBlock: caseBlock, imagePart } = _aiToolsCaseContext(questions, q);
@@ -6112,7 +6146,7 @@ Respond ONLY with a JSON object: {"choices": [${Array(count).fill('"..."').join(
   const data = await callGeminiWithRetry(url, {
     contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens: 1024 }
-  });
+  }, { cancelToken: token });
   const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
   const parsed = _aiToolsParseJSON(textOut);
   let choices = (parsed && Array.isArray(parsed.choices)) ? parsed.choices.filter(c => typeof c === 'string' && c.trim()) : [];
@@ -6153,24 +6187,30 @@ async function aiFillChoices(editorKey, i) {
   // option is marked correct, only add new (incorrect) distractor text.
   const answerBefore = q.answer;
 
+  const _key = _aiToolsKey(editorKey, i);
+  const token = { cancelled: false };
+  _aiToolsCancelToken[_key] = token;
   _aiToolsSetBusy(editorKey, i, true, 'fillChoices');
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(`🧩 Filling ${missing.length} more choice${missing.length !== 1 ? 's' : ''}…`));
 
   try {
-    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length);
+    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length, token);
     if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
-    missing.forEach((key, idx) => {
+    missing.forEach((optKey, idx) => {
       const val = newVals[idx] || '';
-      q.options[key] = val;
-      q.optionsOrder.push({ key, value: val });
+      q.options[optKey] = val;
+      q.optionsOrder.push({ key: optKey, value: val });
     });
     // Defensive guarantee: the correct answer is exactly what it was before —
     // this action only ever adds new wrong choices, never picks or changes one.
     q.answer = answerBefore;
     ed.rerender();
   } catch (e) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate choices.'));
+    if (!(e && e._cancelled)) {
+      _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate choices.'));
+    }
   } finally {
+    if (_aiToolsCancelToken[_key] === token) delete _aiToolsCancelToken[_key];
     _aiToolsSetBusy(editorKey, i, false, 'fillChoices');
   }
 }
@@ -6205,11 +6245,14 @@ async function aiAddChoice(editorKey, i) {
   // which option is marked correct, only append one new (incorrect) option.
   const answerBefore = q.answer;
 
+  const _key = _aiToolsKey(editorKey, i);
+  const token = { cancelled: false };
+  _aiToolsCancelToken[_key] = token;
   _aiToolsSetBusy(editorKey, i, true, 'addChoice');
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is writing a new choice…'));
 
   try {
-    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, 1);
+    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, 1, token);
     const val = newVals[0] || '';
     if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
     q.options[nextKey] = val;
@@ -6218,8 +6261,11 @@ async function aiAddChoice(editorKey, i) {
     q.answer = answerBefore;
     ed.rerender();
   } catch (e) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate a new choice.'));
+    if (!(e && e._cancelled)) {
+      _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate a new choice.'));
+    }
   } finally {
+    if (_aiToolsCancelToken[_key] === token) delete _aiToolsCancelToken[_key];
     _aiToolsSetBusy(editorKey, i, false, 'addChoice');
   }
 }
@@ -7546,7 +7592,7 @@ function cqRemoveSourceFile(idx) {
 // sourceText: optional reference text
 // sourceFiles: optional array of {file, mimeType, name}
 // onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
-async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl) {
+async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl, cancelToken) {
   if (!targetIdxs || !targetIdxs.length) return;
 
   let apiKey = getGeminiKey();
@@ -7600,9 +7646,11 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
   const errors = [];
 
   for (let ci = 0; ci < chunks.length; ci++) {
+    if (cancelToken && cancelToken.cancelled) break;
     // Safe checkpoint between batches — lets the user pause and switch keys
     // without losing any batches already solved.
     apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    if (cancelToken && cancelToken.cancelled) break;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${CQ_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const chunk = chunks[ci];
@@ -7638,7 +7686,7 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
         system_instruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: 'user', parts }],
         generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
-      }, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken });
+      }, { pauseCheck: () => cqPauseRequested, cancelToken: cancelToken });
 
       const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
       const cleanText = textOut.replace(/```json|```/g, '').trim();
@@ -7673,6 +7721,7 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
         errors.push(`Batch ${ci + 1}: AI returned unexpected format (not an array).`);
       }
     } catch (e) {
+      if (e._cancelled) break; // user stopped — not an error, just stop here
       if (e._rateLimitPauseFallback) {
         apiKey = await cqFallbackPauseForRateLimit(statusEl, chunks.length > 1 ? `batch ${ci + 1} of ${chunks.length}` : null);
         ci--; // retry this same batch (not counted as an error) once resumed
@@ -7707,7 +7756,7 @@ async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles, statusE
    at a time — never in parallel with itself or with the refine pass — since
    both this and Refine Questions mutate the same question objects, and the
    whole point of running them sequentially is to avoid that exact race. */
-async function cqBulkFillChoices(questions, statusEl) {
+async function cqBulkFillChoices(questions, statusEl, cancelToken) {
   const idxs = questions.map((q, i) => i).filter(i => {
     const q = questions[i];
     return q && q.question && q.question.trim() && getOptionEntries(q).length < 4;
@@ -7720,7 +7769,9 @@ async function cqBulkFillChoices(questions, statusEl) {
   let done = 0;
   const errors = [];
   for (let n = 0; n < idxs.length; n++) {
+    if (cancelToken && cancelToken.cancelled) break;
     apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    if (cancelToken && cancelToken.cancelled) break;
     const qi = idxs[n];
     const q = questions[qi];
     if (statusEl) {
@@ -7733,7 +7784,7 @@ async function cqBulkFillChoices(questions, statusEl) {
       const missing = _AI_TOOLS_ALL_KEYS.filter(k => !usedKeys.includes(k)).slice(0, Math.max(0, 4 - optEntries.length));
       if (!missing.length) continue;
       const answerBefore = q.answer;
-      const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length);
+      const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length, cancelToken);
       if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
       missing.forEach((key, idx) => {
         const val = newVals[idx] || '';
@@ -7743,6 +7794,7 @@ async function cqBulkFillChoices(questions, statusEl) {
       q.answer = answerBefore; // never change which choice is correct
       done++;
     } catch (e) {
+      if (e._cancelled) break; // user stopped — not an error, just stop here
       if (e._rateLimitPauseFallback) {
         apiKey = await cqFallbackPauseForRateLimit(statusEl, `question ${n + 1} of ${idxs.length}`);
         n--; // retry this same question once resumed
@@ -7750,7 +7802,7 @@ async function cqBulkFillChoices(questions, statusEl) {
       }
       errors.push(`Question ${qi + 1}: ${e.message || String(e)}`);
     }
-    await cancellableSleep(250, cqCancelToken);
+    await cancellableSleep(250, cancelToken);
   }
   return { done, errors };
 }
@@ -7760,7 +7812,7 @@ async function cqBulkFillChoices(questions, statusEl) {
    (same rules/prompt as the single-question "🪄 Refine Question" tool),
    optionally guided by a shared custom-instructions box. Also strictly
    one-at-a-time — see note above cqBulkFillChoices. */
-async function cqBulkRefineQuestions(questions, customInstructions, statusEl) {
+async function cqBulkRefineQuestions(questions, customInstructions, statusEl, cancelToken) {
   const idxs = questions.map((q, i) => i).filter(i => questions[i] && questions[i].question && questions[i].question.trim());
   if (!idxs.length) return { done: 0, errors: [] };
 
@@ -7771,7 +7823,9 @@ async function cqBulkRefineQuestions(questions, customInstructions, statusEl) {
   let done = 0;
   const errors = [];
   for (let n = 0; n < idxs.length; n++) {
+    if (cancelToken && cancelToken.cancelled) break;
     apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    if (cancelToken && cancelToken.cancelled) break;
     const qi = idxs[n];
     const q = questions[qi];
     if (statusEl) {
@@ -7779,9 +7833,10 @@ async function cqBulkRefineQuestions(questions, customInstructions, statusEl) {
         `🪄 Refining question wording… (${n + 1} of ${idxs.length})`, (n / idxs.length) * 100);
     }
     try {
-      q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom);
+      q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom, cancelToken);
       done++;
     } catch (e) {
+      if (e._cancelled) break; // user stopped — not an error, just stop here
       if (e._rateLimitPauseFallback) {
         apiKey = await cqFallbackPauseForRateLimit(statusEl, `question ${n + 1} of ${idxs.length}`);
         n--; // retry this same question once resumed
@@ -7789,7 +7844,7 @@ async function cqBulkRefineQuestions(questions, customInstructions, statusEl) {
       }
       errors.push(`Question ${qi + 1}: ${e.message || String(e)}`);
     }
-    await cancellableSleep(250, cqCancelToken);
+    await cancellableSleep(250, cancelToken);
   }
   return { done, errors };
 }
@@ -8092,14 +8147,20 @@ async function aiSolveQuestion(editorKey, i) {
   // choice.type === 'ai' → leave both empty so cqAiSolveQuestions answers
   // from general knowledge only.
 
+  const _key = _aiToolsKey(editorKey, i);
+  const token = { cancelled: false };
+  _aiToolsCancelToken[_key] = token;
   _aiToolsSetBusy(editorKey, i, true, 'solve');
   const statusEl = _aiToolsStatusEl(editorKey, i);
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is solving this question…'));
   try {
-    await cqAiSolveQuestions(questions, [i], sourceText, sourceFiles, statusEl);
+    await cqAiSolveQuestions(questions, [i], sourceText, sourceFiles, statusEl, token);
   } catch (e) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not solve this question.'));
+    if (!(e && e._cancelled)) {
+      _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not solve this question.'));
+    }
   } finally {
+    if (_aiToolsCancelToken[_key] === token) delete _aiToolsCancelToken[_key];
     _aiToolsSetBusy(editorKey, i, false, 'solve');
   }
   ed.rerender();
