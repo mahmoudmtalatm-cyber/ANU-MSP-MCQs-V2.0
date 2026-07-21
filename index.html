@@ -4251,6 +4251,17 @@ function _stopAllAiProcesses() {
    no safe mid-flight abort point (partial writes could orphan uploaded
    images), so unlike the AI processes it isn't offered as "stop and close" —
    it's simply blocked until it finishes on its own. */
+// Set true by any question-editing action (text edits, option/answer changes,
+// add/delete question or option, image changes, reordering, case-group links,
+// AI tool results not yet saved, etc.) across every editor in the app — the
+// extraction/generation preview, "Create Your Own Quiz", the saved-custom-quiz
+// editor, and the admin question editor. Cleared whenever a fresh editor is
+// opened or edits are actually saved. _guardedClose() (and a couple of
+// non-overlay "cancel" actions that also abandon an in-progress edit) check
+// this so the user is warned before their unsaved edits are silently lost.
+let _questionEditDirty = false;
+function _markQuestionEditDirty() { _questionEditDirty = true; }
+
 function _guardedClose(closeFn) {
   if (typeof adminBusy !== 'undefined' && adminBusy) {
     alert('A publish is still in progress. Please wait for it to finish before closing.');
@@ -4264,6 +4275,13 @@ function _guardedClose(closeFn) {
     if (!confirmed) return;
     _stopAllAiProcesses();
   }
+  if (_questionEditDirty) {
+    const confirmed = confirm(
+      `You have unsaved edits. Closing now will discard them and they will be lost.\n\nClose anyway?`
+    );
+    if (!confirmed) return;
+  }
+  _questionEditDirty = false;
   closeFn();
 }
 
@@ -5566,6 +5584,7 @@ async function _editorBulkAiSolve(editorKey) {
   } finally {
     _editorBulkCancelToken[editorKey] = null;
     _editorBulkSetBusy(editorKey, false, 'Solve');
+    _markQuestionEditDirty();
     ed.rerender();
   }
 }
@@ -5591,6 +5610,7 @@ async function _editorBulkFillChoices(editorKey) {
   } finally {
     _editorBulkCancelToken[editorKey] = null;
     _editorBulkSetBusy(editorKey, false, 'Fill');
+    _markQuestionEditDirty();
     ed.rerender();
   }
 }
@@ -5617,6 +5637,7 @@ async function _editorBulkRefineQuestions(editorKey) {
   } finally {
     _editorBulkCancelToken[editorKey] = null;
     _editorBulkSetBusy(editorKey, false, 'Refine');
+    _markQuestionEditDirty();
     ed.rerender();
   }
 }
@@ -5632,6 +5653,7 @@ function _editorMoveQuestion(editorKey, i, dir) {
   const j = i + dir;
   if (j < 0 || j >= questions.length) return;
   [questions[i], questions[j]] = [questions[j], questions[i]];
+  _markQuestionEditDirty();
   ed.rerender();
 }
 
@@ -5652,6 +5674,7 @@ function _editorMoveQuestionTo(editorKey, i, inputId) {
   if (j === i) return;
   const [moved] = questions.splice(i, 1);
   questions.splice(j, 0, moved);
+  _markQuestionEditDirty();
   ed.rerender();
 }
 
@@ -5815,6 +5838,7 @@ function _caseGroupOnSelect(editorKey, i, val) {
   // the group it just joined/started must end up with exactly one.
   if (prevGid && prevGid !== q.case_group) _caseGroupEnsureSingleCore(questions, prevGid);
   if (q.case_group) _caseGroupEnsureSingleCore(questions, q.case_group);
+  _markQuestionEditDirty();
   ed.rerender();
 }
 
@@ -5826,6 +5850,7 @@ function _caseGroupUnlink(editorKey, i) {
   questions[i].case_group = null;
   questions[i].case_is_core = false;
   if (gid) _caseGroupEnsureSingleCore(questions, gid); // promote a remaining member if the core just left
+  _markQuestionEditDirty();
   ed.rerender();
 }
 
@@ -5839,6 +5864,7 @@ function _caseGroupSetCore(editorKey, i) {
   if (!gid) return;
   questions.forEach(o => { if (o.case_group === gid) o.case_is_core = false; });
   questions[i].case_is_core = true;
+  _markQuestionEditDirty();
   ed.rerender();
 }
 
@@ -6173,6 +6199,7 @@ async function aiRefineQuestion(editorKey, i) {
 
   try {
     q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom, token);
+    _markQuestionEditDirty();
     ed.rerender(); // rebuilds this card fresh, which also naturally re-enables its buttons
   } catch (e) {
     if (!(e && e._cancelled)) {
@@ -6279,6 +6306,7 @@ async function aiFillChoices(editorKey, i) {
     // Defensive guarantee: the correct answer is exactly what it was before —
     // this action only ever adds new wrong choices, never picks or changes one.
     q.answer = answerBefore;
+    _markQuestionEditDirty();
     ed.rerender();
   } catch (e) {
     if (!(e && e._cancelled)) {
@@ -6334,6 +6362,7 @@ async function aiAddChoice(editorKey, i) {
     q.optionsOrder.push({ key: nextKey, value: val });
     // Defensive guarantee: the correct answer is exactly what it was before.
     q.answer = answerBefore;
+    _markQuestionEditDirty();
     ed.rerender();
   } catch (e) {
     if (!(e && e._cancelled)) {
@@ -6728,6 +6757,7 @@ function openCustomQuizzes() {
   cqCreatingNew = false;
   cqNewQuizTitle = '';
   cqMultiSelected = new Set();
+  _questionEditDirty = false;
   document.getElementById('customQuizOverlay').classList.remove('hidden');
   renderCustomQuizModal();
 }
@@ -8258,6 +8288,7 @@ async function aiSolveQuestion(editorKey, i) {
     if (_aiToolsCancelToken[_key] === token) delete _aiToolsCancelToken[_key];
     _aiToolsSetBusy(editorKey, i, false, 'solve');
   }
+  _markQuestionEditDirty();
   ed.rerender();
 }
 
@@ -8970,6 +9001,7 @@ function renderCQPreview() {
 function cqEditQuestion(idx, val) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
   cqGeneratedQuestions[idx].question = val;
+  _markQuestionEditDirty();
 }
 
 function cqEditOption(idx, key, val) {
@@ -8981,11 +9013,13 @@ function cqEditOption(idx, key, val) {
     const entry = order.find(o => o.key === key);
     if (entry) entry.value = val;
   }
+  _markQuestionEditDirty();
 }
 
 function cqSetAnswer(idx, key) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
   cqGeneratedQuestions[idx].answer = key;
+  _markQuestionEditDirty();
   // Re-render just the option rows for this question to update correct highlights
   const q = cqGeneratedQuestions[idx];
   getOptionEntries(q).forEach(([k]) => {
@@ -9010,6 +9044,7 @@ function cqRemoveImage(idx) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
   cqGeneratedQuestions[idx].image    = undefined;
   cqGeneratedQuestions[idx].has_image = false;
+  _markQuestionEditDirty();
   renderCQPreview();
 }
 
@@ -9027,6 +9062,7 @@ function cqReplaceImage(idx, event) {
       cqGeneratedQuestions[idx].image    = dataUrl;
       cqGeneratedQuestions[idx].has_image = true;
     }
+    _markQuestionEditDirty();
     renderCQPreview();
   };
   reader.readAsDataURL(file);
@@ -9037,6 +9073,7 @@ function cqDeleteQuestion(idx) {
   if (!cqGeneratedQuestions) return;
   if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
   cqGeneratedQuestions.splice(idx, 1);
+  _markQuestionEditDirty();
   renderCQPreview();
 }
 
@@ -9057,6 +9094,7 @@ function cqAddBlankQuestion() {
     // use even though the preview's re-extract controls have been removed.
     _notExtractable: true
   });
+  _markQuestionEditDirty();
   renderCQPreview();
   // Scroll to new question
   setTimeout(() => {
@@ -9077,6 +9115,7 @@ function cqDeleteOption(qIdx, key) {
   if (q.optionsOrder) q.optionsOrder = q.optionsOrder.filter(o => o.key !== key);
   // If we deleted the correct answer, pick first remaining
   if (q.answer === key) q.answer = Object.keys(q.options)[0] || '';
+  _markQuestionEditDirty();
   renderCQPreview();
 }
 
@@ -9091,6 +9130,7 @@ function cqAddOption(qIdx) {
   q.options[nextKey] = '';
   if (!q.optionsOrder) q.optionsOrder = usedKeys.map(k => ({ key: k, value: q.options[k] }));
   q.optionsOrder.push({ key: nextKey, value: '' });
+  _markQuestionEditDirty();
   renderCQPreview();
   // Focus the new input
   setTimeout(() => {
@@ -9103,6 +9143,7 @@ function discardGeneratedQuiz() {
   cqGeneratedQuestions = null;
   cqSelectedFiles = [];
   cqLectureFiles = [];
+  _questionEditDirty = false;
   renderCustomQuizModal();
 }
 
@@ -9127,6 +9168,7 @@ async function saveGeneratedCustomQuiz() {
   cqSelectedFiles = [];
   cqLectureFiles = [];
   cqGeneratedTitle = '';
+  _questionEditDirty = false;
 
   renderCustomQuizModal();
   const statusEl = document.getElementById('cqStatus');
@@ -11940,12 +11982,16 @@ function renderAdminAssignForm() {
 
 function adminToggleEditBeforePublish() {
   if (adminEditMode === 'publish') {
-    adminEditMode = null;
-    adminEditQuestions = null;
-  } else {
-    adminEditMode = 'publish';
-    adminEditQuestions = JSON.parse(JSON.stringify(adminSelectedQuiz.questions));
+    _guardedClose(() => {
+      adminEditMode = null;
+      adminEditQuestions = null;
+      renderAdminAssignForm();
+    });
+    return;
   }
+  adminEditMode = 'publish';
+  adminEditQuestions = JSON.parse(JSON.stringify(adminSelectedQuiz.questions));
+  _questionEditDirty = false;
   renderAdminAssignForm();
 }
 
@@ -12119,6 +12165,7 @@ function _adminEditorContainerId() {
 function adminEditQuestionText(idx, val) {
   if (!adminEditQuestions || !adminEditQuestions[idx]) return;
   adminEditQuestions[idx].question = val;
+  _markQuestionEditDirty();
 }
 
 function adminEditOptionText(idx, key, val) {
@@ -12129,12 +12176,14 @@ function adminEditOptionText(idx, key, val) {
     const entry = order.find(o => o.key === key);
     if (entry) entry.value = val;
   }
+  _markQuestionEditDirty();
 }
 
 function adminEditSetAnswer(idx, key) {
   if (!adminEditQuestions || !adminEditQuestions[idx]) return;
   const q = adminEditQuestions[idx];
   q.answer = key;
+  _markQuestionEditDirty();
   getOptionEntries(q).forEach(([k]) => {
     const row = document.getElementById(`adminEditOptRow_${idx}_${k}`);
     if (!row) return;
@@ -12156,6 +12205,7 @@ function adminEditDeleteQuestion(idx) {
   if (!adminEditQuestions) return;
   if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
   adminEditQuestions.splice(idx, 1);
+  _markQuestionEditDirty();
   renderAdminQuestionEditor(_adminEditorContainerId());
 }
 
@@ -12170,6 +12220,7 @@ function adminEditAddBlankQuestion() {
     ],
     answer: 'A'
   });
+  _markQuestionEditDirty();
   renderAdminQuestionEditor(_adminEditorContainerId());
   setTimeout(() => {
     const last = document.getElementById(`adminEditQ_${adminEditQuestions.length - 1}`);
@@ -12187,6 +12238,7 @@ function adminEditDeleteOption(qIdx, key) {
   delete q.options[key];
   if (q.optionsOrder) q.optionsOrder = q.optionsOrder.filter(o => o.key !== key);
   if (q.answer === key) q.answer = Object.keys(q.options)[0] || '';
+  _markQuestionEditDirty();
   renderAdminQuestionEditor(_adminEditorContainerId());
 }
 
@@ -12200,6 +12252,7 @@ function adminEditAddOption(qIdx) {
   q.options[nextKey] = '';
   if (!q.optionsOrder) q.optionsOrder = usedKeys.map(k => ({ key: k, value: q.options[k] }));
   q.optionsOrder.push({ key: nextKey, value: '' });
+  _markQuestionEditDirty();
   renderAdminQuestionEditor(_adminEditorContainerId());
   setTimeout(() => {
     const input = document.querySelector(`#adminEditOptRow_${qIdx}_${nextKey} .cq-opt-text-input`);
@@ -12210,6 +12263,7 @@ function adminEditAddOption(qIdx) {
 function adminEditRemoveImage(idx) {
   if (!adminEditQuestions || !adminEditQuestions[idx]) return;
   delete adminEditQuestions[idx].image;
+  _markQuestionEditDirty();
   renderAdminQuestionEditor(_adminEditorContainerId());
 }
 
@@ -12224,6 +12278,7 @@ function adminEditReplaceImage(idx, event) {
     } catch (e) {
       adminEditQuestions[idx].image = dataUrl;
     }
+    _markQuestionEditDirty();
     renderAdminQuestionEditor(_adminEditorContainerId());
   };
   reader.readAsDataURL(file);
@@ -12244,6 +12299,7 @@ function openCustomQuizEditor(id) {
   cqCreatingNew = false;
   cqEditingQuizId = id;
   cqEditQuestions = JSON.parse(JSON.stringify(quiz.questions || []));
+  _questionEditDirty = false;
   renderCustomQuizModal();
   const area = document.getElementById('cqCustomEditorArea_' + id);
   if (area) area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -12275,6 +12331,7 @@ function openNewQuizComposer() {
     ],
     answer: 'A'
   }];
+  _questionEditDirty = false;
   renderCustomQuizModal();
   const area = document.getElementById('cqNewQuizEditorArea');
   if (area) area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -12439,6 +12496,7 @@ function renderCustomQuizEditor() {
 function cqEditQuestionText(idx, val) {
   if (!cqEditQuestions || !cqEditQuestions[idx]) return;
   cqEditQuestions[idx].question = val;
+  _markQuestionEditDirty();
 }
 
 function cqEditOptionText(idx, key, val) {
@@ -12449,12 +12507,14 @@ function cqEditOptionText(idx, key, val) {
     const entry = order.find(o => o.key === key);
     if (entry) entry.value = val;
   }
+  _markQuestionEditDirty();
 }
 
 function cqEditSetAnswer(idx, key) {
   if (!cqEditQuestions || !cqEditQuestions[idx]) return;
   const q = cqEditQuestions[idx];
   q.answer = key;
+  _markQuestionEditDirty();
   getOptionEntries(q).forEach(([k]) => {
     const row = document.getElementById(`cqCustomEditOptRow_${idx}_${k}`);
     if (!row) return;
@@ -12477,6 +12537,7 @@ function cqEditDeleteQuestion(idx) {
   if (!confirm(`Remove Q${idx + 1} from the quiz?`)) return;
   const [deleted] = cqEditQuestions.splice(idx, 1);
   _caseGroupOnQuestionDeleted(cqEditQuestions, deleted);
+  _markQuestionEditDirty();
   renderCustomQuizEditor();
 }
 
@@ -12491,6 +12552,7 @@ function cqEditAddBlankQuestion() {
     ],
     answer: 'A'
   });
+  _markQuestionEditDirty();
   renderCustomQuizEditor();
   setTimeout(() => {
     const last = document.getElementById(`cqCustomEditQ_${cqEditQuestions.length - 1}`);
@@ -12508,6 +12570,7 @@ function cqEditDeleteOption(qIdx, key) {
   delete q.options[key];
   if (q.optionsOrder) q.optionsOrder = q.optionsOrder.filter(o => o.key !== key);
   if (q.answer === key) q.answer = Object.keys(q.options)[0] || '';
+  _markQuestionEditDirty();
   renderCustomQuizEditor();
 }
 
@@ -12521,6 +12584,7 @@ function cqEditAddOption(qIdx) {
   q.options[nextKey] = '';
   if (!q.optionsOrder) q.optionsOrder = usedKeys.map(k => ({ key: k, value: q.options[k] }));
   q.optionsOrder.push({ key: nextKey, value: '' });
+  _markQuestionEditDirty();
   renderCustomQuizEditor();
   setTimeout(() => {
     const input = document.querySelector(`#cqCustomEditOptRow_${qIdx}_${nextKey} .cq-opt-text-input`);
@@ -12532,6 +12596,7 @@ function cqEditRemoveImage(idx) {
   if (!cqEditQuestions || !cqEditQuestions[idx]) return;
   delete cqEditQuestions[idx].image;
   delete cqEditQuestions[idx].imageUrl;
+  _markQuestionEditDirty();
   renderCustomQuizEditor();
 }
 
@@ -12547,6 +12612,7 @@ function cqEditReplaceImage(idx, event) {
       cqEditQuestions[idx].image = dataUrl;
     }
     delete cqEditQuestions[idx].imageUrl; // stale pointer — a fresh image is (re)uploaded on save
+    _markQuestionEditDirty();
     renderCustomQuizEditor();
   };
   reader.readAsDataURL(file);
@@ -12607,6 +12673,7 @@ async function saveCustomQuizEdits() {
     cqEditingQuizId = null;
     cqEditQuestions = null;
     cqNewQuizTitle = '';
+    _questionEditDirty = false;
     renderCustomQuizModal();
   } catch (e) {
     if (statusEl) statusEl.innerHTML = `<div class="cq-status warning">⚠️ Save failed: ${escapeHtml(e.message || String(e))}</div>`;
@@ -12845,6 +12912,7 @@ async function adminEditPublished(lectureId) {
     adminEditQuestions = JSON.parse(JSON.stringify(data.questions || []));
     // Hydrate images from the subcollection so they appear in the editor
     await hydratePublishedLectureImages(adminTargetSubject, lectureId, adminEditQuestions);
+    _questionEditDirty = false;
 
     renderAdminAssignedList();
     setTimeout(() => {
@@ -12857,15 +12925,17 @@ async function adminEditPublished(lectureId) {
 }
 
 function adminCancelEditPublished() {
-  const id = adminEditingPublishedId;
-  adminEditMode = null;
-  adminEditQuestions = null;
-  adminEditingPublishedId = null;
-  adminEditingPublishedName = '';
-  if (id) {
-    const el = document.getElementById('adminPublishedEditorArea_' + id);
-    if (el) el.innerHTML = '';
-  }
+  _guardedClose(() => {
+    const id = adminEditingPublishedId;
+    adminEditMode = null;
+    adminEditQuestions = null;
+    adminEditingPublishedId = null;
+    adminEditingPublishedName = '';
+    if (id) {
+      const el = document.getElementById('adminPublishedEditorArea_' + id);
+      if (el) el.innerHTML = '';
+    }
+  });
 }
 
 /* Save edits made to an already-published lecture */
@@ -12958,6 +13028,7 @@ async function adminSavePublishedEdits() {
     if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
 
     // Close editor after a short delay so the user sees the success message
+    _questionEditDirty = false;
     setTimeout(() => {
       adminEditMode = null;
       adminEditQuestions = null;
