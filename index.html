@@ -1920,6 +1920,8 @@
   background: var(--apikey-color, var(--accent)); color: #fff; padding: 2px 8px; border-radius: 20px;
   white-space: nowrap;
 }
+.apikey-active-chip-rotated { background: #6D4C41; }
+.apikey-rotated-badge { font-size: .85em; }
 .apikey-status-tip {
   font-size: .74rem; font-weight: 700; padding: 4px 8px; border-radius: 6px;
   width: fit-content; max-width: 100%; overflow-wrap: anywhere;
@@ -3916,6 +3918,11 @@ function _refreshApiKeyManagerIfOpen() {
    retry chain — always re-reads storage so newly-added keys are eligible
    immediately, even mid-run. */
 let _rotationCursor = 0;
+// Id of the key that most recently became active via automatic Smart
+// Rotation (as opposed to the user picking it manually) — used to show a
+// "🔁 auto-switched" indicator instead of a plain "Active" one. Cleared as
+// soon as the user manually chooses a key again.
+let _lastAutoRotatedKeyId = null;
 function _pickNextRotationKey(excludeIds) {
   const now = Date.now();
   const keys = loadApiKeys();
@@ -4010,6 +4017,7 @@ function removeApiKeyById(id) {
   if (getActiveApiKeyId() === id) {
     setActiveApiKeyId(keys.length ? keys[0].id : '');
   }
+  if (_lastAutoRotatedKeyId === id) _lastAutoRotatedKeyId = null;
 }
 function renameApiKey(id, label) {
   const keys = loadApiKeys();
@@ -4042,7 +4050,9 @@ function maskApiKey(key) {
 function _apiKeyQuickBtnHTML() {
   const entry = getActiveApiKeyEntry();
   if (!entry) return '🔑 Add API Key';
-  return `<span class="apikey-dot" style="background:${entry.color || 'var(--accent)'};"></span> ${escapeHtml(entry.label)}`;
+  const rotatedBadge = (entry.id === _lastAutoRotatedKeyId)
+    ? ` <span class="apikey-rotated-badge" title="Smart Rotation switched to this key automatically">🔁</span>` : '';
+  return `<span class="apikey-dot" style="background:${entry.color || 'var(--accent)'};"></span> ${escapeHtml(entry.label)}${rotatedBadge}`;
 }
 function _refreshApiKeyQuickButtons() {
   document.querySelectorAll('.ai-apikey-btn').forEach(btn => {
@@ -4090,6 +4100,7 @@ function useApiKey(id) {
   }
 
   setActiveApiKeyId(id);
+  _lastAutoRotatedKeyId = null; // manual pick — no longer "auto-switched"
   renderApiKeyManager();
   // Refresh any inline "manage keys" widgets that might be open behind the modal
   if (typeof renderCustomQuizModal === 'function' && document.getElementById('customQuizBody')) {
@@ -4220,7 +4231,9 @@ function renderApiKeyManager() {
         <div class="apikey-info">
           <div class="apikey-label-row">
             <div class="apikey-label-display">${escapeHtml(k.label)}</div>
-            ${isActive ? `<span class="apikey-active-chip">Active</span>` : ''}
+            ${isActive ? (k.id === _lastAutoRotatedKeyId
+              ? `<span class="apikey-active-chip apikey-active-chip-rotated">🔁 Active (auto-switched)</span>`
+              : `<span class="apikey-active-chip">Active</span>`) : ''}
           </div>
           ${statusTipHtml}
           ${isEditing ? `
@@ -7537,11 +7550,10 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
 
   // How many *successive* 429s on the SAME key, with Smart Rotation on,
   // before that key is considered genuinely (not just momentarily) rate
-  // limited and handed off to the next one. Deliberately generous — with
-  // the exponential back-off above this is several minutes of real retries
-  // on that one key before we give up on it, so a brief blip never causes
-  // an unnecessary rotation.
-  const RATE_LIMIT_ROTATE_THRESHOLD = 8;
+  // limited and handed off to the next one. With the exponential back-off
+  // above, this is still close to a minute of real retries on that one key
+  // first, so a brief blip won't cause an unnecessary rotation.
+  const RATE_LIMIT_ROTATE_THRESHOLD = 4;
 
   // How long a key marked "rate limited" sits out of rotation before it's
   // considered usable again on its own, with no user action needed.
@@ -7560,6 +7572,15 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
     triedKeyIds.add(next.id);
     currentKeyId = next.id;
     currentUrl = _geminiUrl(model, next.key);
+    // Promote the key actually being used to the app-wide "active" key, and
+    // flag it as auto-rotated, so every indicator that shows "which API key
+    // is in use" (the quick 🔑 buttons, the API Key Manager's Active chip)
+    // stays truthful and updates live as rotation happens — not just the
+    // request itself.
+    setActiveApiKeyId(next.id);
+    _lastAutoRotatedKeyId = next.id;
+    _refreshApiKeyQuickButtons();
+    _refreshApiKeyManagerIfOpen();
     if (onKeyRotated) { try { onKeyRotated(next); } catch (e) {} }
     return true;
   }
