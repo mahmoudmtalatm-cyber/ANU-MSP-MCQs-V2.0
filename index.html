@@ -74,6 +74,29 @@
     .home-hero h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -.5px; }
     .home-hero p { font-size: 1rem; opacity: .85; margin-top: 6px; }
 
+    .home-footer {
+      background: var(--accent);
+      text-align: center;
+      padding: 18px 20px 22px;
+      color: #fff;
+    }
+    .home-footer-credit { font-size: .85rem; font-weight: 600; opacity: .85; margin-bottom: 10px; }
+    .home-footer-feedback {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,.15);
+      color: #fff;
+      border: 1.5px solid rgba(255,255,255,.55);
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: .9rem;
+      font-family: inherit;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .home-footer-feedback:hover { background: rgba(255,255,255,.3); }
+
     .home-body {
       flex: 1;
       display: flex;
@@ -1920,14 +1943,6 @@
   background: var(--apikey-color, var(--accent)); color: #fff; padding: 2px 8px; border-radius: 20px;
   white-space: nowrap;
 }
-.apikey-active-chip-rotated { background: #6D4C41; }
-.apikey-rotated-badge { font-size: .85em; }
-.apikey-status-tip {
-  font-size: .74rem; font-weight: 700; padding: 4px 8px; border-radius: 6px;
-  width: fit-content; max-width: 100%; overflow-wrap: anywhere;
-}
-.apikey-status-disabled { background: #FDEAEA; color: #C62828; }
-.apikey-status-ratelimited { background: #FFF3E0; color: #B25E00; }
 .apikey-masked {
   font-size: .78rem; color: var(--text-muted); font-family: monospace; letter-spacing: .5px;
   min-width: 0; overflow-wrap: anywhere; word-break: break-all;
@@ -2228,6 +2243,11 @@
         <div class="legend-item"><div class="legend-dot" style="background:var(--nav-current)"></div> Current</div>
         <div class="legend-item"><div class="legend-dot" style="background:var(--nav-default)"></div> Unanswered</div>
       </div>
+    </div>
+
+    <div class="home-footer">
+      <div class="home-footer-credit">Created by Mahmoud Talat</div>
+      <a class="home-footer-feedback" href="https://t.me/Mahmoud_M_Talat" target="_blank" rel="noopener noreferrer">💬&nbsp; Send Feedback</a>
     </div>
   </div>
 
@@ -3840,101 +3860,10 @@ function dismissWaterFlood() {
 ══════════════════════════════════════════════════════════ */
 
 const AI_EXPLAIN_KEY_STORE = 'anu_msp_gemini_api_key'; // legacy single-key store (used for migration only)
-const API_KEYS_STORE       = 'anu_msp_gemini_api_keys_v2';     // [{id,label,key,color,status,rateLimitedUntil,disabledReason}]
+const API_KEYS_STORE       = 'anu_msp_gemini_api_keys_v2';     // [{id,label,key,color}]
 const API_ACTIVE_ID_STORE  = 'anu_msp_gemini_active_key_id_v2';
-const API_SMART_ROTATION_STORE = 'anu_msp_gemini_smart_rotation_v1';
 
 const API_KEY_COLORS = ['#1B8AC4','#8E24AA','#43A047','#FB8C00','#E53935','#00897B','#5E35B1','#D81B60','#3949AB','#6D4C41'];
-
-/* ── Smart API Rotation ──
-   When enabled, every AI call across the whole app (extraction, generation,
-   explanations, chat, refine/fill-choices/add-choice/solve, bulk tools — all
-   of them) is allowed to automatically hand off to a different saved key
-   instead of getting stuck on one, in two situations:
-     1. A key gets rate-limited (HTTP 429) — but only after enough consecutive
-        retries on that SAME key to be confident it's a genuine, sustained
-        rate limit and not a one-off blip (see callGeminiWithRetry). That key
-        is then marked "rate limited" with a cooldown and skipped until it
-        naturally expires.
-     2. A key is rejected outright (invalid/revoked/no permission, HTTP
-        401/403 or an API_KEY_INVALID-style 400) — that key is marked
-        "disabled" immediately and permanently until the user edits its value
-        in 🔑 Manage APIs, since retrying it would never succeed on its own.
-   Both checks always reload the saved key list fresh, so a key added while
-   a long-running process is mid-flight is picked up on the very next retry
-   without needing to restart anything. */
-function getSmartRotationEnabled() {
-  try { return localStorage.getItem(API_SMART_ROTATION_STORE) === '1'; } catch (e) { return false; }
-}
-function setSmartRotationEnabled(on) {
-  try { localStorage.setItem(API_SMART_ROTATION_STORE, on ? '1' : '0'); } catch (e) {}
-}
-function toggleSmartRotation(checked) {
-  setSmartRotationEnabled(!!checked);
-  renderApiKeyManager();
-}
-
-/* A key is usable right now if it isn't permanently disabled, and (if it was
-   rate-limited) its cooldown has already elapsed — in which case it's
-   silently treated as usable again without the user having to do anything. */
-function _apiKeyIsUsable(k, now) {
-  if (!k || !k.key) return false;
-  if (k.status === 'disabled') return false;
-  if (k.status === 'rateLimited') {
-    now = now || Date.now();
-    return !(k.rateLimitedUntil && k.rateLimitedUntil > now);
-  }
-  return true;
-}
-function _apiKeyEntryForKey(keyStr) {
-  if (!keyStr) return null;
-  return loadApiKeys().find(k => k.key === keyStr) || null;
-}
-function _apiKeyMarkRateLimited(id, cooldownMs) {
-  const keys = loadApiKeys();
-  const k = keys.find(x => x.id === id);
-  if (!k) return;
-  k.status = 'rateLimited';
-  k.rateLimitedUntil = Date.now() + cooldownMs;
-  k.disabledReason = null;
-  saveApiKeys(keys);
-  _refreshApiKeyManagerIfOpen();
-}
-function _apiKeyMarkDisabled(id, reason) {
-  const keys = loadApiKeys();
-  const k = keys.find(x => x.id === id);
-  if (!k) return;
-  k.status = 'disabled';
-  k.disabledReason = (reason || 'Rejected by Google — invalid key or no permission.').toString().slice(0, 300);
-  k.rateLimitedUntil = null;
-  saveApiKeys(keys);
-  _refreshApiKeyManagerIfOpen();
-}
-function _refreshApiKeyManagerIfOpen() {
-  const overlay = document.getElementById('apiKeyOverlay');
-  if (overlay && !overlay.classList.contains('hidden')) renderApiKeyManager();
-}
-/* Round-robin-ish pick of the next usable key not already tried in this
-   retry chain — always re-reads storage so newly-added keys are eligible
-   immediately, even mid-run. */
-let _rotationCursor = 0;
-// Id of the key that most recently became active via automatic Smart
-// Rotation (as opposed to the user picking it manually) — used to show a
-// "🔁 auto-switched" indicator instead of a plain "Active" one. Cleared as
-// soon as the user manually chooses a key again.
-let _lastAutoRotatedKeyId = null;
-function _pickNextRotationKey(excludeIds) {
-  const now = Date.now();
-  const keys = loadApiKeys();
-  if (!keys.length) return null;
-  const usable = keys.filter(k => _apiKeyIsUsable(k, now) && !(excludeIds && excludeIds.has(k.id)));
-  if (!usable.length) return null;
-  _rotationCursor = (_rotationCursor + 1) % usable.length;
-  return usable[_rotationCursor];
-}
-function _geminiUrl(model, key) {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-}
 
 let _apiKeyPendingCallback = null; // callback to resume once a key becomes active
 
@@ -4017,7 +3946,6 @@ function removeApiKeyById(id) {
   if (getActiveApiKeyId() === id) {
     setActiveApiKeyId(keys.length ? keys[0].id : '');
   }
-  if (_lastAutoRotatedKeyId === id) _lastAutoRotatedKeyId = null;
 }
 function renameApiKey(id, label) {
   const keys = loadApiKeys();
@@ -4027,16 +3955,7 @@ function renameApiKey(id, label) {
 function updateApiKeyValue(id, newKey) {
   const keys = loadApiKeys();
   const k = keys.find(x => x.id === id);
-  if (k) {
-    k.key = newKey;
-    // Changing the key's value is the only way to clear a "disabled" or
-    // "rate limited" status — the user has confirmed this is a different
-    // (or corrected) credential, so give it a fresh start.
-    k.status = null;
-    k.rateLimitedUntil = null;
-    k.disabledReason = null;
-    saveApiKeys(keys);
-  }
+  if (k) { k.key = newKey; saveApiKeys(keys); }
 }
 function maskApiKey(key) {
   if (!key) return '';
@@ -4050,9 +3969,7 @@ function maskApiKey(key) {
 function _apiKeyQuickBtnHTML() {
   const entry = getActiveApiKeyEntry();
   if (!entry) return '🔑 Add API Key';
-  const rotatedBadge = (entry.id === _lastAutoRotatedKeyId)
-    ? ` <span class="apikey-rotated-badge" title="Smart Rotation switched to this key automatically">🔁</span>` : '';
-  return `<span class="apikey-dot" style="background:${entry.color || 'var(--accent)'};"></span> ${escapeHtml(entry.label)}${rotatedBadge}`;
+  return `<span class="apikey-dot" style="background:${entry.color || 'var(--accent)'};"></span> ${escapeHtml(entry.label)}`;
 }
 function _refreshApiKeyQuickButtons() {
   document.querySelectorAll('.ai-apikey-btn').forEach(btn => {
@@ -4100,7 +4017,6 @@ function useApiKey(id) {
   }
 
   setActiveApiKeyId(id);
-  _lastAutoRotatedKeyId = null; // manual pick — no longer "auto-switched"
   renderApiKeyManager();
   // Refresh any inline "manage keys" widgets that might be open behind the modal
   if (typeof renderCustomQuizModal === 'function' && document.getElementById('customQuizBody')) {
@@ -4193,49 +4109,21 @@ function renderApiKeyManager() {
     You can add several keys — e.g. one per Google account — and switch between them any time. Your keys are saved only in this browser and are sent directly to Google's API, never through any other server. Only Gemini API keys are supported.
   </div>`;
 
-  const rotationOn = getSmartRotationEnabled();
-  html += `<div class="cq-help-box" style="display:flex;align-items:flex-start;gap:10px;">
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0;">
-      <input type="checkbox" ${rotationOn ? 'checked' : ''} onchange="toggleSmartRotation(this.checked)" style="width:18px;height:18px;cursor:pointer;" />
-    </label>
-    <div>
-      <strong>🔁 Smart API Rotation</strong> ${rotationOn ? '<span class="apikey-active-chip">On</span>' : ''}
-      <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;margin-top:2px;">
-        Auto-switches to your next saved key when one gets rate limited (⏳) or rejected (🚫), instead of stalling. Adds a tip if every key runs out.
-        <br><em>Note: toggling this takes effect on the next request — a job already running finishes with whatever setting it started with.</em>
-      </div>
-    </div>
-  </div>`;
-
   html += `<div class="apikey-list">`;
   if (!keys.length) {
     html += `<div class="apikey-empty"><span class="ns-icon">🔑</span>No API keys yet — add your first one below.</div>`;
   } else {
-    const now = Date.now();
     keys.forEach((k, idx) => {
       const isActive = k.id === activeId;
       const isEditing = _apiKeyEditingId === k.id;
       const color = k.color || API_KEY_COLORS[idx % API_KEY_COLORS.length];
-      let statusTipHtml = '';
-      if (k.status === 'disabled') {
-        statusTipHtml = `<div class="apikey-status-tip apikey-status-disabled">🚫 Not usable — ${escapeHtml(k.disabledReason || 'rejected by Google.')} Edit the key above to fix it.</div>`;
-      } else if (k.status === 'rateLimited') {
-        const remainMs = (k.rateLimitedUntil || 0) - now;
-        if (remainMs > 0) {
-          const remainMin = Math.max(1, Math.ceil(remainMs / 60000));
-          statusTipHtml = `<div class="apikey-status-tip apikey-status-ratelimited">⏳ Rate limited — sitting out of rotation for about ${remainMin} more minute${remainMin !== 1 ? 's' : ''}.</div>`;
-        }
-      }
       html += `<div class="apikey-item ${isActive ? 'active' : ''}" style="--apikey-color:${color};">
         <div class="apikey-num">${idx + 1}</div>
         <div class="apikey-info">
           <div class="apikey-label-row">
             <div class="apikey-label-display">${escapeHtml(k.label)}</div>
-            ${isActive ? (k.id === _lastAutoRotatedKeyId
-              ? `<span class="apikey-active-chip apikey-active-chip-rotated">🔁 Active (auto-switched)</span>`
-              : `<span class="apikey-active-chip">Active</span>`) : ''}
+            ${isActive ? `<span class="apikey-active-chip">Active</span>` : ''}
           </div>
-          ${statusTipHtml}
           ${isEditing ? `
           <div class="apikey-edit-row">
             <input type="password" id="apikeyEditInput_${k.id}" value="${escapeHtml(k.key)}"
@@ -4657,8 +4545,7 @@ async function explainQuestion(i, forceRegenerate = false) {
       contents: [{ parts }],
       generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
     }, {
-      cancelToken: token,
-      model: AI_EXPLAIN_MODEL
+      cancelToken: token
     });
 
     const text = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
@@ -4699,12 +4586,7 @@ async function explainQuestion(i, forceRegenerate = false) {
     const isKeyErr = err._keyError || /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     const p = document.getElementById(`explainPanel_${i}`);
     if (p) {
-      if (err._allKeysExhausted) {
-        renderExplainKeyPrompt(p, (key) => {
-          p.innerHTML = '';
-          explainQuestion(i);
-        }, err.message);
-      } else if (isKeyErr) {
+      if (isKeyErr) {
         renderExplainKeyPrompt(p, (key) => {
           p.innerHTML = '';
           explainQuestion(i);
@@ -5194,8 +5076,7 @@ async function runChatRequest(i) {
       systemInstruction: { parts: [{ text: buildChatSystemInstruction(i) }] },
       generationConfig: { temperature: 0.4, maxOutputTokens: 1536 }
     }, {
-      cancelToken: token,
-      model: CHAT_MODEL
+      cancelToken: token
     });
 
     const replyText = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
@@ -5216,11 +5097,6 @@ async function runChatRequest(i) {
     }
 
     const isKeyErr = err._keyError || /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
-    if (err._allKeysExhausted) {
-      const panel = document.getElementById(`chatPanel_${i}`);
-      if (panel) renderExplainKeyPrompt(panel, () => runChatRequest(i), err.message);
-      return;
-    }
     if (isKeyErr) {
       const panel = document.getElementById(`chatPanel_${i}`);
       if (panel) renderExplainKeyPrompt(panel, () => runChatRequest(i), 'Your active API key was rejected or is invalid — pick or add another one.');
@@ -5339,6 +5215,12 @@ let cqSplitState = null;
 // ── Inline editing of an already-saved custom quiz ──
 let cqEditingQuizId = null; // id of the saved quiz currently being edited, or null
 let cqEditQuestions = null; // working copy of that quiz's questions while the editor is open
+
+// Where the inline editor above is currently mounted: the normal Custom
+// Quizzes modal, or the admin panel's "My Custom Quizzes" list. Controls
+// which container id the editor renders into and which screen refreshes
+// itself once the editor closes or saves.
+let cqEditorContext = 'quiz'; // 'quiz' | 'admin'
 
 // ── Writing a brand-new quiz by hand (no AI) — reuses the same editor
 //    as above, just starts from a blank slate instead of an existing quiz ──
@@ -6318,7 +6200,7 @@ Respond ONLY with a JSON object: {"question": "the refined question text"}. No m
   const data = await callGeminiWithRetry(url, {
     contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 1024 }
-  }, { cancelToken: token, model: AI_TOOLS_MODEL });
+  }, { cancelToken: token });
   const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
   const parsed = _aiToolsParseJSON(textOut);
   const refined = (parsed && typeof parsed.question === 'string') ? parsed.question.trim() : '';
@@ -6400,7 +6282,7 @@ Respond ONLY with a JSON object: {"choices": [${Array(count).fill('"..."').join(
   const data = await callGeminiWithRetry(url, {
     contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens: 1024 }
-  }, { cancelToken: token, model: AI_TOOLS_MODEL });
+  }, { cancelToken: token });
   const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
   const parsed = _aiToolsParseJSON(textOut);
   let choices = (parsed && Array.isArray(parsed.choices)) ? parsed.choices.filter(c => typeof c === 'string' && c.trim()) : [];
@@ -6943,24 +6825,15 @@ function renderCustomQuizModal() {
   const body     = document.getElementById('customQuizBody');
   const quizzes  = loadCustomQuizzes();
 
-  // A rebuild here (e.g. triggered just by closing the API Key Manager, or
-  // switching keys, while extraction/generation is running in the
-  // background) used to blow away the live "cqStatus" progress box and the
-  // pause/resume/stop row's current state, making an actively-running job
-  // look like it had silently stopped even though it hadn't. Snapshot both
-  // before rebuilding and restore them afterwards whenever a job is busy,
-  // so the visible progress is never lost just because the modal redrew.
-  const prevStatusEl  = document.getElementById('cqStatus');
-  const prevPauseRow  = document.getElementById('cqPauseRow');
-  const preservedStatusHTML   = (cqBusy && prevStatusEl) ? prevStatusEl.innerHTML : null;
-  const preservedPauseRowHTML = (cqBusy && prevPauseRow) ? prevPauseRow.innerHTML : null;
-  const preservedPauseRowDisplay = (cqBusy && prevPauseRow) ? prevPauseRow.style.display : null;
-
   let html = '';
 
   /* ── Saved custom quizzes ── */
   html += `<div class="cq-section">
-    <div class="cq-section-title">📚 Your Custom Quizzes</div>`;
+    <div class="cq-section-title">📚 Your Custom Quizzes</div>
+
+    <!-- API Key -->
+    ${renderCqApiKeyBadge()}
+    `;
   if (!quizzes.length) {
     html += `<div class="empty-state" style="padding:12px;">
       <div class="empty-icon">📭</div>
@@ -7263,22 +7136,6 @@ function renderCustomQuizModal() {
 
   body.innerHTML = html;
 
-  // Restore the live progress box / pause row exactly as they were, so a
-  // job that's genuinely still running never appears to have vanished just
-  // because something else (closing the key manager, switching a key,
-  // etc.) caused this modal to redraw mid-flight.
-  if (preservedStatusHTML !== null) {
-    const statusEl = document.getElementById('cqStatus');
-    if (statusEl) statusEl.innerHTML = preservedStatusHTML;
-  }
-  if (preservedPauseRowHTML !== null) {
-    const pauseRow = document.getElementById('cqPauseRow');
-    if (pauseRow) {
-      pauseRow.innerHTML = preservedPauseRowHTML;
-      if (preservedPauseRowDisplay) pauseRow.style.display = preservedPauseRowDisplay;
-    }
-  }
-
   if (cqGeneratedQuestions) renderCQPreview();
   if ((cqEditingQuizId || cqCreatingNew) && cqEditQuestions) renderCustomQuizEditor();
   setupCQDropzone();
@@ -7533,50 +7390,10 @@ const CQ_RESPONSE_SCHEMA = {
   }
 };
 
-/* Extracts the "key" query param from a Gemini URL, so callGeminiWithRetry
-   can figure out which saved key entry a plain `url` string corresponds to
-   without every call site having to pass it separately. */
-function _extractKeyFromGeminiUrl(u) {
-  const m = /[?&]key=([^&]+)/.exec(u || '');
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
-/* Drops a one-line "🔄 switched key" note into the live custom-quiz status
-   box, if one is currently showing (i.e. an extraction/generation job is
-   actually on screen). This runs for every rotation from every call site,
-   so the indicator doesn't depend on each caller wiring up its own
-   onKeyRotated handler. Silently does nothing if #cqStatus isn't present,
-   is empty, or the modal is hidden — so it never spams unrelated screens. */
-function _announceKeyRotationInStatus(next) {
-  try {
-    const statusEl = document.getElementById('cqStatus');
-    if (!statusEl || !statusEl.innerHTML.trim()) return;
-    const body = document.getElementById('customQuizBody');
-    if (!body || !body.offsetParent) return; // modal not visible
-    statusEl.insertAdjacentHTML('beforeend',
-      `<div class="cq-status warning apikey-rotation-note" style="margin-top:6px;">🔄 Rate limit hit — switched to API key "${escapeHtml(next.label)}" automatically.</div>`
-    );
-  } catch (e) {}
-}
-
-/* Builds a friendly, actionable error for when Smart Rotation has run out of
-   usable keys — every saved key is either still cooling down from a rate
-   limit or has been permanently disabled. */
-function _smartRotationExhaustedError() {
-  const e = new Error('All your API keys are currently rate-limited or unusable. Add another API key (🔑 Manage APIs) or wait a bit before trying again.');
-  e._allKeysExhausted = true;
-  return e;
-}
-
 /* ── Retry helper: retries indefinitely with exponential back-off (2s, 4s, 8s… capped at 30s).
    Only surfaces an error immediately if it's API-key-related
-   (HTTP 400 with API_KEY_INVALID / 401 / 403) — UNLESS Smart Rotation is on
-   and a `model` was supplied, in which case both rate-limit and key errors
-   are instead handled by silently rotating to the next usable saved key and
-   continuing the very same request/retry loop (same `bodyObj`, so nothing
-   about the in-flight conversation/context/prompt is ever lost — only the
-   URL/key changes). ──────── */
-async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCheck, model, onKeyRotated } = {}) {
+   (HTTP 400 with API_KEY_INVALID / 401 / 403). ──────── */
+async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCheck } = {}) {
   const KEY_ERRORS = ['API_KEY_INVALID', 'API_KEY_NOT_VALID', 'INVALID_API_KEY',
                       'PERMISSION_DENIED', 'API key not valid'];
 
@@ -7595,48 +7412,6 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
   // this only changes behavior when the user is actively trying to pause.
   const RATE_LIMIT_PAUSE_FALLBACK_THRESHOLD = 20;
 
-  // How many *successive* 429s on the SAME key, with Smart Rotation on,
-  // before that key is considered genuinely (not just momentarily) rate
-  // limited and handed off to the next one. With the exponential back-off
-  // above, this is still close to a minute of real retries on that one key
-  // first, so a brief blip won't cause an unnecessary rotation.
-  const RATE_LIMIT_ROTATE_THRESHOLD = 4;
-
-  // How long a key marked "rate limited" sits out of rotation before it's
-  // considered usable again on its own, with no user action needed.
-  const RATE_LIMIT_COOLDOWN_MS = 3 * 60 * 1000;
-
-  const rotationOn = !!model && getSmartRotationEnabled();
-  let currentUrl = url;
-  let currentKeyId = rotationOn ? ((_apiKeyEntryForKey(_extractKeyFromGeminiUrl(url)) || {}).id || null) : null;
-  const triedKeyIds = new Set(currentKeyId ? [currentKeyId] : []);
-
-  // Rotates to the next usable saved key not already tried in this call.
-  // Returns true if it rotated, false if every saved key is exhausted.
-  function _rotateToNextKey() {
-    const next = _pickNextRotationKey(triedKeyIds);
-    if (!next) return false;
-    triedKeyIds.add(next.id);
-    currentKeyId = next.id;
-    currentUrl = _geminiUrl(model, next.key);
-    // Promote the key actually being used to the app-wide "active" key, and
-    // flag it as auto-rotated, so every indicator that shows "which API key
-    // is in use" (the quick 🔑 buttons, the API Key Manager's Active chip)
-    // stays truthful and updates live as rotation happens — not just the
-    // request itself.
-    setActiveApiKeyId(next.id);
-    _lastAutoRotatedKeyId = next.id;
-    _refreshApiKeyQuickButtons();
-    _refreshApiKeyManagerIfOpen();
-    // Universal, call-site-agnostic feedback: if a "#cqStatus" progress box
-    // is currently on screen (custom-quiz extraction/generation of any
-    // kind), drop a one-line note into it so rotation is visible even for
-    // call sites that don't pass their own onKeyRotated handler.
-    _announceKeyRotationInStatus(next);
-    if (onKeyRotated) { try { onKeyRotated(next); } catch (e) {} }
-    return true;
-  }
-
   let attempt = 0;
   let consecutive429 = 0;
   while (true) {
@@ -7654,7 +7429,7 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
     if (cancelToken) cancelToken.controller = controller;
 
     try {
-      const resp = await fetch(currentUrl, {
+      const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyObj),
@@ -7668,30 +7443,11 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
         const err = new Error(msg);
         err._httpStatus = resp.status;
         err._apiData    = data;
-
-        // Key rejected outright (invalid/revoked/no permission) — with Smart
-        // Rotation on, that key is permanently unusable, so mark it disabled
-        // and hand off to the next saved key instead of failing the whole
-        // request. Without rotation (or once every key is exhausted), this
-        // still surfaces immediately exactly like before.
-        if (isKeyError(resp.status, data)) {
-          if (rotationOn) {
-            if (currentKeyId) _apiKeyMarkDisabled(currentKeyId, msg);
-            if (_rotateToNextKey()) { consecutive429 = 0; continue; }
-            throw _smartRotationExhaustedError();
-          }
-          throw Object.assign(err, { _keyError: true });
-        }
+        // Always surface key errors immediately — no point retrying
+        if (isKeyError(resp.status, data)) throw Object.assign(err, { _keyError: true });
 
         if (resp.status === 429) {
           consecutive429++;
-          if (rotationOn && consecutive429 >= RATE_LIMIT_ROTATE_THRESHOLD) {
-            // Generous retries already happened on this key (see threshold
-            // above) — confident it's a real, sustained rate limit now.
-            if (currentKeyId) _apiKeyMarkRateLimited(currentKeyId, RATE_LIMIT_COOLDOWN_MS);
-            if (_rotateToNextKey()) { consecutive429 = 0; continue; }
-            throw _smartRotationExhaustedError();
-          }
           if (pauseCheck && pauseCheck() && consecutive429 >= RATE_LIMIT_PAUSE_FALLBACK_THRESHOLD) {
             throw Object.assign(err, { _rateLimitPauseFallback: true });
           }
@@ -7717,7 +7473,7 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
       if (err.name === 'AbortError' || (cancelToken && cancelToken.cancelled)) {
         const e = new Error('cancelled'); e._cancelled = true; throw e;
       }
-      if (err._keyError || err._cancelled || err._rateLimitPauseFallback || err._allKeysExhausted) throw err; // propagate immediately
+      if (err._keyError || err._cancelled || err._rateLimitPauseFallback) throw err; // propagate immediately
       consecutive429 = 0; // a non-HTTP-429 failure (network error etc.) resets the streak
       if (onRetry) onRetry(attempt);
       await cancellableSleep(Math.min(2000 * Math.pow(2, attempt - 1), 30000), cancelToken);
@@ -8093,16 +7849,7 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
         system_instruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: 'user', parts }],
         generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
-      }, {
-        pauseCheck: () => cqPauseRequested,
-        cancelToken: cancelToken,
-        model: CQ_MODEL,
-        onKeyRotated: (next) => {
-          apiKey = next.key; // keep using the newly-active key on later batches too
-          // (the visible "🔄 switched key" note itself is now handled
-          // globally by _announceKeyRotationInStatus, for every call site)
-        }
-      });
+      }, { pauseCheck: () => cqPauseRequested, cancelToken: cancelToken });
 
       const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
       const cleanText = textOut.replace(/```json|```/g, '').trim();
@@ -8618,7 +8365,7 @@ async function _extractQuestionsFromFile(file, apiKey, onProgress) {
       temperature: 0,
       maxOutputTokens: 65536
     }
-  }, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken, model: CQ_MODEL });
+  }, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken });
 
   const candidate = data && data.candidates && data.candidates[0];
   if (!candidate) throw new Error(`Gemini returned no result for "${file.name}". The file may be unsupported or blocked — try a clearer image or PDF.`);
@@ -8837,10 +8584,6 @@ async function generateQuizFromAI() {
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (err._cqStopped || err._cancelled) {
       statusEl.innerHTML = '';
-    } else if (err._allKeysExhausted) {
-      statusEl.innerHTML = `<div class="cq-status error">🚦 ${escapeHtml(err.message)}<br><br>
-        <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Manage API Keys</button>
-      </div>`;
     } else if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
         <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Choose or Add a Different Key</button>
@@ -8961,7 +8704,7 @@ async function _generateQuestionsFromLectureFile(file, generationPrompt, apiKey,
   }
 
   report(0.15, `Generating questions from "${escapeHtml(file.name)}"…`);
-  const data = await callGeminiWithRetry(url, requestBody, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken, model: CQ_MODEL });
+  const data = await callGeminiWithRetry(url, requestBody, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken });
 
   const candidate = data && data.candidates && data.candidates[0];
   if (!candidate) throw new Error(`Gemini returned no result for "${file.name}". The file may be unsupported or too large — try splitting it into smaller sections.`);
@@ -9101,10 +8844,6 @@ async function generateQuizFromLecture() {
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (err._cqStopped || err._cancelled) {
       statusEl.innerHTML = `<div class="cq-status warning">⏹️ Stopped. Nothing generated before the abort was lost, but you'll need to click <strong>Generate Questions</strong> again to continue.</div>`;
-    } else if (err._allKeysExhausted) {
-      statusEl.innerHTML = `<div class="cq-status error">🚦 ${escapeHtml(err.message)}<br><br>
-        <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Manage API Keys</button>
-      </div>`;
     } else if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
         <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Choose or Add a Different Key</button>
@@ -11456,6 +11195,7 @@ function openAdminPanel() {
   }
   adminSourceTab    = 'custom'; // Publish tab is curriculum-only now, so this is always the sensible start
   adminSelectedQuiz = null;
+  if (cqEditorContext === 'admin') { cqEditorContext = 'quiz'; cqEditingQuizId = null; cqEditQuestions = null; _questionEditDirty = false; }
   adminTargetYear   = '';
   adminTargetModule = '';
   adminTargetSubject= '';
@@ -11640,6 +11380,7 @@ async function adminRemoveAdminUI(email) {
 function adminSetSourceTab(tab) {
   adminSourceTab = tab;
   adminSelectedQuiz = null;
+  if (cqEditorContext === 'admin') { cqEditorContext = 'quiz'; cqEditingQuizId = null; cqEditQuestions = null; _questionEditDirty = false; }
   adminCommTab           = 'browse';
   adminCommSearchQuery   = '';
   adminCommYearFilter    = '';
@@ -11677,14 +11418,18 @@ async function renderAdminPanel() {
     } else {
       listHtml = quizzes.map(q => {
         const sel = adminSelectedQuiz && adminSelectedQuiz.sourceType === 'custom' && adminSelectedQuiz.sourceId === q.id;
+        const isEditing = cqEditorContext === 'admin' && cqEditingQuizId === q.id;
         return `
           <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('custom','${q.id}')">
             <div class="admin-quiz-item-info">
               <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
               <div class="admin-quiz-item-meta">${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
             </div>
+            <button class="cq-btn cq-btn-secondary" style="background:#1B8AC4;color:#fff;flex-shrink:0;"
+              onclick="event.stopPropagation();${isEditing ? 'closeCustomQuizEditor()' : `openAdminCustomQuizEditor('${q.id}')`}">${isEditing ? '✖ Close Editor' : '✏️ Edit'}</button>
             <div class="admin-quiz-item-check">✓</div>
-          </div>`;
+          </div>
+          ${isEditing ? `<div class="cq-inline-editor" id="adminCqEditorArea_${q.id}" onclick="event.stopPropagation()" style="margin:-2px 0 10px;"></div>` : ''}`;
       }).join('');
     }
   } else {
@@ -11708,6 +11453,12 @@ async function renderAdminPanel() {
   // Only curriculum-permitted admins get the "assign to curriculum" workflow;
   // a community-only admin just browses/moderates the list above.
   if (canCurriculum) renderAdminAssignForm();
+
+  // If a custom quiz is currently being edited inline from this panel, fill
+  // in its editor now that the container div above exists in the DOM.
+  if (adminSourceTab === 'custom' && cqEditorContext === 'admin' && cqEditingQuizId) {
+    renderCustomQuizEditor();
+  }
 
   if (adminSourceTab === 'community') {
     if (!adminCommunityCache) {
@@ -12606,13 +12357,33 @@ function openCustomQuizEditor(id) {
   if (area) area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+/* Same editor as openCustomQuizEditor above, but mounted inside the admin
+   panel's "My Custom Quizzes" list instead of the Custom Quizzes modal —
+   lets an admin edit a quiz's questions right where they're picking it for
+   assignment, without leaving the admin panel. */
+function openAdminCustomQuizEditor(id) {
+  const quizzes = loadCustomQuizzes();
+  const quiz = quizzes.find(q => q.id === id);
+  if (!quiz) return;
+  cqEditorContext = 'admin';
+  cqCreatingNew = false;
+  cqEditingQuizId = id;
+  cqEditQuestions = JSON.parse(JSON.stringify(quiz.questions || []));
+  _questionEditDirty = false;
+  renderAdminPanel();
+  const area = document.getElementById('adminCqEditorArea_' + id);
+  if (area) area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 function closeCustomQuizEditor() {
   _guardedClose(() => {
+    const wasAdmin = cqEditorContext === 'admin';
     cqCreatingNew = false;
     cqEditingQuizId = null;
     cqEditQuestions = null;
     cqNewQuizTitle = '';
-    renderCustomQuizModal();
+    cqEditorContext = 'quiz';
+    if (wasAdmin) { renderAdminPanel(); } else { renderCustomQuizModal(); }
   });
 }
 
@@ -12643,7 +12414,10 @@ function openNewQuizComposer() {
    composing a brand-new one (a single fixed area, since it has no id yet). */
 function _cqEditorKey() { return cqCreatingNew ? 'new' : cqEditingQuizId; }
 function _cqEditorContainerId() {
-  return cqCreatingNew ? 'cqNewQuizEditorArea' : ('cqCustomEditorArea_' + cqEditingQuizId);
+  if (cqCreatingNew) return 'cqNewQuizEditorArea';
+  return cqEditorContext === 'admin'
+    ? ('adminCqEditorArea_' + cqEditingQuizId)
+    : ('cqCustomEditorArea_' + cqEditingQuizId);
 }
 
 function renderCustomQuizEditor() {
@@ -12970,12 +12744,14 @@ async function saveCustomQuizEdits() {
 
   try {
     await saveCustomQuizzesList(quizzes);
+    const wasAdmin = cqEditorContext === 'admin';
     cqCreatingNew = false;
     cqEditingQuizId = null;
     cqEditQuestions = null;
     cqNewQuizTitle = '';
+    cqEditorContext = 'quiz';
     _questionEditDirty = false;
-    renderCustomQuizModal();
+    if (wasAdmin) { renderAdminPanel(); } else { renderCustomQuizModal(); }
   } catch (e) {
     if (statusEl) statusEl.innerHTML = `<div class="cq-status warning">⚠️ Save failed: ${escapeHtml(e.message || String(e))}</div>`;
   }
