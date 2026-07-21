@@ -5748,7 +5748,7 @@ function _ensureAiActivityPanelEl() {
   if (el) return el;
   el = document.createElement('div');
   el.id = 'aiActivityPanel';
-  el.style.cssText = 'position:fixed;bottom:18px;right:18px;z-index:9999;width:290px;font-family:var(--font);';
+  el.style.cssText = 'position:fixed;bottom:18px;right:18px;z-index:20000;width:290px;font-family:var(--font);';
   document.body.appendChild(el);
   return el;
 }
@@ -5756,8 +5756,19 @@ function _aiActivityToggleCollapse() {
   _aiActivityPanelCollapsed = !_aiActivityPanelCollapsed;
   _renderAiActivityPanel();
 }
+// Dismissing a row only clears it from the floating panel — it does NOT
+// touch the underlying process (still running, still cancellable via the
+// question card's own Stop button; still finishes/still fires its toast).
+// This is purely "clear my screen", never "stop my work".
+function _aiActivityDismiss(runId) {
+  const run = _aiActivity[runId];
+  if (!run) return;
+  run.dismissed = true;
+  _renderAiActivityPanel();
+}
 function _renderAiActivityPanel() {
-  const runs = Object.values(_aiActivity).sort((a, b) => a.ts - b.ts);
+  const allRuns = Object.values(_aiActivity).sort((a, b) => a.ts - b.ts);
+  const runs = allRuns.filter(r => !r.dismissed);
   const el = _ensureAiActivityPanelEl();
   if (!runs.length) { el.innerHTML = ''; return; }
   const runningCount = _aiActivityCountRunning();
@@ -5768,8 +5779,12 @@ function _renderAiActivityPanel() {
     </div>`;
   if (_aiActivityPanelCollapsed) { el.innerHTML = headerHtml; return; }
   const rowsHtml = runs.map(run => `
-    <div style="padding:8px 12px;border-bottom:1px solid #E3ECF5;background:#fff;">
-      <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:3px;">${escapeHtml(run.qLabel)}</div>
+    <div style="padding:8px 12px;border-bottom:1px solid #E3ECF5;background:#fff;position:relative;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:3px;">
+        <div style="font-size:.72rem;color:var(--text-muted);">${escapeHtml(run.qLabel)}</div>
+        <button type="button" onclick="event.stopPropagation();_aiActivityDismiss('${run.id}')" title="Dismiss (keeps running in the background)"
+          style="flex:none;border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:.85rem;line-height:1;padding:0 0 0 4px;">✕</button>
+      </div>
       ${_aiActivityStatusHTML(run)}
     </div>`).join('');
   el.innerHTML = `${headerHtml}<div style="max-height:300px;overflow-y:auto;border-radius:0 0 10px 10px;box-shadow:0 4px 14px rgba(0,0,0,.14);">${rowsHtml}</div>`;
@@ -5780,13 +5795,24 @@ function _renderAiActivityPanel() {
    the activity panel is collapsed). Purely visual — auto-dismisses. */
 function _showAiToast(message, isError) {
   const el = document.createElement('div');
-  el.textContent = message;
   const bottomOffset = (_aiActivityCountRunning() || Object.keys(_aiActivity).length) ? 78 : 18;
-  el.style.cssText = `position:fixed;bottom:${bottomOffset}px;right:18px;z-index:10000;background:${isError ? '#C62828' : '#2E7D32'};
+  el.style.cssText = `position:fixed;bottom:${bottomOffset}px;right:18px;z-index:20001;background:${isError ? '#C62828' : '#2E7D32'};
     color:#fff;padding:9px 14px;border-radius:8px;font-family:var(--font);font-size:.8rem;box-shadow:0 4px 14px rgba(0,0,0,.2);
-    max-width:290px;transition:opacity .4s;`;
+    max-width:290px;transition:opacity .4s;display:flex;align-items:center;gap:10px;justify-content:space-between;`;
+  const textSpan = document.createElement('span');
+  textSpan.textContent = message;
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.textContent = '✕';
+  closeBtn.title = 'Dismiss';
+  closeBtn.style.cssText = 'flex:none;border:none;background:none;cursor:pointer;color:#fff;opacity:.85;font-size:.85rem;line-height:1;padding:0;';
+  const dismiss = () => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); };
+  closeBtn.onclick = dismiss;
+  el.appendChild(textSpan);
+  el.appendChild(closeBtn);
   document.body.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 4200);
+  const autoTimer = setTimeout(dismiss, 4200);
+  closeBtn.addEventListener('click', () => clearTimeout(autoTimer));
 }
 
 /* ── Per-question AI lock ──
@@ -10970,30 +10996,56 @@ function adminDefaultTab() {
   return null;
 }
 
+// Tracks whether the admin panel has ever been opened this session. The
+// FIRST open starts from a clean slate (as before); every open AFTER that
+// is a reopen, and should restore exactly the view the user left — same
+// tab, same Manage Curriculum drill-down position (Year → Module →
+// Subject), same Publish-tab target — instead of snapping back to the top
+// every time the panel is closed and reopened.
+let _adminPanelEverOpened = false;
+
 function openAdminPanel() {
   if (!isAdminUser(window._currentUser)) {
     alert('You do not have admin access.');
     return;
   }
-  adminSourceTab    = hasAdminPermission(window._currentUser, 'curriculum') ? 'custom' : 'community';
-  adminSelectedQuiz = null;
-  adminTargetYear   = '';
-  adminTargetModule = '';
-  adminTargetSubject= '';
-  adminPubTargetYear   = '';
-  adminPubTargetModule = '';
-  adminPubTargetSubject= '';
-  adminPublishInsertPosition = null;
-  adminCommunityCache = null;
-  adminCurrNavLevel = 'years';
   const defaultTab = adminDefaultTab();
   if (!defaultTab) {
     alert('You do not have admin access.');
     return;
   }
-  adminActiveTab = defaultTab;
+  if (!_adminPanelEverOpened) {
+    adminSourceTab    = hasAdminPermission(window._currentUser, 'curriculum') ? 'custom' : 'community';
+    adminSelectedQuiz = null;
+    adminTargetYear   = '';
+    adminTargetModule = '';
+    adminTargetSubject= '';
+    adminPubTargetYear   = '';
+    adminPubTargetModule = '';
+    adminPubTargetSubject= '';
+    adminPublishInsertPosition = null;
+    adminCurrNavLevel = 'years';
+    adminActiveTab = defaultTab;
+    _adminPanelEverOpened = true;
+  } else {
+    // Reopening: keep the tab/drill-down position as-is, but fall back to
+    // a safe default tab if this user's permissions changed while the
+    // panel was closed and they can no longer see their previous tab.
+    const user = window._currentUser;
+    const tabStillAllowed =
+      (adminActiveTab === 'publish'    && (hasAdminPermission(user, 'curriculum') || hasAdminPermission(user, 'community'))) ||
+      (adminActiveTab === 'curriculum' && hasAdminPermission(user, 'curriculum')) ||
+      (adminActiveTab === 'admins'     && hasAdminPermission(user, 'admins'));
+    if (!tabStillAllowed) adminActiveTab = defaultTab;
+  }
+  // Unlike the navigation state above, this is fetched shared data (other
+  // admins/users may have added or removed community quizzes while this
+  // panel was closed) — it already does its own server-version check before
+  // deciding whether to actually refetch, so clearing it here just lets that
+  // check run again; it does NOT force a full reload every time.
+  adminCommunityCache = null;
   document.getElementById('adminOverlay').classList.remove('hidden');
-  adminSwitchTab(defaultTab);
+  adminSwitchTab(adminActiveTab);
 }
 
 function closeAdminPanel() {
@@ -13339,6 +13391,17 @@ document.addEventListener('click', (e) => {
     const caret = caretId && document.getElementById(caretId);
     if (caret && caret.contains(e.target)) return;
     picker.style.display = 'none';
+    // Also clear the persisted "which popover is open" state (this is what
+    // makes the reopen/rerender state-restore work in _renderAiRefineTools).
+    // Without this, the DOM element gets hidden here but the tracked state
+    // still says it's open, so the very next rerender of this card (e.g.
+    // from an unrelated status update) snaps the popover back open on its
+    // own — that's the "menus behave oddly" bug.
+    const idMatch = /^ai(?:SourcePicker|RefineInstrPicker)_(.+)$/.exec(picker.id);
+    if (idMatch) {
+      const key = idMatch[1];
+      if (_aiPopoverOpenKey === key) { _aiPopoverOpenKey = null; _aiPopoverOpenKind = null; }
+    }
   });
 });
 
@@ -13369,7 +13432,19 @@ function renderAdminCurriculumPanel() {
     return;
   }
 
-  // Guard against a stale deeper level if its parent selection got cleared
+  // Guard against a stale deeper level if its parent selection got cleared,
+  // OR if the year/module/subject it points to no longer exists at all —
+  // e.g. it (or its parent) was deleted, possibly by another admin, while
+  // this panel was closed and its drill-down position was preserved.
+  if (adminTargetYear && !curriculum[adminTargetYear]) {
+    adminTargetYear = ''; adminTargetModule = ''; adminTargetSubject = '';
+  }
+  if (adminTargetModule && (!curriculum[adminTargetYear] || !curriculum[adminTargetYear][adminTargetModule])) {
+    adminTargetModule = ''; adminTargetSubject = '';
+  }
+  if (adminTargetSubject && !subjects[adminTargetSubject]) {
+    adminTargetSubject = '';
+  }
   if (adminCurrNavLevel === 'modules' && !adminTargetYear) adminCurrNavLevel = 'years';
   if (adminCurrNavLevel === 'subjects' && (!adminTargetYear || !adminTargetModule)) adminCurrNavLevel = 'modules';
   if (adminCurrNavLevel === 'quizzes' && (!adminTargetYear || !adminTargetModule || !adminTargetSubject)) adminCurrNavLevel = 'subjects';
