@@ -936,6 +936,34 @@
 .cq-edit-reask-btn.cq-edit-reask-btn-active:disabled {
   background: #EDE7F6; color: #4527A0; border-color: #B39DDB; opacity: 1; cursor: default;
 }
+.ai-source-picker {
+  position: relative; z-index: 20; margin: 4px 0 8px;
+}
+.ai-source-picker-inner {
+  background: #fff; border: 1.5px solid #A5D6A7; border-radius: 9px;
+  padding: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.12); max-width: 320px;
+}
+.ai-source-picker-title {
+  font-size: .72rem; font-weight: 800; color: #2E7D32; text-transform: uppercase;
+  letter-spacing: .5px; padding: 2px 6px 6px;
+}
+.ai-source-opt {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px;
+  font-size: .78rem; font-weight: 600; color: var(--text-main); cursor: pointer;
+  transition: background .12s;
+}
+.ai-source-opt:hover { background: #F1F8F4; }
+.ai-source-opt-active { background: #E8F5E9; color: #2E7D32; }
+.ai-source-opt-remove {
+  font-size: .7rem; color: #C62828; opacity: .6; padding: 0 3px; border-radius: 4px;
+}
+.ai-source-opt-remove:hover { opacity: 1; background: #FFEBEE; }
+.ai-source-picker-divider { height: 1px; background: #E0E0E0; margin: 5px 2px; }
+.ai-source-add-toggle {
+  padding: 6px 8px; border-radius: 6px; font-size: .78rem; font-weight: 700;
+  color: #1565C0; cursor: pointer; transition: background .12s;
+}
+.ai-source-add-toggle:hover { background: #F0F8FF; }
 .cq-bulk-ai-panel {
   margin: 8px 0 12px; padding: 12px 14px; background: #F3F0FF;
   border: 1.5px solid #C5B3F0; border-radius: 10px;
@@ -5641,7 +5669,8 @@ function _aiToolsButtonIds(editorKey, i) {
     `aiCustomBtn_${editorKey}_${i}`,
     `aiAddChoiceBtn_${editorKey}_${i}`,
     `aiFillChoicesBtn_${editorKey}_${i}`,
-    `cqAiSolveBtn_${i}` // only exists in the 'cq' extraction/review editor
+    `cqAiSolveBtn_${editorKey}_${i}`,   // now available in every editor, not just 'cq'
+    `aiSolveSrcCaret_${editorKey}_${i}` // the ▾ source picker toggle next to it
   ];
 }
 function _aiToolsSyncButtons(editorKey, i, busy, action) {
@@ -5656,7 +5685,7 @@ function _aiToolsSyncButtons(editorKey, i, busy, action) {
     refine:      `aiRefineBtn_${editorKey}_${i}`,
     addChoice:   `aiAddChoiceBtn_${editorKey}_${i}`,
     fillChoices: `aiFillChoicesBtn_${editorKey}_${i}`,
-    solve:       `cqAiSolveBtn_${i}`
+    solve:       `cqAiSolveBtn_${editorKey}_${i}`
   };
   const activeId = action && idMap[action];
   const activeEl = activeId && document.getElementById(activeId);
@@ -5736,9 +5765,13 @@ function _aiToolsCaseContext(questions, q) {
   return { textBlock, imagePart };
 }
 
-/* Renders the "🪄 Refine Question" toolbar + collapsible custom-instructions
-   box + status area. Placed directly under the question textarea in every
-   editor. editorKey: 'cq' | 'admin' | 'customQuiz'. */
+/* Renders the "🤖 AI Solve" + "🪄 Refine Question" toolbar + collapsible
+   custom-instructions box + source picker + status area. Placed directly
+   under the question textarea in every editor. editorKey: 'cq' | 'admin' |
+   'customQuiz'. AI Solve itself, and the ▾ button beside it that lets the
+   admin choose between answering from general AI knowledge or a specific
+   reference source (including adding a brand-new source on the spot), are
+   defined further down — see aiSolveQuestion() / _toggleAiSourcePicker(). */
 function _renderAiRefineTools(editorKey, i) {
   const key = _aiToolsKey(editorKey, i);
   const open = !!_aiToolsCustomPromptOpen[key];
@@ -5746,6 +5779,16 @@ function _renderAiRefineTools(editorKey, i) {
   const busy = _aiToolsIsBusy(editorKey, i);
   return `
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 8px;">
+      <div style="display:flex;">
+        <button class="cq-edit-reask-btn" type="button" id="cqAiSolveBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
+          title="Ask AI to solve this question using the source chosen below"
+          onclick="aiSolveQuestion('${editorKey}', ${i})"
+          style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;border-top-right-radius:0;border-bottom-right-radius:0;">🤖 AI Solve</button>
+        <button class="cq-edit-reask-btn" type="button" id="aiSolveSrcCaret_${editorKey}_${i}" ${busy ? 'disabled' : ''}
+          title="Choose what AI Solve should rely on: general AI knowledge, or a specific source"
+          onclick="_toggleAiSourcePicker('${editorKey}', ${i})"
+          style="background:#F1F8F4;color:#2E7D32;border-color:#A5D6A7;border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_aiSolveSourceShortLabel(editorKey, i)} ▾</button>
+      </div>
       <button class="cq-edit-reask-btn" type="button" id="aiRefineBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
         title="Use AI to rewrite this question with clear, exam-style phrasing and no grammar mistakes or typos"
         onclick="aiRefineQuestion('${editorKey}', ${i})"
@@ -5755,6 +5798,7 @@ function _renderAiRefineTools(editorKey, i) {
         onclick="_aiToggleCustomPrompt('${editorKey}', ${i})"
         style="background:#F0F8FF;color:var(--accent);border-color:#B0D4F0;">⚙️ Custom Instructions</button>
     </div>
+    <div id="aiSourcePicker_${editorKey}_${i}" class="ai-source-picker" style="display:none;"></div>
     <div id="aiCustomPromptWrap_${editorKey}_${i}" style="${open ? '' : 'display:none;'}margin:-3px 0 8px;">
       <textarea id="aiCustomPromptInput_${editorKey}_${i}" rows="2"
         oninput="_aiCustomPromptChanged('${editorKey}', ${i}, this.value)"
@@ -7593,27 +7637,244 @@ async function cqBulkRefineQuestions(questions, customInstructions, statusEl) {
   return { done, errors };
 }
 
-// Solve a single question from the preview panel
-async function cqAiSolveOne(i) {
-  if (!cqGeneratedQuestions || !cqGeneratedQuestions[i]) return;
+/* ══════════════════════════════════════════════════════════
+   AI SOLVE — per-question source picker
+   Every question card's 🤖 AI Solve button now has a ▾ caret beside it
+   that lets the admin choose, PER QUESTION, whether to solve using pure
+   AI knowledge, the bulk source already configured for this editor (the
+   text/files pasted into "AI Solve All" / MCQ-extraction settings), or
+   any source saved to the shared library below. Adding a brand-new
+   source from this picker saves it to that library, so it immediately
+   becomes available as a choice for every OTHER question too — in this
+   editor and any other editor — not just the one it was added from.
+   Library is in-memory only (cleared on page reload), same lifetime as
+   the existing bulk-source textareas.
+══════════════════════════════════════════════════════════ */
+
+// { id, label, text, files: [{file, mimeType, name}] }
+let _aiSourceLibrary = [];
+let _aiSourceLibraryCounter = 0;
+
+// Per-question choice of what AI Solve should rely on, keyed by
+// `${editorKey}_${i}`. { type: 'ai' } | { type: 'bulk' } | { type: 'lib', id }
+const _aiSolveSourceChoice = {};
+
+// Draft state for the inline "add new source" form, keyed the same way,
+// cleared once the source is saved (or the form is cancelled/re-opened).
+const _aiSourceAddDraft = {};
+
+function _aiSolveBulkSourceHasContent(editorKey) {
+  if (editorKey === 'cq') return !!((cqAiAnswerSource && cqAiAnswerSource.trim()) || (cqAiSourceFiles && cqAiSourceFiles.length));
+  return !!((_editorBulkAiSource[editorKey] || '').trim());
+}
+function _aiSolveBulkSourceLabel(editorKey) {
+  return editorKey === 'cq' ? 'Bulk / extraction source' : 'Editor bulk source';
+}
+
+// First time a question card is asked for its choice, default to the bulk
+// source if this editor already has one configured (mirrors the old
+// single-source behaviour), otherwise default to plain AI knowledge.
+function _aiSolveGetChoice(editorKey, i) {
+  const key = _aiToolsKey(editorKey, i);
+  if (!_aiSolveSourceChoice[key]) {
+    _aiSolveSourceChoice[key] = _aiSolveBulkSourceHasContent(editorKey) ? { type: 'bulk' } : { type: 'ai' };
+  }
+  return _aiSolveSourceChoice[key];
+}
+
+function _aiSolveSourceShortLabel(editorKey, i) {
+  const choice = _aiSolveGetChoice(editorKey, i);
+  if (choice.type === 'bulk') return '📚 ' + _aiSolveBulkSourceLabel(editorKey);
+  if (choice.type === 'lib') {
+    const src = _aiSourceLibrary.find(s => s.id === choice.id);
+    if (src) return '📄 ' + src.label;
+  }
+  return '🧠 AI knowledge';
+}
+
+function _toggleAiSourcePicker(editorKey, i) {
+  const el = document.getElementById(`aiSourcePicker_${editorKey}_${i}`);
+  if (!el) return;
+  const showing = el.style.display !== 'none';
+  // Only one picker open at a time, across every card/editor.
+  document.querySelectorAll('.ai-source-picker').forEach(p => { if (p !== el) p.style.display = 'none'; });
+  if (showing) { el.style.display = 'none'; return; }
+  el.innerHTML = _renderAiSourcePickerHTML(editorKey, i);
+  el.style.display = 'block';
+}
+
+function _renderAiSourcePickerHTML(editorKey, i) {
+  const choice = _aiSolveGetChoice(editorKey, i);
+  const isSel = (t, id) => choice.type === t && (t !== 'lib' || choice.id === id);
+  let html = `<div class="ai-source-picker-inner">`;
+  html += `<div class="ai-source-picker-title">🤖 Solve using…</div>`;
+  html += `<div class="ai-source-opt${isSel('ai') ? ' ai-source-opt-active' : ''}" onclick="_aiSolvePickSource('${editorKey}', ${i}, 'ai', null)">🧠 AI knowledge only${isSel('ai') ? ' ✓' : ''}</div>`;
+  if (_aiSolveBulkSourceHasContent(editorKey)) {
+    html += `<div class="ai-source-opt${isSel('bulk') ? ' ai-source-opt-active' : ''}" onclick="_aiSolvePickSource('${editorKey}', ${i}, 'bulk', null)">📚 ${escapeHtml(_aiSolveBulkSourceLabel(editorKey))}${isSel('bulk') ? ' ✓' : ''}</div>`;
+  }
+  if (_aiSourceLibrary.length) {
+    html += `<div class="ai-source-picker-divider"></div>`;
+    _aiSourceLibrary.forEach(src => {
+      html += `<div class="ai-source-opt${isSel('lib', src.id) ? ' ai-source-opt-active' : ''}" onclick="_aiSolvePickSource('${editorKey}', ${i}, 'lib', '${src.id}')">
+        <span style="flex:1;">📄 ${escapeHtml(src.label)}${isSel('lib', src.id) ? ' ✓' : ''}</span>
+        <span class="ai-source-opt-remove" title="Remove this source" onclick="event.stopPropagation();_aiSourceLibraryRemove('${src.id}', '${editorKey}', ${i})">✕</span>
+      </div>`;
+    });
+  }
+  html += `<div class="ai-source-picker-divider"></div>`;
+  html += `<div class="ai-source-add-toggle" onclick="event.stopPropagation();_aiSourceAddFormToggle('${editorKey}', ${i})">➕ Add new source</div>`;
+  html += `<div id="aiSourceAddForm_${editorKey}_${i}" style="display:none;margin-top:6px;" onclick="event.stopPropagation();"></div>`;
+  html += `</div>`;
+  return html;
+}
+
+function _aiSolvePickSource(editorKey, i, type, id) {
+  _aiSolveSourceChoice[_aiToolsKey(editorKey, i)] = (type === 'lib') ? { type, id } : { type };
+  const btn = document.getElementById(`aiSolveSrcCaret_${editorKey}_${i}`);
+  if (btn) btn.innerHTML = escapeHtml(_aiSolveSourceShortLabel(editorKey, i)) + ' ▾';
+  const picker = document.getElementById(`aiSourcePicker_${editorKey}_${i}`);
+  if (picker) picker.style.display = 'none';
+}
+
+function _aiSourceAddFormToggle(editorKey, i) {
+  const wrap = document.getElementById(`aiSourceAddForm_${editorKey}_${i}`);
+  if (!wrap) return;
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : '';
+  if (!showing) wrap.innerHTML = _renderAiSourceAddFormHTML(editorKey, i);
+}
+function _aiSourceAddFormRerender(editorKey, i) {
+  const wrap = document.getElementById(`aiSourceAddForm_${editorKey}_${i}`);
+  if (wrap) wrap.innerHTML = _renderAiSourceAddFormHTML(editorKey, i);
+}
+function _aiSourceAddDraftChange(editorKey, i, field, val) {
+  const dk = _aiToolsKey(editorKey, i);
+  if (!_aiSourceAddDraft[dk]) _aiSourceAddDraft[dk] = { label: '', text: '', files: [] };
+  _aiSourceAddDraft[dk][field] = val;
+}
+function _aiSourceAddFileSelect(editorKey, i, input) {
+  const files = Array.from((input && input.files) || []);
+  const dk = _aiToolsKey(editorKey, i);
+  if (!_aiSourceAddDraft[dk]) _aiSourceAddDraft[dk] = { label: '', text: '', files: [] };
+  files.forEach(file => {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isImage = file.type.startsWith('image/');
+    if (!isPdf && !isImage) { alert(`"${file.name}" isn't an image or PDF — please upload an image or a PDF file.`); return; }
+    if (file.size > GEMINI_MAX_FILE_BYTES) { alert(`"${file.name}" is ${formatBytes(file.size)} — over the ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit.`); return; }
+    const mimeType = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+    _aiSourceAddDraft[dk].files.push({ file, mimeType, name: file.name });
+  });
+  input.value = '';
+  _aiSourceAddFormRerender(editorKey, i);
+}
+function _aiSourceAddRemoveFile(editorKey, i, idx) {
+  const dk = _aiToolsKey(editorKey, i);
+  if (_aiSourceAddDraft[dk]) _aiSourceAddDraft[dk].files.splice(idx, 1);
+  _aiSourceAddFormRerender(editorKey, i);
+}
+function _aiSourceAddDraftFileListHTML(editorKey, i, files) {
+  if (!files || !files.length) return '';
+  return `<div class="cq-dz-filelist">` + files.map((f, idx) => `
+    <div class="cq-dz-file-item">
+      <span>✅ ${escapeHtml(f.name)}</span>
+      <button type="button" onclick="_aiSourceAddRemoveFile('${editorKey}', ${i}, ${idx})" title="Remove this file">✕</button>
+    </div>`).join('') + `</div>`;
+}
+function _renderAiSourceAddFormHTML(editorKey, i) {
+  const dk = _aiToolsKey(editorKey, i);
+  const draft = _aiSourceAddDraft[dk] || { label: '', text: '', files: [] };
+  return `
+    <input type="text" placeholder="Source name (e.g. Lecture 4 slides)" value="${escapeHtml(draft.label)}"
+      oninput="_aiSourceAddDraftChange('${editorKey}', ${i}, 'label', this.value)"
+      style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid #B0D4F0;border-radius:5px;margin-bottom:5px;box-sizing:border-box;">
+    <textarea rows="2" placeholder="Paste reference text (optional)…"
+      oninput="_aiSourceAddDraftChange('${editorKey}', ${i}, 'text', this.value)"
+      style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid #B0D4F0;border-radius:5px;margin-bottom:5px;resize:vertical;box-sizing:border-box;">${escapeHtml(draft.text)}</textarea>
+    <input type="file" accept="image/*,application/pdf" multiple
+      onchange="_aiSourceAddFileSelect('${editorKey}', ${i}, this)" style="font-size:.72rem;margin-bottom:5px;">
+    ${_aiSourceAddDraftFileListHTML(editorKey, i, draft.files)}
+    <div style="display:flex;gap:6px;">
+      <button type="button" class="cq-edit-reask-btn" style="background:#1565C0;color:#fff;font-size:.72rem;"
+        onclick="_aiSourceAddSave('${editorKey}', ${i})">✅ Save Source</button>
+      <button type="button" class="cq-edit-reask-btn" style="font-size:.72rem;"
+        onclick="_aiSourceAddFormToggle('${editorKey}', ${i})">Cancel</button>
+    </div>`;
+}
+// Saves the draft to the shared library — this makes it available to
+// EVERY question card from now on (see _aiSourceLibrary), not just the one
+// it was added from — then immediately selects it for the current question.
+function _aiSourceAddSave(editorKey, i) {
+  const dk = _aiToolsKey(editorKey, i);
+  const draft = _aiSourceAddDraft[dk] || { label: '', text: '', files: [] };
+  const label = (draft.label || '').trim();
+  const text = (draft.text || '').trim();
+  const files = draft.files || [];
+  if (!label) { alert('Give this source a name.'); return; }
+  if (!text && !files.length) { alert('Add some reference text or at least one file.'); return; }
+  const id = 'src_' + (++_aiSourceLibraryCounter) + '_' + Date.now();
+  _aiSourceLibrary.push({ id, label, text, files });
+  delete _aiSourceAddDraft[dk];
+  _aiSolvePickSource(editorKey, i, 'lib', id);
+}
+function _aiSourceLibraryRemove(id, editorKey, i) {
+  const idx = _aiSourceLibrary.findIndex(s => s.id === id);
+  if (idx === -1) return;
+  if (!confirm(`Remove source "${_aiSourceLibrary[idx].label}"? Any question currently set to use it will fall back to AI knowledge.`)) return;
+  _aiSourceLibrary.splice(idx, 1);
+  Object.keys(_aiSolveSourceChoice).forEach(k => {
+    if (_aiSolveSourceChoice[k].type === 'lib' && _aiSolveSourceChoice[k].id === id) delete _aiSolveSourceChoice[k];
+  });
+  const btn = document.getElementById(`aiSolveSrcCaret_${editorKey}_${i}`);
+  if (btn) btn.innerHTML = escapeHtml(_aiSolveSourceShortLabel(editorKey, i)) + ' ▾';
+  const picker = document.getElementById(`aiSourcePicker_${editorKey}_${i}`);
+  if (picker) { picker.innerHTML = _renderAiSourcePickerHTML(editorKey, i); }
+}
+
+// Solve a single question, in ANY editor ('cq' | 'admin' | 'customQuiz'),
+// using whichever source the user has picked for it (see picker above).
+async function aiSolveQuestion(editorKey, i) {
   // Shares a lock with Refine Question / Fill Choices / Add Choice (AI) on
   // this same question — see _aiToolsBusy — so AI Solve can never settle on
   // an answer while one of those is still mid-write to the same question's
   // options, and vice versa.
-  if (_aiToolsIsBusy('cq', i)) {
-    _aiToolsSetStatus('cq', i, _aiToolsErrorHTML('Another AI action is already running on this question — please wait for it to finish.'));
+  if (_aiToolsIsBusy(editorKey, i)) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Another AI action is already running on this question — please wait for it to finish.'));
     return;
   }
-  _aiToolsSetBusy('cq', i, true, 'solve');
-  const statusEl = document.getElementById('cqReaskStatus_' + i);
-  if (statusEl) statusEl.innerHTML = '<div class="cq-status info" style="font-size:.75rem;padding:5px 10px;"><div class="cq-spinner" style="width:12px;height:12px;border-width:2px;"></div> 🤖 AI is solving this question…</div>';
-  try {
-    await cqAiSolveQuestions(cqGeneratedQuestions, [i], cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
-  } finally {
-    _aiToolsSetBusy('cq', i, false, 'solve');
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const q = questions[i];
+  if (!q.question || !q.question.trim()) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Write the question text first.'));
+    return;
   }
-  if (statusEl) statusEl.innerHTML = '';
-  renderCQPreview();
+  const apiKey = _aiToolsRequireKey(editorKey, i);
+  if (!apiKey) return;
+
+  const choice = _aiSolveGetChoice(editorKey, i);
+  let sourceText = '', sourceFiles = [];
+  if (choice.type === 'bulk') {
+    if (editorKey === 'cq') { sourceText = (cqAiAnswerSource || '').trim(); sourceFiles = cqAiSourceFiles || []; }
+    else { sourceText = (_editorBulkAiSource[editorKey] || '').trim(); }
+  } else if (choice.type === 'lib') {
+    const src = _aiSourceLibrary.find(s => s.id === choice.id);
+    if (src) { sourceText = src.text || ''; sourceFiles = src.files || []; }
+  }
+  // choice.type === 'ai' → leave both empty so cqAiSolveQuestions answers
+  // from general knowledge only.
+
+  _aiToolsSetBusy(editorKey, i, true, 'solve');
+  const statusEl = _aiToolsStatusEl(editorKey, i);
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is solving this question…'));
+  try {
+    await cqAiSolveQuestions(questions, [i], sourceText, sourceFiles, statusEl);
+  } catch (e) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not solve this question.'));
+  } finally {
+    _aiToolsSetBusy(editorKey, i, false, 'solve');
+  }
+  ed.rerender();
 }
 
 
@@ -8188,10 +8449,6 @@ function renderCQPreview() {
       ${_renderMergeSourceBadge(q)}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
       ${_renderReorderButtons('cq', i, cqGeneratedQuestions.length)}
-      <button class="cq-edit-reask-btn" id="cqAiSolveBtn_${i}" ${_aiToolsIsBusy('cq', i) ? 'disabled' : ''}
-        title="Ask AI to solve this question using the configured source"
-        onclick="cqAiSolveOne(${i})"
-        style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 AI Solve</button>
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="cqDeleteQuestion(${i})"
         style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;">🗑 Delete</button>
@@ -8290,9 +8547,6 @@ function renderCQPreview() {
 
     /* ── AI Question Tools: Add Choice (AI) / Fill Choices (AI) ── */
     html += _renderAiChoiceTools('cq', i, optEntries.length, nextKey);
-
-    /* ── Re-ask / re-extract status area ── */
-    html += `<div id="cqReaskStatus_${i}" style="margin-top:6px;"></div>`;
 
     html += `</div>`; // end .cq-editable-q
   });
@@ -12778,6 +13032,19 @@ document.addEventListener('click', (e) => {
     if (pop) pop.classList.add('hidden');
     _openIconPickerId = null;
   }
+});
+
+// Close any open AI Solve source picker when clicking outside it (but not
+// when clicking the ▾ caret that opens it — that has its own toggle logic).
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.ai-source-picker').forEach(picker => {
+    if (picker.style.display === 'none') return;
+    if (picker.contains(e.target)) return;
+    const idSuffix = picker.id.replace('aiSourcePicker_', '');
+    const caret = document.getElementById('aiSolveSrcCaret_' + idSuffix);
+    if (caret && caret.contains(e.target)) return;
+    picker.style.display = 'none';
+  });
 });
 
 /* ══════════════════════════════════════════════════════════
