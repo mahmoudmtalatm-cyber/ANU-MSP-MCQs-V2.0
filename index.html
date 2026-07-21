@@ -10925,7 +10925,7 @@ function openAdminPanel() {
     alert('You do not have admin access.');
     return;
   }
-  adminActiveTab = defaultTab;
+  adminActiveTab = null; // force adminSwitchTab below to actually render instead of no-op'ing
   document.getElementById('adminOverlay').classList.remove('hidden');
   adminSwitchTab(defaultTab);
 }
