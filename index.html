@@ -4180,7 +4180,7 @@ function buildExplainPrompt(questions, q, userAnswer) {
     .filter(([k]) => k !== q.answer)
     .map(([k, v]) => `
 WRONG — ${k}. ${v}:
-[1–2 sentences: why this option is incorrect and what makes it a plausible distractor]`).join('');
+[1 tight sentence: the specific reason it's wrong — no restating the question or option text]`).join('');
 
   const hasImage = !!(q.image || _cqFindCaseGroupImage(questions, q));
   const imageNote = hasImage
@@ -4200,16 +4200,16 @@ ${optLines}
 CORRECT ANSWER: ${q.answer}. ${q.options[q.answer] || ''}
 ${userLine}
 
-Provide a concise explanation in this EXACT structure (use these exact section headers). You MUST include a section for EVERY answer choice, both correct and wrong:
+Provide a tight, information-dense explanation in this EXACT structure (use these exact section headers). You MUST include a section for EVERY answer choice, both correct and wrong. Every sentence must add new information — no throat-clearing, no restating the question, no filler phrases like "this is important because" or "let's look at":
 
 QUESTION OVERVIEW:
-[One sentence explaining what concept/clinical scenario this question is testing]
+[One sentence: the core concept/clinical scenario being tested — nothing else]
 
 CORRECT ANSWER — ${q.answer}. ${q.options[q.answer] || ''}:
-[2–3 sentences explaining WHY this is correct, with the key medical reasoning]
+[1–2 sentences with only the essential medical reasoning for why this is correct]
 ${wrongOptLines}
 
-Keep each section concise. Use plain text only — no markdown, no bullet points, no asterisks.`;
+Be as brief as possible while keeping every piece of medical reasoning — cut words, never cut content. Use plain text only — no markdown, no bullet points, no asterisks.`;
 }
 
 /* ── Render the "no active API key" prompt inside an explain panel ── */
@@ -4605,7 +4605,7 @@ function buildChatSystemInstruction(i) {
 
   const caseBlock = _cqCaseContextBlock(currentQuestions, q);
 
-  let ctx = `You are a friendly, knowledgeable medical education tutor chatting with a student about one MCQ question. Stay focused on this question and related concepts unless the student clearly asks something else.
+  let ctx = `You are a friendly, knowledgeable medical education tutor chatting with a student about one MCQ question. Stay focused on this question and related concepts unless the student clearly asks something else. Be concise by default: answer in 2–4 sentences, straight to the point, no restating the question, no filler pleasantries or hedging. Only go longer when the student explicitly asks for more detail or the concept genuinely can't be explained correctly in fewer words — but never drop essential medical content just to be short.
 
 ${caseBlock}QUESTION:
 ${q.question}
@@ -4628,7 +4628,7 @@ ${rawExplain}
 Build on this explanation rather than repeating it verbatim — clarify, expand, or address follow-up questions about it.`;
   }
 
-  ctx += `\n\nThe student may attach images or files (e.g. photos of notes, diagrams, or screenshots) — consider their contents when responding. Keep replies concise and clear, in plain text only — no markdown, no asterisks.`;
+  ctx += `\n\nThe student may attach images or files (e.g. photos of notes, diagrams, or screenshots) — consider their contents when responding. Default to short, direct replies; expand only if the question truly needs it. Plain text only — no markdown, no asterisks.`;
   return ctx;
 }
 
@@ -5374,6 +5374,288 @@ function _caseGroupSetCore(editorKey, i) {
 function _caseGroupOnQuestionDeleted(questions, deletedQuestion) {
   if (deletedQuestion && deletedQuestion.case_group) {
     _caseGroupEnsureSingleCore(questions, deletedQuestion.case_group);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   AI QUESTION TOOLS — Refine Question / Fill Choices / Add Choice
+   Available on every question card, in every question editor
+   (extraction review, admin publish/edit, write-your-own custom
+   quiz editor) via the shared _caseGroupEditors registry, so this
+   is written once and works everywhere without duplication.
+══════════════════════════════════════════════════════════ */
+
+const AI_TOOLS_MODEL = (typeof CQ_MODEL !== 'undefined') ? CQ_MODEL : 'gemini-2.5-flash';
+
+// Per-question UI state for the "Custom Instructions" box (whether it's
+// open, and its draft text) — keyed by `${editorKey}_${i}` since each
+// editor keeps its own independent set of question cards.
+const _aiToolsCustomPromptOpen = {};
+const _aiToolsCustomPromptText = {};
+function _aiToolsKey(editorKey, i) { return editorKey + '_' + i; }
+
+function _aiToolsStatusEl(editorKey, i) {
+  return document.getElementById(`aiToolsStatus_${editorKey}_${i}`);
+}
+function _aiToolsSetStatus(editorKey, i, html) {
+  const el = _aiToolsStatusEl(editorKey, i);
+  if (el) el.innerHTML = html;
+}
+function _aiToolsLoadingHTML(label) {
+  return `<div class="cq-status info" style="font-size:.75rem;padding:5px 10px;">
+    <div class="cq-spinner" style="width:12px;height:12px;border-width:2px;"></div> ${label}</div>`;
+}
+function _aiToolsErrorHTML(msg) {
+  return `<div class="cq-status warning" style="font-size:.75rem;padding:5px 10px;">⚠️ ${escapeHtml(msg)}</div>`;
+}
+/* Every AI tool call shares the same active Gemini key used everywhere else
+   in the app (extraction, AI Solve, explanations) — if none is configured
+   yet, point the user at where to add one instead of silently failing. */
+function _aiToolsRequireKey(editorKey, i) {
+  const apiKey = getActiveApiKey();
+  if (!apiKey) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Add a Gemini API key (⚙️ API Keys) to use AI tools.'));
+    return null;
+  }
+  return apiKey;
+}
+function _aiToggleCustomPrompt(editorKey, i) {
+  const key = _aiToolsKey(editorKey, i);
+  _aiToolsCustomPromptOpen[key] = !_aiToolsCustomPromptOpen[key];
+  const wrap = document.getElementById(`aiCustomPromptWrap_${editorKey}_${i}`);
+  if (wrap) wrap.style.display = _aiToolsCustomPromptOpen[key] ? '' : 'none';
+  if (_aiToolsCustomPromptOpen[key]) {
+    setTimeout(() => {
+      const ta = document.getElementById(`aiCustomPromptInput_${editorKey}_${i}`);
+      if (ta) ta.focus();
+    }, 30);
+  }
+}
+function _aiCustomPromptChanged(editorKey, i, val) {
+  _aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] = val;
+}
+/* Strips ```json fences (Gemini sometimes adds them despite the mime type
+   request) before parsing — same tolerant pattern used elsewhere in the app. */
+function _aiToolsParseJSON(text) {
+  const clean = (text || '').replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
+}
+
+/* Renders the "🪄 Refine Question" toolbar + collapsible custom-instructions
+   box + status area. Placed directly under the question textarea in every
+   editor. editorKey: 'cq' | 'admin' | 'customQuiz'. */
+function _renderAiRefineTools(editorKey, i) {
+  const key = _aiToolsKey(editorKey, i);
+  const open = !!_aiToolsCustomPromptOpen[key];
+  const draft = _aiToolsCustomPromptText[key] || '';
+  return `
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 8px;">
+      <button class="cq-edit-reask-btn" type="button" title="Use AI to rewrite this question with clear, exam-style phrasing and no grammar mistakes or typos"
+        onclick="aiRefineQuestion('${editorKey}', ${i})"
+        style="background:#EDE7F6;color:#6A1B9A;border-color:#CE93D8;">🪄 Refine Question</button>
+      <button class="cq-edit-reask-btn" type="button" title="Add optional custom instructions for the refine"
+        onclick="_aiToggleCustomPrompt('${editorKey}', ${i})"
+        style="background:#F0F8FF;color:var(--accent);border-color:#B0D4F0;">⚙️ Custom Instructions</button>
+    </div>
+    <div id="aiCustomPromptWrap_${editorKey}_${i}" style="${open ? '' : 'display:none;'}margin:-3px 0 8px;">
+      <textarea id="aiCustomPromptInput_${editorKey}_${i}" rows="2"
+        oninput="_aiCustomPromptChanged('${editorKey}', ${i}, this.value)"
+        placeholder="Optional — anything extra you want for THIS question (e.g. &quot;make it about penicillin resistance&quot;, &quot;keep it to one sentence&quot;). Only overrides the default refine behavior where it truly conflicts — grammar and exam phrasing still apply otherwise."
+        style="width:100%;resize:vertical;font-size:.78rem;padding:6px 8px;border:1.5px solid #D8C4EA;
+          border-radius:6px;font-family:var(--font);background:#FAF7FD;">${escapeHtml(draft)}</textarea>
+    </div>
+    <div id="aiToolsStatus_${editorKey}_${i}" style="margin:-3px 0 8px;"></div>`;
+}
+
+/* Renders the choice-related AI buttons (Add Choice AI, and Fill Choices
+   when under 4 options) — placed next to the existing "＋ Add Option"
+   button in every editor's options footer. */
+function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
+  let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:5px;">`;
+  if (nextKey) {
+    html += `<button class="cq-edit-reask-btn" type="button" title="Let AI write one more plausible answer choice for this question"
+      onclick="aiAddChoice('${editorKey}', ${i})"
+      style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 Add Choice (AI)</button>`;
+  }
+  if (optCount < 4 && nextKey) {
+    html += `<button class="cq-edit-reask-btn" type="button" title="Let AI fill in the remaining choices (up to 4 total)"
+      onclick="aiFillChoices('${editorKey}', ${i})"
+      style="background:#FFF3E0;color:#E65100;border-color:#FFB74D;">🧩 Fill Choices (AI)</button>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+/* ── Refine Question ──
+   Rewrites the question stem into clear, grammatically-correct, exam-style
+   phrasing without changing what's actually being asked, the topic, or any
+   fact/name/number in it, and without touching the answer choices. An
+   optional per-question custom instruction can ask for more — it only
+   overrides the default rules above where the two genuinely conflict on
+   that specific point; everything else still applies. */
+async function aiRefineQuestion(editorKey, i) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const q = questions[i];
+  if (!q.question || !q.question.trim()) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Write the question text first.'));
+    return;
+  }
+  const apiKey = _aiToolsRequireKey(editorKey, i);
+  if (!apiKey) return;
+
+  const custom = (_aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] || '').trim();
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🪄 Refining question…'));
+
+  const optEntries = getOptionEntries(q);
+  const optsText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none yet)';
+
+  const prompt = `You are an exam-writing expert. Rewrite ONLY the question stem below so it reads like a polished, professionally written exam question.
+Rules:
+- Fix all grammar, spelling, and typo issues.
+- Use clear, formal, exam-style phrasing and structure.
+- Do NOT change what the question is actually asking, its topic, or any fact/number/name in it.
+- Do NOT reference or rewrite the answer choices — they're given only as context.
+- Keep it roughly the same length unless told otherwise below.
+${custom ? `\nADDITIONAL INSTRUCTIONS FROM THE EDITOR (apply these too — if one of them genuinely conflicts with a rule above, THIS instruction wins for that specific point only; every other rule above still applies):\n"""${custom}"""\n` : ''}
+Original question:
+"""${q.question}"""
+
+Answer choices (context only — do not rewrite them):
+${optsText}
+
+Respond ONLY with a JSON object: {"question": "the refined question text"}. No markdown, no preamble.`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_TOOLS_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  try {
+    const data = await callGeminiWithRetry(url, {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 1024 }
+    });
+    const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+    const parsed = _aiToolsParseJSON(textOut);
+    const refined = (parsed && typeof parsed.question === 'string') ? parsed.question.trim() : '';
+    if (!refined) throw new Error('AI did not return a refined question.');
+    q.question = refined;
+    ed.rerender();
+  } catch (e) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not refine this question.'));
+  }
+}
+
+/* Shared distractor generator used by both Fill Choices and Add Choice (AI).
+   Asks for exactly `count` new, plausible-but-incorrect answer choices that
+   fit the question's subject, style, and difficulty — distinct from every
+   existing choice and from each other, and not generic filler. */
+async function _aiGenerateDistractors(apiKey, q, optEntries, count) {
+  const existingText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none)';
+  const correctVal = (optEntries.find(([k]) => k === q.answer) || [])[1] || '';
+
+  const prompt = `You are an exam-writing expert creating additional multiple-choice answer options (distractors) for an existing question.
+
+Question:
+"""${q.question}"""
+
+Existing answer choices:
+${existingText}
+${correctVal ? `\nThe correct answer is: "${correctVal}"` : ''}
+
+Write exactly ${count} NEW answer choice${count !== 1 ? 's' : ''} that:
+- Is/are plausible and on-topic — the kind of mistake a student who half-understands the material might pick.
+- Match the style, tone, length, and level of detail of the existing choices.
+- Is/are clearly and unambiguously INCORRECT (do not duplicate or restate the correct answer).
+- Is/are distinct from every existing choice and from each other.
+- Are NOT generic filler like "None of the above", "All of the above", or "I don't know".
+
+Respond ONLY with a JSON object: {"choices": [${Array(count).fill('"..."').join(', ')}]} containing exactly ${count} string${count !== 1 ? 's' : ''}, in order. No markdown, no preamble.`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_TOOLS_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const data = await callGeminiWithRetry(url, {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens: 1024 }
+  });
+  const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+  const parsed = _aiToolsParseJSON(textOut);
+  let choices = (parsed && Array.isArray(parsed.choices)) ? parsed.choices.filter(c => typeof c === 'string' && c.trim()) : [];
+  if (!choices.length) throw new Error('AI did not return usable choices.');
+  while (choices.length < count) choices.push('');
+  return choices.slice(0, count);
+}
+
+const _AI_TOOLS_ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
+
+/* ── Fill Choices ──
+   Tops a question up to 4 total answer choices, generating only the
+   missing ones — existing choices (and which one is correct) are untouched. */
+async function aiFillChoices(editorKey, i) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const q = questions[i];
+  if (!q.question || !q.question.trim()) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Write the question text first.'));
+    return;
+  }
+  const optEntries = getOptionEntries(q);
+  const usedKeys = optEntries.map(([k]) => k);
+  const missing = _AI_TOOLS_ALL_KEYS.filter(k => !usedKeys.includes(k)).slice(0, Math.max(0, 4 - optEntries.length));
+  if (!missing.length) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('This question already has 4 or more choices.'));
+    return;
+  }
+  const apiKey = _aiToolsRequireKey(editorKey, i);
+  if (!apiKey) return;
+
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(`🧩 Filling ${missing.length} more choice${missing.length !== 1 ? 's' : ''}…`));
+
+  try {
+    const newVals = await _aiGenerateDistractors(apiKey, q, optEntries, missing.length);
+    if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
+    missing.forEach((key, idx) => {
+      const val = newVals[idx] || '';
+      q.options[key] = val;
+      q.optionsOrder.push({ key, value: val });
+    });
+    ed.rerender();
+  } catch (e) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate choices.'));
+  }
+}
+
+/* ── Add Choice (AI) ──
+   Adds exactly one new, AI-written, plausible answer choice — regardless
+   of how many choices already exist (up to the 10-choice max). */
+async function aiAddChoice(editorKey, i) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const q = questions[i];
+  if (!q.question || !q.question.trim()) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Write the question text first.'));
+    return;
+  }
+  const optEntries = getOptionEntries(q);
+  const usedKeys = optEntries.map(([k]) => k);
+  const nextKey = _AI_TOOLS_ALL_KEYS.find(k => !usedKeys.includes(k));
+  if (!nextKey) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Maximum of 10 choices reached.'));
+    return;
+  }
+  const apiKey = _aiToolsRequireKey(editorKey, i);
+  if (!apiKey) return;
+
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is writing a new choice…'));
+
+  try {
+    const newVals = await _aiGenerateDistractors(apiKey, q, optEntries, 1);
+    const val = newVals[0] || '';
+    if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
+    q.options[nextKey] = val;
+    q.optionsOrder.push({ key: nextKey, value: val });
+    ed.rerender();
+  } catch (e) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate a new choice.'));
   }
 }
 
@@ -7340,6 +7622,9 @@ function renderCQPreview() {
       oninput="cqEditQuestion(${i}, this.value)"
       style="width:100%;resize:vertical;margin-bottom:8px;">${escapeHtml(q.question)}</textarea>`;
 
+    /* ── AI Question Tools: Refine Question + custom instructions ── */
+    html += _renderAiRefineTools('cq', i);
+
     /* ── Image area ── */
     html += `<div class="cq-img-edit-row" style="margin-bottom:8px;">`;
     if (q.image) {
@@ -7422,6 +7707,9 @@ function renderCQPreview() {
         ＋ Add Option ${nextKey}
       </button>`;
     }
+
+    /* ── AI Question Tools: Add Choice (AI) / Fill Choices (AI) ── */
+    html += _renderAiChoiceTools('cq', i, optEntries.length, nextKey);
 
     /* ── Re-ask / re-extract status area ── */
     html += `<div id="cqReaskStatus_${i}" style="margin-top:6px;"></div>`;
@@ -10026,6 +10314,9 @@ function renderAdminQuestionEditor(containerId) {
       oninput="adminEditQuestionText(${i}, this.value)"
       style="width:100%;resize:vertical;margin-bottom:8px;">${escapeHtml(q.question)}</textarea>`;
 
+    /* ── AI Question Tools: Refine Question + custom instructions ── */
+    html += _renderAiRefineTools('admin', i);
+
     /* Image area */
     html += `<div class="cq-img-edit-row" style="margin-bottom:8px;">`;
     if (q.image) {
@@ -10092,6 +10383,9 @@ function renderAdminQuestionEditor(containerId) {
         ＋ Add Option ${nextKey}
       </button>`;
     }
+
+    /* ── AI Question Tools: Add Choice (AI) / Fill Choices (AI) ── */
+    html += _renderAiChoiceTools('admin', i, optEntries.length, nextKey);
 
     html += `</div>`; // end .cq-editable-q
   });
@@ -10348,6 +10642,9 @@ function renderCustomQuizEditor() {
       oninput="cqEditQuestionText(${i}, this.value)"
       style="width:100%;resize:vertical;margin-bottom:8px;">${escapeHtml(q.question)}</textarea>`;
 
+    /* ── AI Question Tools: Refine Question + custom instructions ── */
+    html += _renderAiRefineTools('customQuiz', i);
+
     /* Image area */
     html += `<div class="cq-img-edit-row" style="margin-bottom:8px;">`;
     if (q.image) {
@@ -10414,6 +10711,9 @@ function renderCustomQuizEditor() {
         ＋ Add Option ${nextKey}
       </button>`;
     }
+
+    /* ── AI Question Tools: Add Choice (AI) / Fill Choices (AI) ── */
+    html += _renderAiChoiceTools('customQuiz', i, optEntries.length, nextKey);
 
     html += `</div>`; // end .cq-editable-q
   });
