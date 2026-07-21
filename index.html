@@ -10922,6 +10922,22 @@ let adminCommModuleFilter  = '';
 let adminCommSubjectFilter = '';
 let adminCommSort          = 'newest';
 
+// "🗂️ Manage Community Quiz" tab — a full admin-side duplicate of the
+// student-facing Community Quizzes browse menu (Browse All / My Shared,
+// search, cascading Year/Module/Subject filters, sort, tag chips), with
+// an admin Delete button added to every card. This is now the ONLY place
+// an admin deletes a community-shared quiz from — the Publish Quizzes
+// tab keeps its search/filter bar for picking a source to publish, but
+// has no delete button anywhere anymore. Kept as its own separate set of
+// variables so this tab's browsing/filtering never interferes with the
+// student-facing overlay's or the Publish tab's.
+let commManageTab           = 'browse'; // 'browse' | 'mine'
+let commManageSearchQuery   = '';
+let commManageYearFilter    = '';
+let commManageModuleFilter  = '';
+let commManageSubjectFilter = '';
+let commManageSort          = 'newest';
+
 // Inline quiz editor state (used both for "edit before publish" and "edit published lecture")
 let adminEditQuestions = null;   // working copy of questions array being edited, or null
 let adminEditMode      = null;   // 'publish' | 'published' | null
@@ -10956,8 +10972,19 @@ function renderAdminPanelTabs() {
   const canAdmins     = hasAdminPermission(user, 'admins');
 
   let html = '';
-  if (canCurriculum || canCommunity) {
+  // Publish Quizzes now requires 'curriculum' permission — it's the only
+  // thing that tab does (pick a source quiz + assign it into the
+  // curriculum), and deleting is no longer possible from here at all.
+  if (canCurriculum) {
     html += `<button class="admin-panel-tab ${adminActiveTab === 'publish' ? 'active' : ''}" id="adminTabPublish" onclick="adminSwitchTab('publish')">📤 Publish Quizzes</button>`;
+  }
+  // Manage Community Quiz — a full duplicate of the student-facing
+  // Community Quizzes browse menu (search, cascading filters, tags),
+  // with an admin Delete button added to every card. This is now the
+  // ONLY place a community-shared quiz gets deleted from in the admin
+  // panel. Requires 'community' permission, independent of 'curriculum'.
+  if (canCommunity) {
+    html += `<button class="admin-panel-tab ${adminActiveTab === 'commManage' ? 'active' : ''}" id="adminTabCommManage" onclick="adminSwitchTab('commManage')">🗂️ Manage Community Quiz</button>`;
   }
   if (canCurriculum) {
     html += `<button class="admin-panel-tab ${adminActiveTab === 'curriculum' ? 'active' : ''}" id="adminTabCurriculum" onclick="adminSwitchTab('curriculum')">📚 Manage Curriculum</button>`;
@@ -10971,7 +10998,8 @@ function renderAdminPanelTabs() {
 /* Pick a sensible default tab given this user's permissions. */
 function adminDefaultTab() {
   const user = window._currentUser;
-  if (hasAdminPermission(user, 'curriculum') || hasAdminPermission(user, 'community')) return 'publish';
+  if (hasAdminPermission(user, 'curriculum')) return 'publish';
+  if (hasAdminPermission(user, 'community')) return 'commManage';
   if (hasAdminPermission(user, 'admins')) return 'admins';
   return null;
 }
@@ -10981,7 +11009,7 @@ function openAdminPanel() {
     alert('You do not have admin access.');
     return;
   }
-  adminSourceTab    = hasAdminPermission(window._currentUser, 'curriculum') ? 'custom' : 'community';
+  adminSourceTab    = 'custom'; // Publish tab is curriculum-only now, so this is always the sensible start
   adminSelectedQuiz = null;
   adminTargetYear   = '';
   adminTargetModule = '';
@@ -10992,6 +11020,12 @@ function openAdminPanel() {
   adminPublishInsertPosition = null;
   adminCommunityCache = null;
   adminCurrNavLevel = 'years';
+  commManageTab           = 'browse';
+  commManageSearchQuery   = '';
+  commManageYearFilter    = '';
+  commManageModuleFilter  = '';
+  commManageSubjectFilter = '';
+  commManageSort          = 'newest';
   const defaultTab = adminDefaultTab();
   if (!defaultTab) {
     alert('You do not have admin access.');
@@ -11020,13 +11054,15 @@ function refreshOpenAdminPanel() {
   if (adminActiveTab === 'admins') renderAdminManagePanel();
   else if (adminActiveTab === 'curriculum') renderAdminCurriculumPanel();
   else if (adminActiveTab === 'publish') renderAdminPanel();
+  else if (adminActiveTab === 'commManage') renderAdminManageCommunityPanel();
 }
 
 function adminSwitchTab(tab) {
   // Refuse to switch into a tab this user doesn't hold permission for
   // (defends against stale buttons / direct calls, not just hides them).
   const user = window._currentUser;
-  if (tab === 'publish' && !hasAdminPermission(user, 'curriculum') && !hasAdminPermission(user, 'community')) return;
+  if (tab === 'publish' && !hasAdminPermission(user, 'curriculum')) return;
+  if (tab === 'commManage' && !hasAdminPermission(user, 'community')) return;
   if (tab === 'curriculum' && !hasAdminPermission(user, 'curriculum')) return;
   if (tab === 'admins' && !hasAdminPermission(user, 'admins')) return;
   if (tab === adminActiveTab) return; // already there — nothing to guard or re-render
@@ -11035,10 +11071,12 @@ function adminSwitchTab(tab) {
     adminActiveTab = tab;
     renderAdminPanelTabs();
     if (tab === 'publish') renderAdminPanel();
+    else if (tab === 'commManage') renderAdminManageCommunityPanel();
     else if (tab === 'curriculum') renderAdminCurriculumPanel();
     else if (tab === 'admins') renderAdminManagePanel();
   });
 }
+
 
 /* ══════════════════════════════════════════════════════════
    MANAGE ADMINS TAB
@@ -11193,7 +11231,6 @@ async function renderAdminPanel() {
               <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
               <div class="admin-quiz-item-meta">${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
             </div>
-            <button class="admin-remove-btn" onclick="event.stopPropagation();adminDeleteSourceQuiz('custom','${q.id}')">🗑 Delete</button>
             <div class="admin-quiz-item-check">✓</div>
           </div>`;
       }).join('');
@@ -11208,13 +11245,8 @@ async function renderAdminPanel() {
       ${canCommunity ? `<button class="admin-source-tab ${adminSourceTab === 'community' ? 'active' : ''}" onclick="adminSetSourceTab('community')">🌐 Community Quizzes</button>` : ''}
     </div>`;
 
-  const moderationHint = (!canCurriculum && canCommunity)
-    ? `<div style="padding:10px 4px;color:var(--text-muted);font-size:.82rem;">You have community moderation access: browse and delete community quizzes below. Publishing quizzes into the curriculum requires curriculum permission.</div>`
-    : '';
-
   body.innerHTML = `
     ${sourceTabsHtml}
-    ${moderationHint}
     <div id="adminCommFilterBar"></div>
     <div class="admin-quiz-list" id="adminQuizList">${listHtml}</div>
     <div id="adminAssignArea"></div>
@@ -11368,7 +11400,6 @@ async function renderAdminPanel() {
             <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
             <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
           </div>
-          <button class="admin-remove-btn" onclick="event.stopPropagation();adminDeleteSourceQuiz('community','${escapeHtml(q.id)}')">🗑 Delete</button>
           <div class="admin-quiz-item-check">✓</div>
         </div>`;
     }).join('');
@@ -11397,39 +11428,240 @@ function adminSelectQuiz(sourceType, sourceId) {
 }
 
 /* Delete a source quiz (custom quiz of the admin's own account, or any community/shared quiz) */
-async function adminDeleteSourceQuiz(sourceType, sourceId) {
+// Deletes a community-shared quiz. Only reachable from the "Manage
+// Community Quiz" tab now — custom-quiz deletion lives in the user's own
+// custom-quiz menu outside the admin panel, so there's no 'custom' branch
+// here anymore.
+async function adminDeleteSourceQuiz(sourceId) {
   const user = window._currentUser;
-  if (sourceType === 'community' && !hasAdminPermission(user, 'community')) {
+  if (!hasAdminPermission(user, 'community')) {
     alert('You do not have permission to manage community quizzes.');
-    return;
-  }
-  if (sourceType === 'custom' && !hasAdminPermission(user, 'curriculum')) {
-    alert('You do not have permission to manage curriculum content.');
     return;
   }
   if (!confirm('Delete this quiz permanently? This cannot be undone.')) return;
   try {
-    if (sourceType === 'custom') {
-      let quizzes = loadCustomQuizzes();
-      quizzes = quizzes.filter(q => q.id !== sourceId);
-      await deleteQuizImagesFromStorage(sourceId);
-      await saveCustomQuizzesList(quizzes);
-    } else {
-      const ref = window._doc(window._db, 'sharedQuizzes', sourceId);
-      await window._deleteDoc(ref);
-      await deleteSharedQuizImages(sourceId);
-      adminCommunityCache = (adminCommunityCache || []).filter(q => q.id !== sourceId);
-      _allSharedQuizzes = [];
-      await bumpSharedQuizzesVersion();
-    }
-    if (adminSelectedQuiz && adminSelectedQuiz.sourceType === sourceType && adminSelectedQuiz.sourceId === sourceId) {
+    const ref = window._doc(window._db, 'sharedQuizzes', sourceId);
+    await window._deleteDoc(ref);
+    await deleteSharedQuizImages(sourceId);
+    adminCommunityCache = (adminCommunityCache || []).filter(q => q.id !== sourceId);
+    _allSharedQuizzes = [];
+    await bumpSharedQuizzesVersion();
+
+    if (adminSelectedQuiz && adminSelectedQuiz.sourceType === 'community' && adminSelectedQuiz.sourceId === sourceId) {
       adminSelectedQuiz = null;
       adminEditQuestions = null;
       adminEditMode = null;
     }
-    renderAdminPanel();
+    if (adminActiveTab === 'commManage') renderAdminManageCommunityPanel();
+    else renderAdminPanel();
   } catch (e) {
     alert('Failed to delete: ' + (e.message || e));
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   MANAGE COMMUNITY QUIZ TAB
+   A full duplicate of the student-facing Community Quizzes browse menu
+   (openCommunityQuizzes/renderCommunityQuizzes) — same Browse All / My
+   Shared tabs, same search bar, same cascading Year/Module/Subject
+   filters + sort, same tag chips and quiz-card metadata — rendered
+   inside the admin panel instead of the overlay, with an admin Delete
+   button on every card regardless of who authored it. This is the only
+   place in the admin panel a community-shared quiz gets deleted from.
+   Requires 'community' permission (enforced by adminSwitchTab and,
+   ultimately, by the Firestore rules on sharedQuizzes/{docId}).
+══════════════════════════════════════════════════════════ */
+function commManageOnSearchInput(val) {
+  commManageSearchQuery = val;
+  const clearBtn = document.getElementById('commManageClearBtn');
+  if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+  window._commManageSearchFocused = true;
+  const el = document.getElementById('commManageSearchInput');
+  window._commManageSearchPos = el ? el.selectionStart : null;
+  renderAdminManageCommunityPanel();
+}
+
+async function renderAdminManageCommunityPanel(forceReload) {
+  const body = document.getElementById('adminBody');
+  if (!body) return;
+
+  // Reuse the same version-checked shared-quizzes cache as the student
+  // browse overlay and the Publish tab's community source list, so
+  // switching between them in one session doesn't re-fetch needlessly.
+  if (!_allSharedQuizzes.length || forceReload) {
+    body.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-muted);"><div style="font-size:2rem;margin-bottom:10px;">&#8987;</div><div style="font-weight:700;">Loading community quizzes…</div></div>`;
+    try {
+      const serverVer = forceReload ? null : await _fetchSharedServerVersion();
+      const localVer  = _readSharedCacheVer();
+      const cached    = await _readCache();
+
+      if (!forceReload && serverVer && localVer === serverVer && cached && cached.shared) {
+        _allSharedQuizzes = cached.shared;
+      } else {
+        const snap = await window._getDocs(window._collection(window._db, 'sharedQuizzes'));
+        _allSharedQuizzes = [];
+        snap.forEach(d => _allSharedQuizzes.push(d.data()));
+        const existing = (await _readCache()) || {};
+        existing.shared = _allSharedQuizzes;
+        await _writeCache(existing);
+        let verToStore = forceReload ? await _fetchSharedServerVersion() : serverVer;
+        if (!verToStore) verToStore = await bumpSharedQuizzesVersion(); // establish baseline first time
+        if (verToStore) _writeSharedCacheVer(verToStore);
+      }
+      adminCommunityCache = _allSharedQuizzes; // keep the Publish tab's copy of the cache in sync too
+    } catch (e) {
+      body.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;">&#10060; Failed to load community quizzes. Please try again.</div>`;
+      return;
+    }
+  }
+
+  const myUid = window._currentUser ? window._currentUser.uid : null;
+  const shared = _allSharedQuizzes;
+  const myShared = shared.filter(q => q.authorUid === myUid);
+
+  // --- Filtering (identical logic to renderCommunityQuizzes) ---
+  let pool = commManageTab === 'mine' ? myShared : shared;
+
+  const q = commManageSearchQuery.toLowerCase().trim();
+  if (q) {
+    pool = pool.filter(item => {
+      const inTitle  = (item.title || '').toLowerCase().includes(q);
+      const inAuthor = (item.authorName || '').toLowerCase().includes(q);
+      const inCat    = (item.category || '').toLowerCase().includes(q);
+      const inTags   = (item.tags || []).some(t => t.includes(q));
+      return inTitle || inAuthor || inCat || inTags;
+    });
+  }
+  if (commManageYearFilter) {
+    pool = pool.filter(item => (item.year || '') === commManageYearFilter);
+  }
+  if (commManageModuleFilter) {
+    pool = pool.filter(item => (item.module || '') === commManageModuleFilter);
+  }
+  if (commManageSubjectFilter) {
+    pool = pool.filter(item => (item.subjectKey || '') === commManageSubjectFilter);
+  }
+
+  if (commManageSort === 'newest') {
+    pool = [...pool].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
+  } else if (commManageSort === 'oldest') {
+    pool = [...pool].sort((a, b) => (a.sharedAt || 0) - (b.sharedAt || 0));
+  } else if (commManageSort === 'az') {
+    pool = [...pool].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  } else if (commManageSort === 'questions') {
+    pool = [...pool].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
+  }
+
+  // Build cascading filter options from live curriculum + shared quiz metadata
+  const allYears   = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
+  const allModules = commManageYearFilter
+    ? Object.keys(curriculum[commManageYearFilter] || {})
+    : [...new Set(shared.map(i => i.module).filter(Boolean))].sort();
+  const allSubjects = (commManageYearFilter && commManageModuleFilter)
+    ? (curriculum[commManageYearFilter][commManageModuleFilter] || []).filter(k => subjects[k])
+    : [...new Set(shared.map(i => i.subjectKey).filter(Boolean))];
+
+  const searchVal  = escapeHtml(commManageSearchQuery);
+  const clearStyle = commManageSearchQuery ? 'display:block' : 'display:none';
+
+  let html = `
+    <div class="community-section-tabs">
+      <button class="community-tab-btn ${commManageTab === 'browse' ? 'active' : ''}" onclick="commManageTab='browse';commManageSearchQuery='';commManageYearFilter='';commManageModuleFilter='';commManageSubjectFilter='';renderAdminManageCommunityPanel()">&#127758; Browse All (${shared.length})</button>
+      <button class="community-tab-btn ${commManageTab === 'mine' ? 'active' : ''}" onclick="commManageTab='mine';renderAdminManageCommunityPanel()">&#128100; My Shared (${myShared.length})</button>
+    </div>
+
+    <div class="comm-filter-bar">
+      <div class="comm-search-wrap">
+        <span class="comm-search-icon">🔍</span>
+        <input class="comm-search-input" id="commManageSearchInput" type="text"
+               placeholder="Search by title, author, category or tag…"
+               value="${searchVal}"
+               oninput="commManageOnSearchInput(this.value)" />
+        <button class="comm-search-clear" id="commManageClearBtn" style="${clearStyle}"
+                onclick="commManageSearchQuery='';document.getElementById('commManageSearchInput').value='';this.style.display='none';renderAdminManageCommunityPanel()">✕</button>
+      </div>
+      <div class="comm-filter-row">
+        <select class="comm-filter-select" id="commManageYearFilter"
+                onchange="commManageYearFilter=this.value;commManageModuleFilter='';commManageSubjectFilter='';renderAdminManageCommunityPanel()">
+          <option value="">All Years</option>
+          ${allYears.map(y => `<option value="${escapeHtml(y)}" ${commManageYearFilter === y ? 'selected' : ''}>${escapeHtml(y)}</option>`).join('')}
+        </select>
+        <select class="comm-filter-select" id="commManageModuleFilter"
+                onchange="commManageModuleFilter=this.value;commManageSubjectFilter='';renderAdminManageCommunityPanel()"
+                ${!commManageYearFilter ? 'disabled' : ''}>
+          <option value="">All Modules</option>
+          ${allModules.map(m => `<option value="${escapeHtml(m)}" ${commManageModuleFilter === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+        </select>
+        <select class="comm-filter-select" id="commManageSubjectFilter"
+                onchange="commManageSubjectFilter=this.value;renderAdminManageCommunityPanel()"
+                ${!commManageModuleFilter ? 'disabled' : ''}>
+          <option value="">All Subjects</option>
+          ${allSubjects.map(k => {
+            const lbl = (subjects[k] && (subjects[k].label || k)) || k;
+            const ico = (subjects[k] && subjects[k].icon) || '';
+            return `<option value="${escapeHtml(k)}" ${commManageSubjectFilter === k ? 'selected' : ''}>${ico} ${escapeHtml(lbl)}</option>`;
+          }).join('')}
+        </select>
+        <select class="comm-filter-select" id="commManageSortSelect"
+                onchange="commManageSort=this.value;renderAdminManageCommunityPanel()">
+          <option value="newest" ${commManageSort==='newest'?'selected':''}>🕐 Newest</option>
+          <option value="oldest" ${commManageSort==='oldest'?'selected':''}>🕐 Oldest</option>
+          <option value="az"     ${commManageSort==='az'?'selected':''}>🔤 A → Z</option>
+          <option value="questions" ${commManageSort==='questions'?'selected':''}>📝 Most Questions</option>
+        </select>
+      </div>
+      <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
+    </div>`;
+
+  if (!pool.length) {
+    html += `<div class="community-empty">
+      <div class="ce-icon">${commManageSearchQuery || commManageYearFilter || commManageModuleFilter || commManageSubjectFilter ? '🔍' : (commManageTab === 'mine' ? '&#128100;' : '&#127758;')}</div>
+      ${commManageSearchQuery || commManageYearFilter || commManageModuleFilter || commManageSubjectFilter
+        ? 'No quizzes match your search. Try different keywords or clear the filters.'
+        : commManageTab === 'mine'
+          ? 'You haven\'t shared any quizzes yet.'
+          : 'No community quizzes yet.'}
+    </div>`;
+  } else {
+    pool.forEach(item => {
+      const isOwn = item.authorUid === myUid;
+      const date  = new Date(item.sharedAt).toLocaleDateString();
+      const catBadge = (item.year || item.subjectLabel)
+        ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
+        : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
+      const tagsHtml = (item.tags && item.tags.length)
+        ? `<div class="comm-tags-row">${item.tags.map(t =>
+            `<span class="comm-tag" onclick="commManageSearchQuery='${escapeHtml(t)}';renderAdminManageCommunityPanel()" title="Filter by tag">#${escapeHtml(t)}</span>`
+          ).join('')}</div>` : '';
+
+      html += `<div class="community-quiz-item">
+        <div class="community-quiz-header">
+          <div style="flex:1;min-width:0;">
+            <div class="community-quiz-title">${escapeHtml(item.title)}</div>
+            <div class="community-quiz-meta">
+              ${catBadge}
+              ${item.questionCount} question${item.questionCount !== 1 ? 's' : ''}
+              &nbsp;&middot;&nbsp; &#128100; ${escapeHtml(item.authorName)}
+              ${isOwn ? ' <span class="share-chip">You</span>' : ''}
+              &nbsp;&middot;&nbsp; &#128197; ${date}
+            </div>
+            ${tagsHtml}
+          </div>
+          <button class="admin-remove-btn" onclick="adminDeleteSourceQuiz('${escapeHtml(item.id)}')">🗑 Delete</button>
+        </div>
+      </div>`;
+    });
+  }
+
+  body.innerHTML = html;
+
+  // Restore search input focus/caret if the admin was mid-typing
+  const searchEl = document.getElementById('commManageSearchInput');
+  if (searchEl && document.activeElement !== searchEl && window._commManageSearchFocused) {
+    const pos = window._commManageSearchPos || searchEl.value.length;
+    searchEl.focus();
+    try { searchEl.setSelectionRange(pos, pos); } catch(e) {}
+    window._commManageSearchFocused = false;
   }
 }
 
