@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ANU MSP Question Bank</title>
-  <link rel="icon" href="logo.ico" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230A3F52'/%3E%3Ccircle cx='36' cy='54' r='16' fill='none' stroke='%236FE3F0' stroke-width='11'/%3E%3Cpath d='M46 65 L58 78' fill='none' stroke='%236FE3F0' stroke-width='11' stroke-linecap='round'/%3E%3Cpath d='M66 30 L66 74' fill='none' stroke='%236FE3F0' stroke-width='11' stroke-linecap='round'/%3E%3Cpath d='M66 30 L78 30 A11 10 0 0 1 78 50 L66 50' fill='none' stroke='%236FE3F0' stroke-width='11'/%3E%3Cpath d='M66 50 L80 50 A12 12 0 0 1 80 74 L66 74' fill='none' stroke='%236FE3F0' stroke-width='11'/%3E%3C/svg%3E" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&display=swap" rel="stylesheet" />
   <script>
     (function () {
@@ -173,15 +173,15 @@
       background: linear-gradient(115deg, transparent 35%, var(--sigil-line) 49%, transparent 63%);
       background-size: 240% 240%;
       background-position: 200% 200%;
-      animation: carvedSheen 8s ease-in-out infinite;
+      animation: carvedSheen 30s ease-in-out infinite;
       mix-blend-mode: screen;
       pointer-events: none;
       z-index: 0;
     }
     .carved-surface > * { position: relative; z-index: 1; }
     @keyframes carvedSheen {
-      0%   { background-position: 220% 220%; }
-      45%, 100% { background-position: -40% -40%; }
+      0%        { background-position: 220% 220%; }
+      15%, 100% { background-position: -40% -40%; }
     }
     @media (prefers-reduced-motion: reduce) {
       .carved-surface::after { animation: none; }
@@ -207,22 +207,43 @@
       stroke-dashoffset: 1;
       animation: sigilDraw .9s cubic-bezier(.4,0,.2,1) forwards;
     }
-    .sigil-ring   { stroke-width: .9; opacity: .55; animation-delay: 0s; }
-    .sigil-hex    { stroke-width: 1.6; animation-delay: .1s; }
-    .sigil-diag-1 { stroke-width: 1.1; opacity: .85; animation-delay: .55s; }
-    .sigil-diag-2 { stroke-width: 1.1; opacity: .85; animation-delay: .65s; }
-    .sigil-diag-3 { stroke-width: 1.1; opacity: .85; animation-delay: .75s; }
-    .sigil-node {
-      fill: #6FE3F0; opacity: 0; transform-origin: 50px 50px;
-      animation: nodeAppear .35s ease forwards;
-      animation-delay: 1.05s;
+    .sigil-ring     { stroke-width: .9; opacity: .5; animation-delay: 0s; }
+    .sigil-q        { stroke-width: 2.1; opacity: 1; animation-delay: .2s; }
+    .sigil-q-tail   { stroke-width: 2.1; opacity: 1; stroke-linecap: round; animation-delay: .55s; }
+    .sigil-b-stem   { stroke-width: 2.1; opacity: 1; stroke-linecap: round; animation-delay: .3s; }
+    .sigil-b-upper  { stroke-width: 2.1; opacity: 1; animation-delay: .45s; }
+    .sigil-b-lower  { stroke-width: 2.1; opacity: 1; animation-delay: .6s; }
+    .sigil-pulse-ring {
+      fill: none; stroke: #6FE3F0; stroke-width: 1;
+      opacity: 0; transform-origin: 50px 50px;
+    }
+    .sigil-ring-spin {
+      fill: none; stroke: #6FE3F0; stroke-width: .8;
+      stroke-dasharray: 3 7; opacity: 0; transform-origin: 50px 50px;
+      transition: opacity .5s ease;
     }
     @keyframes sigilDraw { to { stroke-dashoffset: 0; } }
-    @keyframes nodeAppear { to { opacity: 1; } }
+    @keyframes nodeAppear {
+      0%   { opacity: 0; transform: scale(.25); }
+      65%  { opacity: 1; transform: scale(1.25); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes pulseRingExpand {
+      0%   { opacity: .6; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.55); }
+    }
     #introSigilSvg.sigil-glow {
       filter: drop-shadow(0 0 8px rgba(111,227,240,.85)) drop-shadow(0 0 26px rgba(111,227,240,.45));
       animation: sigilPulse 1s ease-in-out;
     }
+    #introSigilSvg.sigil-glow .sigil-pulse-ring {
+      animation: pulseRingExpand 1s ease-out forwards;
+    }
+    #introSigilSvg.sigil-glow .sigil-ring-spin {
+      opacity: .5;
+      animation: sigilRingSpin 6s linear infinite;
+    }
+    @keyframes sigilRingSpin { to { transform: rotate(360deg); } }
     @keyframes sigilPulse {
       0%   { transform: scale(1); }
       42%  { transform: scale(1.07); }
@@ -236,17 +257,13 @@
     .intro-wordmark.show { opacity: 1; transform: translateY(0); }
     .intro-word-main {
       display: block; font-family: var(--font-display);
-      font-size: 1.55rem; font-weight: 600; letter-spacing: 7px;
-      color: #F2F8FA;
-    }
-    .intro-word-sub {
-      display: block; margin-top: 7px;
-      font-size: .74rem; font-weight: 600; letter-spacing: 2.5px;
-      text-transform: uppercase; color: rgba(230,244,248,.5);
+      font-size: 1.05rem; font-weight: 600; letter-spacing: 2.5px;
+      color: #F2F8FA; max-width: 260px;
     }
     @media (prefers-reduced-motion: reduce) {
       #introScreen { transition: opacity .3s ease; clip-path: none !important; }
-      .sigil-path, .sigil-node, #introSigilSvg.sigil-glow { animation: none !important; stroke-dashoffset: 0; opacity: 1; filter: none; }
+      .sigil-path, #introSigilSvg.sigil-glow, .sigil-ring-spin { animation: none !important; stroke-dashoffset: 0; opacity: 1; filter: none; }
+      .sigil-pulse-ring { animation: none !important; opacity: 0 !important; }
       .intro-wordmark { transition: opacity .3s ease; }
     }
 
@@ -282,7 +299,24 @@
     }
     .header-title span { font-size: 1.3rem; }
     .brand-mark { width: 30px; height: 30px; flex-shrink: 0; filter: drop-shadow(0 0 6px rgba(111,227,240,.5)); }
-    .brand-mark circle, .brand-mark path { stroke: currentColor; }
+    .brand-mark circle, .brand-mark path, .brand-mark ellipse { stroke: currentColor; }
+    .brand-mark .bm-ring {
+      stroke-dasharray: 3 6.5;
+      transform-origin: 50px 50px;
+      animation: bmRingSpin 20s linear infinite;
+    }
+    .brand-mark .bm-m {
+      transform-origin: 57px 50px;
+      animation: bmPulse 3.4s ease-in-out infinite;
+    }
+    @keyframes bmRingSpin { to { transform: rotate(360deg); } }
+    @keyframes bmPulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: .72; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .brand-mark .bm-m, .brand-mark .bm-ring { animation: none; }
+    }
     .timer {
       font-size: 1.28rem; font-weight: 800;
       color: var(--amber-glow);
@@ -321,7 +355,7 @@
     .theme-toggle .tt-sun { color: #C98D1F; }
     .theme-toggle .tt-moon { color: var(--accent-glow); display: none; }
     [data-theme="dark"] .theme-toggle .tt-sun { display: none; }
-    [data-theme="dark"] .theme-toggle .tt-moon { display: block; }
+    [data-theme="dark"] .theme-toggle .tt-moon { display: block; color: #0A1017; }
 
     /* ── HOME SCREEN ── */
     #home { flex: 1; display: flex; flex-direction: column; }
@@ -1100,7 +1134,7 @@
 .cq-quiz-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .cq-quiz-actions input[type="number"] {
   width: 64px; padding: 7px 8px; border: 1.5px solid var(--border-soft); border-radius: 6px;
-  font-family: var(--font); font-size: .82rem; background: #fff;
+  font-family: var(--font); font-size: .82rem; background: var(--surface-2); color: var(--text-main);
 }
 .cq-preview-list {
   max-height: 480px; overflow-y: auto; border: 1px solid var(--border-soft-2); border-radius: 8px;
@@ -1122,7 +1156,7 @@
 .cq-edit-textarea {
   width: 100%; padding: 7px 10px; border: 1.5px solid var(--border-soft); border-radius: 6px;
   font-family: var(--font); font-size: .88rem; color: var(--text-main);
-  background: #fff; outline: none; resize: vertical; line-height: 1.5;
+  background: var(--surface-2); outline: none; resize: vertical; line-height: 1.5;
   transition: border-color .2s, box-shadow .2s;
 }
 .cq-edit-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(14,110,130,.13); }
@@ -1511,8 +1545,8 @@
 .comm-search-input {
   width: 100%; box-sizing: border-box;
   padding: 9px 36px 9px 34px; border: 1.5px solid var(--border-soft); border-radius: 8px;
-  font-family: var(--font); font-size: .88rem; background: #fff; color: var(--text-main);
-  outline: none; transition: border-color .15s;
+  font-family: var(--font); font-size: .88rem; background: var(--surface-2); color: var(--text-main);
+  outline: none; transition: border-color .15s, background .2s;
 }
 .comm-search-input:focus { border-color: var(--accent); }
 .comm-search-clear {
@@ -1527,8 +1561,8 @@
 .comm-filter-select {
   flex: 1; min-width: 120px;
   padding: 8px 10px; border: 1.5px solid var(--border-soft); border-radius: 8px;
-  font-family: var(--font); font-size: .82rem; background: #fff; color: var(--text-main);
-  outline: none; cursor: pointer; transition: border-color .15s;
+  font-family: var(--font); font-size: .82rem; background: var(--surface-2); color: var(--text-main);
+  outline: none; cursor: pointer; transition: border-color .15s, background .2s;
 }
 .comm-filter-select:focus { border-color: var(--accent); }
 .comm-results-count {
@@ -1577,8 +1611,8 @@
 .sq-select, .sq-input {
   width: 100%; box-sizing: border-box;
   padding: 9px 11px; border: 1.5px solid var(--border-soft); border-radius: 8px;
-  font-family: var(--font); font-size: .88rem; background: #fff; color: var(--text-main);
-  outline: none; transition: border-color .15s; margin-bottom: 14px;
+  font-family: var(--font); font-size: .88rem; background: var(--surface-2); color: var(--text-main);
+  outline: none; transition: border-color .15s, background .2s; margin-bottom: 14px;
 }
 .sq-select:focus, .sq-input:focus { border-color: var(--violet); }
 .sq-hint { font-size: .74rem; color: var(--text-muted); margin-top: -10px; margin-bottom: 14px; }
@@ -1887,7 +1921,7 @@
 .admin-field label { display: block; font-size: .8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .6px; }
 .admin-field select, .admin-field input[type="text"] {
   width: 100%; padding: 10px 12px; border: 1.5px solid var(--border-soft); border-radius: 7px;
-  font-family: var(--font); font-size: .9rem; background: #fff;
+  font-family: var(--font); font-size: .9rem; background: var(--surface-2);
   color: var(--text-main); outline: none; appearance: none; -webkit-appearance: none;
 }
 .admin-field select:focus, .admin-field input[type="text"]:focus {
@@ -1970,7 +2004,7 @@
 .curr-row .curr-field { flex: 1; min-width: 100px; }
 .curr-row input, .curr-row select {
   width: 100%; padding: 9px 11px; border: 1.5px solid var(--border-soft); border-radius: 7px;
-  font-family: var(--font); font-size: .88rem; background: white; color: var(--text-main); outline: none;
+  font-family: var(--font); font-size: .88rem; background: var(--surface-2); color: var(--text-main); outline: none;
 }
 .curr-row input:focus, .curr-row select:focus { border-color: var(--accent-dark); box-shadow: 0 0 0 3px rgba(27,79,114,.12); }
 .curr-add-btn {
@@ -2214,15 +2248,16 @@
   <div class="intro-inner">
     <svg id="introSigilSvg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle class="sigil-path sigil-ring" cx="50" cy="50" r="44" pathLength="1"></circle>
-      <path class="sigil-path sigil-hex" d="M50 16 L79.4 33 L79.4 67 L50 84 L20.6 67 L20.6 33 Z" pathLength="1"></path>
-      <path class="sigil-path sigil-diag-1" d="M50 16 L50 84" pathLength="1"></path>
-      <path class="sigil-path sigil-diag-2" d="M79.4 33 L20.6 67" pathLength="1"></path>
-      <path class="sigil-path sigil-diag-3" d="M79.4 67 L20.6 33" pathLength="1"></path>
-      <path class="sigil-node" d="M50 42 L58 50 L50 58 L42 50 Z"></path>
+      <circle class="sigil-ring-spin" cx="50" cy="50" r="44"></circle>
+      <circle class="sigil-pulse-ring" cx="50" cy="50" r="44"></circle>
+      <circle class="sigil-path sigil-q" cx="37" cy="50" r="15" pathLength="1"></circle>
+      <path class="sigil-path sigil-q-tail" d="M45 59 L53 68" pathLength="1"></path>
+      <path class="sigil-path sigil-b-stem" d="M67 35 L67 65" pathLength="1"></path>
+      <path class="sigil-path sigil-b-upper" d="M67 35 L76 35 A8 7.5 0 0 1 76 50 L67 50" pathLength="1"></path>
+      <path class="sigil-path sigil-b-lower" d="M67 50 L77 50 A7.5 7.5 0 0 1 77 65 L67 65" pathLength="1"></path>
     </svg>
     <div class="intro-wordmark" id="introWordmark">
-      <span class="intro-word-main">MERIDIAN</span>
-      <span class="intro-word-sub">ANU MSP Question Bank</span>
+      <span class="intro-word-main">ANU MSP QUESTION BANK</span>
     </div>
   </div>
 </div>
@@ -2408,10 +2443,15 @@
       </button>
       <h1>
         <svg class="brand-mark" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="50" cy="50" r="44" stroke-width="1.2" opacity=".5"/>
-          <path d="M50 16 L79.4 33 L79.4 67 L50 84 L20.6 67 L20.6 33 Z" stroke-width="1.6"/>
-          <path d="M50 16 L50 84 M79.4 33 L20.6 67 M79.4 67 L20.6 33" stroke-width="1.1" opacity=".85"/>
-          <path d="M50 42 L58 50 L50 58 L42 50 Z" stroke-width="1.6" fill="currentColor" opacity=".9"/>
+          <circle cx="50" cy="50" r="44" stroke-width="1.2" opacity=".35"/>
+          <circle class="bm-ring" cx="50" cy="50" r="44" stroke-width="1" opacity=".55"/>
+          <g class="bm-m" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="37" cy="50" r="15" stroke-width="2.2"/>
+            <path d="M45 59 L53 68" stroke-width="2.2"/>
+            <path d="M67 35 L67 65" stroke-width="2.2"/>
+            <path d="M67 35 L76 35 A8 7.5 0 0 1 76 50 L67 50" stroke-width="2.2"/>
+            <path d="M67 50 L77 50 A7.5 7.5 0 0 1 77 65 L67 65" stroke-width="2.2"/>
+          </g>
         </svg>
         ANU MSP Question Bank
       </h1>
@@ -2510,10 +2550,15 @@
     <div class="header carved-surface">
       <div class="header-title">
         <svg class="brand-mark" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="50" cy="50" r="44" stroke-width="1.2" opacity=".5"/>
-          <path d="M50 16 L79.4 33 L79.4 67 L50 84 L20.6 67 L20.6 33 Z" stroke-width="1.6"/>
-          <path d="M50 16 L50 84 M79.4 33 L20.6 67 M79.4 67 L20.6 33" stroke-width="1.1" opacity=".85"/>
-          <path d="M50 42 L58 50 L50 58 L42 50 Z" stroke-width="1.6" fill="currentColor" opacity=".9"/>
+          <circle cx="50" cy="50" r="44" stroke-width="1.2" opacity=".35"/>
+          <circle class="bm-ring" cx="50" cy="50" r="44" stroke-width="1" opacity=".55"/>
+          <g class="bm-m" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="37" cy="50" r="15" stroke-width="2.2"/>
+            <path d="M45 59 L53 68" stroke-width="2.2"/>
+            <path d="M67 35 L67 65" stroke-width="2.2"/>
+            <path d="M67 35 L76 35 A8 7.5 0 0 1 76 50 L67 50" stroke-width="2.2"/>
+            <path d="M67 50 L77 50 A7.5 7.5 0 0 1 77 65 L67 65" stroke-width="2.2"/>
+          </g>
         </svg>
         ANU MSP Question Bank
       </div>
@@ -4271,11 +4316,11 @@ function toggleApiKeyVisibility(btn, id) {
   if (span.dataset.shown === '1') {
     span.textContent = maskApiKey(entry.key);
     span.dataset.shown = '0';
-    btn.textContent = '👁';
+    btn.textContent = 'Show';
   } else {
     span.textContent = entry.key;
     span.dataset.shown = '1';
-    btn.textContent = '🙈';
+    btn.textContent = 'Hide';
   }
 }
 
@@ -4330,7 +4375,7 @@ function renderApiKeyManager() {
           ` : `
           <div class="apikey-masked-row">
             <span class="apikey-masked" id="apikeyMasked_${k.id}" data-shown="0">${maskApiKey(k.key)}</span>
-            <button class="apikey-view-btn" style="padding:2px 6px;font-size:.7rem;" onclick="toggleApiKeyVisibility(this,'${k.id}')" type="button">👁</button>
+            <button class="apikey-view-btn" style="padding:2px 6px;font-size:.7rem;" onclick="toggleApiKeyVisibility(this,'${k.id}')" type="button">Show</button>
           </div>
           `}
         </div>
@@ -10648,7 +10693,7 @@ async function renderCommunityQuizzes(forceReload) {
           </div>
         </div>
         <div class="community-quiz-actions">
-          <input type="number" id="cqCommMins_${idx}" value="${Math.max(5, item.questionCount)}" min="1" max="180" title="Duration (minutes)" style="width:64px;padding:7px 8px;border:1.5px solid var(--border-soft);border-radius:6px;font-family:var(--font);font-size:.82rem;background:#fff;" />
+          <input type="number" id="cqCommMins_${idx}" value="${Math.max(5, item.questionCount)}" min="1" max="180" title="Duration (minutes)" style="width:64px;padding:7px 8px;border:1.5px solid var(--border-soft);border-radius:6px;font-family:var(--font);font-size:.82rem;background:var(--surface-2);color:var(--text-main);" />
           <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;">
             <input type="checkbox" id="cqCommShuffle_${idx}" style="width:14px;height:14px;accent-color:var(--accent);" /> &#128256;
           </label>
