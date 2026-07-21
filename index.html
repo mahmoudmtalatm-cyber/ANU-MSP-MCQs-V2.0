@@ -2644,6 +2644,8 @@ function _hasUnsavedProgress() {
   if (typeof cqBusy !== 'undefined' && cqBusy) return true;
   if (typeof adminBusy !== 'undefined' && adminBusy) return true;
   if (typeof _explainAllBusy !== 'undefined' && _explainAllBusy) return true;
+  if (typeof _editorBulkBusy !== 'undefined' && (_editorBulkBusy.admin || _editorBulkBusy.customQuiz)) return true;
+  if (typeof _aiToolsBusy !== 'undefined' && Object.keys(_aiToolsBusy).length) return true;
 
   // A Firestore sync/loading operation is in flight
   const toast = document.getElementById('fsLoadingToast');
@@ -4174,6 +4176,15 @@ function _activeAiProcessLabel() {
   if (typeof _chatBusy !== 'undefined' && Object.values(_chatBusy).some(Boolean)) {
     return 'an AI chat response';
   }
+  if (typeof _editorBulkBusy !== 'undefined' && _editorBulkBusy.admin) {
+    return 'running a bulk AI tool on the quiz you\'re editing in the Admin Panel';
+  }
+  if (typeof _editorBulkBusy !== 'undefined' && _editorBulkBusy.customQuiz) {
+    return 'running a bulk AI tool on your custom quiz';
+  }
+  if (typeof _aiToolsBusy !== 'undefined' && Object.keys(_aiToolsBusy).length) {
+    return 'running an AI tool (Refine / Fill Choices / Add Choice / Solve) on a question';
+  }
   return null;
 }
 
@@ -4200,6 +4211,40 @@ function _stopAllAiProcesses() {
   if (typeof _chatCancelToken !== 'undefined') {
     Object.keys(_chatCancelToken).forEach(k => { _cancelAiToken(_chatCancelToken[k]); });
   }
+  // Bulk (whole-quiz) AI tool passes running in the Admin/Custom-Quiz editors —
+  // each has its own cancel token (see _editorBulkAiSolve/FillChoices/RefineQuestions).
+  if (typeof _editorBulkCancelToken !== 'undefined') {
+    Object.keys(_editorBulkCancelToken).forEach(k => { _cancelAiToken(_editorBulkCancelToken[k]); _editorBulkCancelToken[k] = null; });
+  }
+  // Per-question AI tool runs (Refine / Fill Choices / Add Choice / Solve),
+  // keyed by `${editorKey}_${i}` — see _aiToolsKey.
+  if (typeof _aiToolsCancelToken !== 'undefined') {
+    Object.keys(_aiToolsCancelToken).forEach(k => { _cancelAiToken(_aiToolsCancelToken[k]); delete _aiToolsCancelToken[k]; });
+  }
+}
+
+/* ── Guarding menu close / tab-switch attempts while a process is running ──
+   Wraps a close (or tab-switch) action: if an AI process is actively running
+   that would be interrupted, warn the user first — same wording/pattern as
+   the API-key-switch guard above — and only actually stop it and proceed if
+   they confirm. A publish (adminBusy) is a sequence of Firestore writes with
+   no safe mid-flight abort point (partial writes could orphan uploaded
+   images), so unlike the AI processes it isn't offered as "stop and close" —
+   it's simply blocked until it finishes on its own. */
+function _guardedClose(closeFn) {
+  if (typeof adminBusy !== 'undefined' && adminBusy) {
+    alert('A publish is still in progress. Please wait for it to finish before closing.');
+    return;
+  }
+  const activeLabel = _activeAiProcessLabel();
+  if (activeLabel) {
+    const confirmed = confirm(
+      `You're currently ${activeLabel}. Closing this now will stop that process immediately — anything not already completed will be lost.\n\nStop it and close?`
+    );
+    if (!confirmed) return;
+    _stopAllAiProcesses();
+  }
+  closeFn();
 }
 
 // ── Shared explanation pool (Firestore-backed, session-isolated) ──
@@ -5259,6 +5304,9 @@ const _caseGroupEditors = {
    duration, since these functions mutate the same question objects the
    per-question tools do — running them concurrently would race. */
 const _editorBulkBusy = { admin: false, customQuiz: false };
+// One cancel token per editor, live only while a bulk pass is running —
+// see _stopAllAiProcesses() and the menu-close guard (_guardedClose).
+const _editorBulkCancelToken = { admin: null, customQuiz: null };
 const _editorBulkAiSource = { admin: '', customQuiz: '' };
 const _editorBulkRefineInstructions = { admin: '', customQuiz: '' };
 
@@ -5699,6 +5747,10 @@ function _aiToolsKey(editorKey, i) { return editorKey + '_' + i; }
    mutually exclusive per question (not per editor) — other questions, and
    other editors, are completely unaffected. */
 const _aiToolsBusy = {};
+// One cancel token per question (same keying as _aiToolsBusy), live only
+// while that question's AI tool call is in flight — see _stopAllAiProcesses()
+// and the menu-close guard (_guardedClose).
+const _aiToolsCancelToken = {};
 // Tracks WHICH action is running per question (e.g. 'refine', 'fillChoices',
 // 'addChoice', 'solve') so the spinner can be shown on that one specific
 // button, while its siblings are merely disabled (see _aiToolsSyncButtons).
@@ -5888,7 +5940,7 @@ function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
    the bulk post-extraction pass (cqBulkRefineQuestions) can reuse it without
    needing an editor/card in the DOM. Returns the refined question string,
    or throws on failure. */
-async function _aiRefineQuestionCall(apiKey, questions, q, custom) {
+async function _aiRefineQuestionCall(apiKey, questions, q, custom, token) {
   const optEntries = getOptionEntries(q);
   const optsText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none yet)';
   const { textBlock: caseBlock, imagePart } = _aiToolsCaseContext(questions, q);
@@ -5920,7 +5972,7 @@ Respond ONLY with a JSON object: {"question": "the refined question text"}. No m
   const data = await callGeminiWithRetry(url, {
     contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 1024 }
-  });
+  }, { cancelToken: token });
   const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
   const parsed = _aiToolsParseJSON(textOut);
   const refined = (parsed && typeof parsed.question === 'string') ? parsed.question.trim() : '';
@@ -6479,8 +6531,10 @@ function openCustomQuizzes() {
   renderCustomQuizModal();
 }
 function closeCustomQuizzes() {
-  document.getElementById('customQuizOverlay').classList.add('hidden');
-  fsLoadingHide();
+  _guardedClose(() => {
+    document.getElementById('customQuizOverlay').classList.add('hidden');
+    fsLoadingHide();
+  });
 }
 
 function renderCqApiKeyBadge() {
@@ -10824,8 +10878,10 @@ function openAdminPanel() {
 }
 
 function closeAdminPanel() {
-  document.getElementById('adminOverlay').classList.add('hidden');
-  fsLoadingHide();
+  _guardedClose(() => {
+    document.getElementById('adminOverlay').classList.add('hidden');
+    fsLoadingHide();
+  });
 }
 
 /* Re-render whatever admin panel tab is currently open (if the panel is
@@ -10848,12 +10904,15 @@ function adminSwitchTab(tab) {
   if (tab === 'publish' && !hasAdminPermission(user, 'curriculum') && !hasAdminPermission(user, 'community')) return;
   if (tab === 'curriculum' && !hasAdminPermission(user, 'curriculum')) return;
   if (tab === 'admins' && !hasAdminPermission(user, 'admins')) return;
+  if (tab === adminActiveTab) return; // already there — nothing to guard or re-render
 
-  adminActiveTab = tab;
-  renderAdminPanelTabs();
-  if (tab === 'publish') renderAdminPanel();
-  else if (tab === 'curriculum') renderAdminCurriculumPanel();
-  else if (tab === 'admins') renderAdminManagePanel();
+  _guardedClose(() => {
+    adminActiveTab = tab;
+    renderAdminPanelTabs();
+    if (tab === 'publish') renderAdminPanel();
+    else if (tab === 'curriculum') renderAdminCurriculumPanel();
+    else if (tab === 'admins') renderAdminManagePanel();
+  });
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -11597,11 +11656,13 @@ function openCustomQuizEditor(id) {
 }
 
 function closeCustomQuizEditor() {
-  cqCreatingNew = false;
-  cqEditingQuizId = null;
-  cqEditQuestions = null;
-  cqNewQuizTitle = '';
-  renderCustomQuizModal();
+  _guardedClose(() => {
+    cqCreatingNew = false;
+    cqEditingQuizId = null;
+    cqEditQuestions = null;
+    cqNewQuizTitle = '';
+    renderCustomQuizModal();
+  });
 }
 
 /* Opens the same editor used for existing quizzes, but starting from one
