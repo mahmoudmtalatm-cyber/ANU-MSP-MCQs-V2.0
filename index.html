@@ -440,6 +440,10 @@
     .curr-item-row.curr-item-open:hover { background: #EEF7FF; border-color: var(--accent); }
     .curr-item-arrow { color: #B0D4F0; font-size: .8rem; flex-shrink: 0; }
     .curr-item-row.curr-item-open:hover .curr-item-arrow { color: var(--accent); }
+    .admin-publish-picker { padding: 12px 14px; margin: 4px 0; }
+    .admin-publish-target-selected {
+      background: #F0FFF4; border-color: #A5D6A7;
+    }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #B0D4F0; border-radius: 3px; }
@@ -10718,28 +10722,78 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
   }
 }
 
-function adminYearOptionsHtml() {
-  return Object.keys(curriculum).map(y =>
-    `<option value="${escapeHtml(y)}" ${adminTargetYear === y ? 'selected' : ''}>${escapeHtml(y)}</option>`
-  ).join('');
+/* ── Visual publish-destination picker ──
+   Replaces the old Year/Module/Subject <select> chain with the same
+   click-through card style used by the "📚 Manage Curriculum" browser
+   (_moduleIcon, .curr-item-row, etc.) so picking where a quiz goes is a
+   direct, visual "tap the right box" action instead of three dropdowns. */
+function adminAssignBreadcrumbHtml() {
+  let html = `<div class="curr-breadcrumb">`;
+  html += `<span class="curr-crumb ${!adminTargetYear ? 'active' : ''}" onclick="adminOnYearChange('')">📅 Years</span>`;
+  if (adminTargetYear) {
+    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${!adminTargetModule ? 'active' : ''}" onclick="adminOnModuleChange('')">${escapeHtml(adminTargetYear)}</span>`;
+  }
+  if (adminTargetModule) {
+    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${!adminTargetSubject ? 'active' : ''}" onclick="adminOnSubjectChange('')">${escapeHtml(adminTargetModule)}</span>`;
+  }
+  if (adminTargetSubject) {
+    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb active">${escapeHtml(subjects[adminTargetSubject]?.label || adminTargetSubject)}</span>`;
+  }
+  html += `</div>`;
+  return html;
 }
 
-function adminModuleOptionsHtml() {
-  const mods = adminTargetYear ? Object.keys(curriculum[adminTargetYear] || {}) : [];
-  if (!mods.length) return `<option value="">— No modules —</option>`;
-  return mods.map(m =>
-    `<option value="${escapeHtml(m)}" ${adminTargetModule === m ? 'selected' : ''}>${escapeHtml(m)}</option>`
-  ).join('');
-}
+function adminPublishTargetPickerHtml() {
+  let html = `<div class="curr-section admin-publish-picker">`;
+  html += `<div class="curr-section-title" style="margin-bottom:8px;">📍 Publish Destination</div>`;
+  html += adminAssignBreadcrumbHtml();
+  html += `<div style="margin-top:9px;display:flex;flex-direction:column;gap:6px;">`;
 
-function adminSubjectOptionsHtml() {
-  const subs = (adminTargetYear && adminTargetModule)
-    ? (curriculum[adminTargetYear][adminTargetModule] || []).filter(n => subjects[n])
-    : [];
-  if (!subs.length) return `<option value="">— No subjects —</option>`;
-  return subs.map(s =>
-    `<option value="${escapeHtml(s)}" ${adminTargetSubject === s ? 'selected' : ''}>${escapeHtml(subjects[s].label || s)}</option>`
-  ).join('');
+  if (!adminTargetYear) {
+    const years = Object.keys(curriculum);
+    html += years.length ? years.map(y => `
+      <div class="curr-item-row curr-item-open" onclick="adminOnYearChange('${escapeHtml(y)}')">
+        <div style="flex:1;">
+          <div class="curr-item-name">📅 ${escapeHtml(y)}</div>
+          <div class="curr-item-sub">${Object.keys(curriculum[y] || {}).length} module(s)</div>
+        </div>
+        <span class="curr-item-arrow">▶</span>
+      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No years yet — add one in 📚 Manage Curriculum first.</div>`;
+
+  } else if (!adminTargetModule) {
+    const mods = Object.keys(curriculum[adminTargetYear] || {});
+    html += mods.length ? mods.map(m => `
+      <div class="curr-item-row curr-item-open" onclick="adminOnModuleChange('${escapeHtml(m)}')">
+        <div style="flex:1;">
+          <div class="curr-item-name">${escapeHtml(_moduleIcon(adminTargetYear, m))} ${escapeHtml(m)}</div>
+          <div class="curr-item-sub">${(curriculum[adminTargetYear][m] || []).filter(k => subjects[k]).length} subject(s)</div>
+        </div>
+        <span class="curr-item-arrow">▶</span>
+      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No modules yet in ${escapeHtml(adminTargetYear)}.</div>`;
+
+  } else if (!adminTargetSubject) {
+    const subs = (curriculum[adminTargetYear][adminTargetModule] || []).filter(k => subjects[k]);
+    html += subs.length ? subs.map(s => `
+      <div class="curr-item-row curr-item-open" onclick="adminOnSubjectChange('${escapeHtml(s)}')">
+        <div style="flex:1;">
+          <div class="curr-item-name">${escapeHtml(subjects[s].icon || '📘')} ${escapeHtml(subjects[s].label || s)}</div>
+        </div>
+        <span class="curr-item-arrow">▶</span>
+      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No subjects yet in ${escapeHtml(adminTargetModule)}.</div>`;
+
+  } else {
+    html += `
+      <div class="curr-item-row admin-publish-target-selected">
+        <div style="flex:1;">
+          <div class="curr-item-name">✅ ${escapeHtml(subjects[adminTargetSubject].icon || '📘')} ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}</div>
+          <div class="curr-item-sub">${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)}</div>
+        </div>
+        <button class="curr-item-btn edit" onclick="adminOnSubjectChange('')">🔁 Change</button>
+      </div>`;
+  }
+
+  html += `</div></div>`;
+  return html;
 }
 
 function adminOnYearChange(val) {
@@ -10781,29 +10835,7 @@ function renderAdminAssignForm() {
 
       <div id="adminEditorArea"></div>
 
-      <div class="admin-field">
-        <label>Year</label>
-        <select onchange="adminOnYearChange(this.value)">
-          <option value="">— Select year —</option>
-          ${adminYearOptionsHtml()}
-        </select>
-      </div>
-
-      <div class="admin-field">
-        <label>Module</label>
-        <select onchange="adminOnModuleChange(this.value)" ${!adminTargetYear ? 'disabled' : ''}>
-          <option value="">— Select module —</option>
-          ${adminModuleOptionsHtml()}
-        </select>
-      </div>
-
-      <div class="admin-field">
-        <label>Subject</label>
-        <select onchange="adminOnSubjectChange(this.value)" ${!adminTargetModule ? 'disabled' : ''}>
-          <option value="">— Select subject —</option>
-          ${adminSubjectOptionsHtml()}
-        </select>
-      </div>
+      ${adminPublishTargetPickerHtml()}
 
       <div class="admin-field">
         <label>Lecture / Topic Name</label>
@@ -11572,10 +11604,37 @@ function _renderAdminAssignedListHTML() {
   if (!sec) return;
   const entries = adminAssignedEntries;
 
-  sec.innerHTML = `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
+  // The "Publish Quizzes" tab only needs a quick read-only glance at what's
+  // already there (so the admin doesn't duplicate a lecture by accident) —
+  // reordering, editing, copy/move, and delete all live one place now:
+  // the "📚 Manage Curriculum" tab. Showing them here too was redundant
+  // and easy to trigger by mistake mid-publish.
+  const simple = adminActiveTab !== 'curriculum';
+
+  sec.innerHTML = simple
+    ? `<div class="admin-assigned-title">Already published in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}"</div>`
+    : `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
 
   if (!entries.length) {
     sec.innerHTML += `<div style="color:var(--text-muted);font-size:.82rem;">No quizzes have been published to this subject yet.</div>`;
+    return;
+  }
+
+  if (simple) {
+    entries.forEach(e => {
+      sec.innerHTML += `
+        <div class="admin-assigned-item">
+          <div class="admin-assigned-info">
+            <div class="admin-assigned-name">${escapeHtml(e.lectureName || e.id)}</div>
+            <div class="admin-assigned-path">${(e.questions || []).length} question${(e.questions||[]).length !== 1 ? 's' : ''}</div>
+          </div>
+        </div>`;
+    });
+    sec.innerHTML += `
+      <div style="font-size:.76rem;color:var(--text-muted);font-weight:600;margin-top:6px;">
+        Need to edit, reorder, copy/move, or delete one of these? Head to
+        <span style="color:var(--accent);cursor:pointer;font-weight:800;" onclick="adminJumpToCurriculumQuizzes()">📚 Manage Curriculum</span>.
+      </div>`;
     return;
   }
 
@@ -11605,6 +11664,14 @@ function _renderAdminAssignedListHTML() {
   if (adminEditMode === 'published' && adminEditingPublishedId) {
     renderAdminQuestionEditor('adminPublishedEditorArea_' + adminEditingPublishedId);
   }
+}
+
+// Shortcut from the simplified "Publish Quizzes" list straight to the same
+// subject's full quiz-management view in "📚 Manage Curriculum" — the
+// year/module/subject targets carry over since both tabs share them.
+function adminJumpToCurriculumQuizzes() {
+  adminCurrNavLevel = 'quizzes';
+  adminSwitchTab('curriculum');
 }
 
 /* Opens the Split Quiz panel for a published curriculum lecture.
