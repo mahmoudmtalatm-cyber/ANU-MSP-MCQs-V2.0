@@ -5518,6 +5518,25 @@ function _aiToolsParseJSON(text) {
   return JSON.parse(clean);
 }
 
+/* Builds the "shared case" context that AI Solve/Explain/Chat already use
+   (see _cqCaseContextBlock) for the AI Tools too (Refine Question, Fill
+   Choices, Add Choice) — WITHOUT this, a dependent question in a case
+   cluster hands the model only its own short stub text, with no idea what
+   patient scenario/vignette (or accompanying image) it's actually about,
+   which can produce distractors or rewording that don't fit the real case.
+   Returns { textBlock, imagePart } — textBlock is '' for standalone/core
+   questions, imagePart is null if there's no shared (or own) image. */
+function _aiToolsCaseContext(questions, q) {
+  const textBlock = _cqCaseContextBlock(questions, q);
+  const img = q.image || _cqFindCaseGroupImage(questions, q);
+  let imagePart = null;
+  if (img) {
+    const match = img.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) imagePart = { mime_type: match[1], data: match[2] };
+  }
+  return { textBlock, imagePart };
+}
+
 /* Renders the "🪄 Refine Question" toolbar + collapsible custom-instructions
    box + status area. Placed directly under the question textarea in every
    editor. editorKey: 'cq' | 'admin' | 'customQuiz'. */
@@ -5581,9 +5600,10 @@ function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
    the bulk post-extraction pass (cqBulkRefineQuestions) can reuse it without
    needing an editor/card in the DOM. Returns the refined question string,
    or throws on failure. */
-async function _aiRefineQuestionCall(apiKey, q, custom) {
+async function _aiRefineQuestionCall(apiKey, questions, q, custom) {
   const optEntries = getOptionEntries(q);
   const optsText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none yet)';
+  const { textBlock: caseBlock, imagePart } = _aiToolsCaseContext(questions, q);
 
   const prompt = `You are an exam-writing expert. Rewrite ONLY the question stem below so it reads like a polished, professionally written exam question.
 Rules:
@@ -5592,6 +5612,7 @@ Rules:
 - Do NOT change what the question is actually asking, its topic, or any fact/number/name in it.
 - Do NOT reference or rewrite the answer choices — they're given only as context.
 - Keep it roughly the same length unless told otherwise below.
+${caseBlock ? `\nThis question depends on a shared case/vignette${imagePart ? ' (and an accompanying image, attached below)' : ''}, given below for CONTEXT ONLY — do NOT rewrite it, repeat it, or fold it into your output. Only rewrite the "Original question" text itself, using the case to make sure your rewording still makes sense against it:\n${caseBlock}` : ''}
 ${custom ? `\nADDITIONAL INSTRUCTIONS FROM THE EDITOR (apply these too — if one of them genuinely conflicts with a rule above, THIS instruction wins for that specific point only; every other rule above still applies):\n"""${custom}"""\n` : ''}
 Original question:
 """${q.question}"""
@@ -5601,9 +5622,15 @@ ${optsText}
 
 Respond ONLY with a JSON object: {"question": "the refined question text"}. No markdown, no preamble.`;
 
+  const parts = [{ text: prompt }];
+  if (imagePart) {
+    parts.push({ text: '(Shared case image, for context only:)' });
+    parts.push({ inline_data: imagePart });
+  }
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_TOOLS_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const data = await callGeminiWithRetry(url, {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 1024 }
   });
   const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
@@ -5634,7 +5661,7 @@ async function aiRefineQuestion(editorKey, i) {
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🪄 Refining question…'));
 
   try {
-    q.question = await _aiRefineQuestionCall(apiKey, q, custom);
+    q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom);
     ed.rerender(); // rebuilds this card fresh, which also naturally re-enables its buttons
   } catch (e) {
     _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not refine this question.'));
@@ -5647,12 +5674,13 @@ async function aiRefineQuestion(editorKey, i) {
    Asks for exactly `count` new, plausible-but-incorrect answer choices that
    fit the question's subject, style, and difficulty — distinct from every
    existing choice and from each other, and not generic filler. */
-async function _aiGenerateDistractors(apiKey, q, optEntries, count) {
+async function _aiGenerateDistractors(apiKey, questions, q, optEntries, count) {
   const existingText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none)';
   const correctVal = (optEntries.find(([k]) => k === q.answer) || [])[1] || '';
+  const { textBlock: caseBlock, imagePart } = _aiToolsCaseContext(questions, q);
 
   const prompt = `You are an exam-writing expert creating additional multiple-choice answer options (distractors) for an existing question.
-
+${caseBlock ? `\nThis question depends on a shared case/vignette${imagePart ? ' (and an accompanying image, attached below)' : ''} — use it to make sure your distractors actually fit the scenario, but don't rewrite or repeat it:\n${caseBlock}` : ''}
 Question:
 """${q.question}"""
 
@@ -5669,9 +5697,15 @@ Write exactly ${count} NEW answer choice${count !== 1 ? 's' : ''} that:
 
 Respond ONLY with a JSON object: {"choices": [${Array(count).fill('"..."').join(', ')}]} containing exactly ${count} string${count !== 1 ? 's' : ''}, in order. No markdown, no preamble.`;
 
+  const parts = [{ text: prompt }];
+  if (imagePart) {
+    parts.push({ text: '(Shared case image, for context only:)' });
+    parts.push({ inline_data: imagePart });
+  }
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_TOOLS_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const data = await callGeminiWithRetry(url, {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens: 1024 }
   });
   const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
@@ -5718,7 +5752,7 @@ async function aiFillChoices(editorKey, i) {
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(`🧩 Filling ${missing.length} more choice${missing.length !== 1 ? 's' : ''}…`));
 
   try {
-    const newVals = await _aiGenerateDistractors(apiKey, q, optEntries, missing.length);
+    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length);
     if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
     missing.forEach((key, idx) => {
       const val = newVals[idx] || '';
@@ -5770,7 +5804,7 @@ async function aiAddChoice(editorKey, i) {
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is writing a new choice…'));
 
   try {
-    const newVals = await _aiGenerateDistractors(apiKey, q, optEntries, 1);
+    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, 1);
     const val = newVals[0] || '';
     if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
     q.options[nextKey] = val;
@@ -7299,7 +7333,7 @@ async function cqBulkFillChoices(questions, statusEl) {
       const missing = _AI_TOOLS_ALL_KEYS.filter(k => !usedKeys.includes(k)).slice(0, Math.max(0, 4 - optEntries.length));
       if (!missing.length) continue;
       const answerBefore = q.answer;
-      const newVals = await _aiGenerateDistractors(apiKey, q, optEntries, missing.length);
+      const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length);
       if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
       missing.forEach((key, idx) => {
         const val = newVals[idx] || '';
@@ -7345,7 +7379,7 @@ async function cqBulkRefineQuestions(questions, customInstructions, statusEl) {
         `🪄 Refining question wording… (${n + 1} of ${idxs.length})`, (n / idxs.length) * 100);
     }
     try {
-      q.question = await _aiRefineQuestionCall(apiKey, q, custom);
+      q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom);
       done++;
     } catch (e) {
       if (e._rateLimitPauseFallback) {
