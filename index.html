@@ -5633,7 +5633,6 @@ const AI_TOOLS_MODEL = (typeof CQ_MODEL !== 'undefined') ? CQ_MODEL : 'gemini-2.
 // Per-question UI state for the "Custom Instructions" box (whether it's
 // open, and its draft text) — keyed by `${editorKey}_${i}` since each
 // editor keeps its own independent set of question cards.
-const _aiToolsCustomPromptOpen = {};
 const _aiToolsCustomPromptText = {};
 function _aiToolsKey(editorKey, i) { return editorKey + '_' + i; }
 
@@ -5669,7 +5668,7 @@ function _aiToolsSetBusy(editorKey, i, busy, action) {
 function _aiToolsButtonIds(editorKey, i) {
   return [
     `aiRefineBtn_${editorKey}_${i}`,
-    `aiCustomBtn_${editorKey}_${i}`,
+    `aiRefineInstrCaret_${editorKey}_${i}`,
     `aiAddChoiceBtn_${editorKey}_${i}`,
     `aiFillChoicesBtn_${editorKey}_${i}`,
     `cqAiSolveBtn_${editorKey}_${i}`,   // now available in every editor, not just 'cq'
@@ -5727,20 +5726,14 @@ function _aiToolsRequireKey(editorKey, i) {
   }
   return apiKey;
 }
-function _aiToggleCustomPrompt(editorKey, i) {
-  const key = _aiToolsKey(editorKey, i);
-  _aiToolsCustomPromptOpen[key] = !_aiToolsCustomPromptOpen[key];
-  const wrap = document.getElementById(`aiCustomPromptWrap_${editorKey}_${i}`);
-  if (wrap) wrap.style.display = _aiToolsCustomPromptOpen[key] ? '' : 'none';
-  if (_aiToolsCustomPromptOpen[key]) {
-    setTimeout(() => {
-      const ta = document.getElementById(`aiCustomPromptInput_${editorKey}_${i}`);
-      if (ta) ta.focus();
-    }, 30);
-  }
-}
 function _aiCustomPromptChanged(editorKey, i, val) {
   _aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] = val;
+  const caret = document.getElementById(`aiRefineInstrCaret_${editorKey}_${i}`);
+  if (caret) caret.innerHTML = _aiRefineInstrCaretLabel(editorKey, i) + ' ▾';
+}
+function _aiRefineInstrCaretLabel(editorKey, i) {
+  const draft = (_aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] || '').trim();
+  return draft ? '⚙️ Instructions •' : '⚙️ Instructions';
 }
 /* Strips ```json fences (Gemini sometimes adds them despite the mime type
    request) before parsing — same tolerant pattern used elsewhere in the app. */
@@ -5768,17 +5761,17 @@ function _aiToolsCaseContext(questions, q) {
   return { textBlock, imagePart };
 }
 
-/* Renders the "🤖 AI Solve" + "🪄 Refine Question" toolbar + collapsible
-   custom-instructions box + source picker + status area. Placed directly
-   under the question textarea in every editor. editorKey: 'cq' | 'admin' |
-   'customQuiz'. AI Solve itself, and the ▾ button beside it that lets the
-   admin choose between answering from general AI knowledge or a specific
-   reference source (including adding a brand-new source on the spot), are
-   defined further down — see aiSolveQuestion() / _toggleAiSourcePicker(). */
+/* Renders the "🤖 AI Solve" + "🪄 Refine Question" toolbar, each with its
+   own ▾ caret opening a popover scoped to THAT action only — AI Solve's
+   caret picks the source to solve from; Refine's caret holds the custom
+   instructions used only when refining. Keeping both as the same
+   button+caret+popover shape (rather than one popover and one free-floating
+   "Custom Instructions" button) makes it visually unambiguous which
+   settings belong to which action. Placed directly under the question
+   textarea in every editor. editorKey: 'cq' | 'admin' | 'customQuiz'.
+   See aiSolveQuestion()/_toggleAiSourcePicker() and
+   aiRefineQuestion()/_toggleAiRefineInstrPicker() further down. */
 function _renderAiRefineTools(editorKey, i) {
-  const key = _aiToolsKey(editorKey, i);
-  const open = !!_aiToolsCustomPromptOpen[key];
-  const draft = _aiToolsCustomPromptText[key] || '';
   const busy = _aiToolsIsBusy(editorKey, i);
   return `
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 8px;">
@@ -5790,25 +5783,21 @@ function _renderAiRefineTools(editorKey, i) {
         <button class="cq-edit-reask-btn" type="button" id="aiSolveSrcCaret_${editorKey}_${i}" ${busy ? 'disabled' : ''}
           title="Choose what AI Solve should rely on: general AI knowledge, or a specific source"
           onclick="_toggleAiSourcePicker('${editorKey}', ${i})"
-          style="background:#F1F8F4;color:#2E7D32;border-color:#A5D6A7;border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_aiSolveSourceShortLabel(editorKey, i)} ▾</button>
+          style="background:#F1F8F4;color:#2E7D32;border-color:#A5D6A7;border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(_aiSolveSourceShortLabel(editorKey, i))} ▾</button>
       </div>
-      <button class="cq-edit-reask-btn" type="button" id="aiRefineBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
-        title="Use AI to rewrite this question with clear, exam-style phrasing and no grammar mistakes or typos"
-        onclick="aiRefineQuestion('${editorKey}', ${i})"
-        style="background:#EDE7F6;color:#6A1B9A;border-color:#CE93D8;">🪄 Refine Question</button>
-      <button class="cq-edit-reask-btn" type="button" id="aiCustomBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
-        title="Add optional custom instructions for the refine"
-        onclick="_aiToggleCustomPrompt('${editorKey}', ${i})"
-        style="background:#F0F8FF;color:var(--accent);border-color:#B0D4F0;">⚙️ Custom Instructions</button>
+      <div style="display:flex;">
+        <button class="cq-edit-reask-btn" type="button" id="aiRefineBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
+          title="Use AI to rewrite this question with clear, exam-style phrasing and no grammar mistakes or typos"
+          onclick="aiRefineQuestion('${editorKey}', ${i})"
+          style="background:#EDE7F6;color:#6A1B9A;border-color:#CE93D8;border-top-right-radius:0;border-bottom-right-radius:0;">🪄 Refine Question</button>
+        <button class="cq-edit-reask-btn" type="button" id="aiRefineInstrCaret_${editorKey}_${i}" ${busy ? 'disabled' : ''}
+          title="Optional custom instructions used only when refining this question"
+          onclick="_toggleAiRefineInstrPicker('${editorKey}', ${i})"
+          style="background:#F3EEFC;color:#6A1B9A;border-color:#CE93D8;border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;">${_aiRefineInstrCaretLabel(editorKey, i)} ▾</button>
+      </div>
     </div>
     <div id="aiSourcePicker_${editorKey}_${i}" class="ai-source-picker" style="display:none;"></div>
-    <div id="aiCustomPromptWrap_${editorKey}_${i}" style="${open ? '' : 'display:none;'}margin:-3px 0 8px;">
-      <textarea id="aiCustomPromptInput_${editorKey}_${i}" rows="2"
-        oninput="_aiCustomPromptChanged('${editorKey}', ${i}, this.value)"
-        placeholder="Optional — anything extra you want for THIS question (e.g. &quot;make it about penicillin resistance&quot;, &quot;keep it to one sentence&quot;). Only overrides the default refine behavior where it truly conflicts — grammar and exam phrasing still apply otherwise."
-        style="width:100%;resize:vertical;font-size:.78rem;padding:6px 8px;border:1.5px solid #D8C4EA;
-          border-radius:6px;font-family:var(--font);background:#FAF7FD;">${escapeHtml(draft)}</textarea>
-    </div>
+    <div id="aiRefineInstrPicker_${editorKey}_${i}" class="ai-source-picker" style="display:none;"></div>
     <div id="aiToolsStatus_${editorKey}_${i}" style="margin:-3px 0 8px;"></div>`;
 }
 
@@ -7702,15 +7691,49 @@ function _aiSolveSourceShortLabel(editorKey, i) {
   return '🧠 AI knowledge';
 }
 
-function _toggleAiSourcePicker(editorKey, i) {
-  const el = document.getElementById(`aiSourcePicker_${editorKey}_${i}`);
+// Shared open/close logic for every per-question "button + ▾ caret +
+// popover" control (AI Solve's source picker, Refine's instructions
+// popover, and any future ones). Only one such popover stays open at a
+// time. `pickerId`/`caretId` are the DOM ids; `buildHtml` renders the
+// popover's contents fresh each time it opens.
+function _toggleAiPopover(pickerId, caretId, buildHtml) {
+  const el = document.getElementById(pickerId);
   if (!el) return;
   const showing = el.style.display !== 'none';
-  // Only one picker open at a time, across every card/editor.
   document.querySelectorAll('.ai-source-picker').forEach(p => { if (p !== el) p.style.display = 'none'; });
   if (showing) { el.style.display = 'none'; return; }
-  el.innerHTML = _renderAiSourcePickerHTML(editorKey, i);
+  el.dataset.caret = caretId;
+  el.innerHTML = buildHtml();
   el.style.display = 'block';
+}
+
+function _toggleAiSourcePicker(editorKey, i) {
+  _toggleAiPopover(`aiSourcePicker_${editorKey}_${i}`, `aiSolveSrcCaret_${editorKey}_${i}`,
+    () => _renderAiSourcePickerHTML(editorKey, i));
+}
+
+function _toggleAiRefineInstrPicker(editorKey, i) {
+  _toggleAiPopover(`aiRefineInstrPicker_${editorKey}_${i}`, `aiRefineInstrCaret_${editorKey}_${i}`,
+    () => _renderAiRefineInstrPickerHTML(editorKey, i));
+}
+
+// Content of Refine's instructions popover — deliberately labeled so it's
+// unambiguous this text is used ONLY by 🪄 Refine Question, never by AI Solve.
+function _renderAiRefineInstrPickerHTML(editorKey, i) {
+  const key = _aiToolsKey(editorKey, i);
+  const draft = _aiToolsCustomPromptText[key] || '';
+  return `<div class="ai-source-picker-inner" style="max-width:290px;">
+    <div class="ai-source-picker-title">🪄 Custom Instructions — Refine Question only</div>
+    <div style="font-size:.71rem;color:var(--text-muted);padding:0 6px 6px;line-height:1.35;">
+      Optional extra guidance used only when you click 🪄 Refine Question on this question.
+      It has no effect on 🤖 AI Solve. Only overrides the default refine rules (grammar, exam phrasing) where it truly conflicts.
+    </div>
+    <textarea id="aiCustomPromptInput_${editorKey}_${i}" rows="3"
+      oninput="_aiCustomPromptChanged('${editorKey}', ${i}, this.value)"
+      placeholder="e.g. &quot;make it about penicillin resistance&quot;, &quot;keep it to one sentence&quot;"
+      style="width:100%;resize:vertical;font-size:.78rem;padding:6px 8px;border:1.5px solid #D8C4EA;
+        border-radius:6px;font-family:var(--font);background:#FAF7FD;box-sizing:border-box;">${escapeHtml(draft)}</textarea>
+  </div>`;
 }
 
 function _renderAiSourcePickerHTML(editorKey, i) {
@@ -13079,14 +13102,15 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// Close any open AI Solve source picker when clicking outside it (but not
-// when clicking the ▾ caret that opens it — that has its own toggle logic).
+// Close any open per-question AI popover (AI Solve's source picker, or
+// Refine's instructions popover) when clicking outside it — but not when
+// clicking the ▾ caret that opens it, which has its own toggle logic.
 document.addEventListener('click', (e) => {
   document.querySelectorAll('.ai-source-picker').forEach(picker => {
     if (picker.style.display === 'none') return;
     if (picker.contains(e.target)) return;
-    const idSuffix = picker.id.replace('aiSourcePicker_', '');
-    const caret = document.getElementById('aiSolveSrcCaret_' + idSuffix);
+    const caretId = picker.dataset.caret;
+    const caret = caretId && document.getElementById(caretId);
     if (caret && caret.contains(e.target)) return;
     picker.style.display = 'none';
   });
