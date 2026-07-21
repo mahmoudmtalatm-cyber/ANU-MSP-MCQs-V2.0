@@ -936,6 +936,17 @@
 .cq-edit-reask-btn.cq-edit-reask-btn-active:disabled {
   background: #EDE7F6; color: #4527A0; border-color: #B39DDB; opacity: 1; cursor: default;
 }
+/* Small ⏹ Stop button placed next to an individual AI feature's trigger
+   button, shown only while that specific feature is running (see
+   _aiToolsSyncButtons / _editorBulkSetBusy). Kept visually distinct (red)
+   and separate from the trigger it accompanies, always clickable even
+   though the trigger itself is disabled while busy. */
+.ai-tool-stop-btn {
+  display: none; background: #C62828; color: #fff; border: none; border-radius: 7px;
+  padding: 5px 9px; font-family: var(--font); font-size: .75rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: background .15s;
+}
+.ai-tool-stop-btn:hover { background: #B71C1C; }
 .ai-source-picker {
   position: relative; z-index: 20; margin: 4px 0 8px;
 }
@@ -5313,6 +5324,11 @@ const _caseGroupEditors = {
    duration, since these functions mutate the same question objects the
    per-question tools do — running them concurrently would race. */
 const _editorBulkBusy = { admin: false, customQuiz: false };
+// Which bulk tool ('Solve' | 'Fill' | 'Refine') is currently running, per
+// editor — lets the Stop button next to just that tool's button show up,
+// while its two sibling tools stay merely disabled (they can't run at the
+// same time anyway; _editorBulkGuard enforces that).
+const _editorBulkActiveTool = { admin: null, customQuiz: null };
 // One cancel token per editor, live only while a bulk pass is running —
 // see _stopAllAiProcesses() and the menu-close guard (_guardedClose).
 const _editorBulkCancelToken = { admin: null, customQuiz: null };
@@ -5342,15 +5358,26 @@ function _aiToolsSetAllDisabledForEditor(editorKey, disabled) {
   });
 }
 
-function _editorBulkSetBusy(editorKey, busy) {
+function _editorBulkSetBusy(editorKey, busy, tool) {
   _editorBulkBusy[editorKey] = busy;
+  _editorBulkActiveTool[editorKey] = busy ? tool : null;
   ['Solve', 'Fill', 'Refine'].forEach(name => {
     const btn = document.getElementById(`${editorKey}Bulk${name}Btn`);
     if (btn) btn.disabled = busy;
+    const stopBtn = document.getElementById(`${editorKey}Bulk${name}StopBtn`);
+    if (stopBtn) stopBtn.style.display = (busy && tool === name) ? 'inline-block' : 'none';
   });
   const lockWrap = document.getElementById(`${editorKey}BulkLockWrap`);
   if (lockWrap) lockWrap.classList.toggle('cq-bulk-lock', busy);
   _aiToolsSetAllDisabledForEditor(editorKey, busy);
+}
+
+/* Stops whichever bulk (whole-quiz) AI tool is currently running in this
+   editor. Only one can run at a time per editor (_editorBulkGuard), so no
+   tool name is needed — same hard, immediate abort as every other Stop
+   button (see _cancelAiToken). */
+function _editorBulkStopTool(editorKey) {
+  _cancelAiToken(_editorBulkCancelToken[editorKey]);
 }
 
 // Each bulk tool gets its own row with its own button PLUS (if it takes
@@ -5361,6 +5388,7 @@ function _editorBulkSetBusy(editorKey, busy) {
 // time under the hood, applying its action to each question in the quiz.
 function _renderBulkAiToolsPanel(editorKey, questions) {
   const busy = _editorBulkBusy[editorKey];
+  const activeTool = _editorBulkActiveTool[editorKey];
   const n = questions.length;
   return `
   <div class="cq-bulk-ai-panel">
@@ -5374,6 +5402,9 @@ function _renderBulkAiToolsPanel(editorKey, questions) {
         <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkSolveBtn" type="button"
           ${busy ? 'disabled' : ''} onclick="_editorBulkAiSolve('${editorKey}')"
           style="background:#1565C0;color:#fff;">🤖 AI Solve All</button>
+        <button class="ai-tool-stop-btn" type="button" id="${editorKey}BulkSolveStopBtn"
+          style="${busy && activeTool === 'Solve' ? 'display:inline-block;' : ''}"
+          title="Stop AI Solve All" onclick="_editorBulkStopTool('${editorKey}')">⏹ Stop</button>
       </div>
       <details class="cq-bulk-ai-opts">
         <summary>⚙️ AI Solve settings</summary>
@@ -5399,6 +5430,9 @@ function _renderBulkAiToolsPanel(editorKey, questions) {
         <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkFillBtn" type="button"
           ${busy ? 'disabled' : ''} onclick="_editorBulkFillChoices('${editorKey}')"
           style="background:#E65100;color:#fff;">🧩 Fill Choices (All)</button>
+        <button class="ai-tool-stop-btn" type="button" id="${editorKey}BulkFillStopBtn"
+          style="${busy && activeTool === 'Fill' ? 'display:inline-block;' : ''}"
+          title="Stop Fill Choices" onclick="_editorBulkStopTool('${editorKey}')">⏹ Stop</button>
         <span class="cq-bulk-ai-no-opts">Tops up missing answer choices — no settings needed.</span>
       </div>
     </div>
@@ -5408,6 +5442,9 @@ function _renderBulkAiToolsPanel(editorKey, questions) {
         <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkRefineBtn" type="button"
           ${busy ? 'disabled' : ''} onclick="_editorBulkRefineQuestions('${editorKey}')"
           style="background:#6A1B9A;color:#fff;">🪄 Refine Questions (All)</button>
+        <button class="ai-tool-stop-btn" type="button" id="${editorKey}BulkRefineStopBtn"
+          style="${busy && activeTool === 'Refine' ? 'display:inline-block;' : ''}"
+          title="Stop Refine Questions" onclick="_editorBulkStopTool('${editorKey}')">⏹ Stop</button>
       </div>
       <details class="cq-bulk-ai-opts">
         <summary>⚙️ Refine Questions settings</summary>
@@ -5508,7 +5545,7 @@ async function _editorBulkAiSolve(editorKey) {
   const ctx = _editorBulkGuard(editorKey);
   if (!ctx) return;
   const { ed, questions } = ctx;
-  _editorBulkSetBusy(editorKey, true);
+  _editorBulkSetBusy(editorKey, true, 'Solve');
   // Real per-run cancel token — this is what _stopAllAiProcesses() cancels via
   // _editorBulkCancelToken[editorKey]. Without creating and passing this down,
   // that cancel call had nothing to cancel: the loop below kept running for
@@ -5528,7 +5565,7 @@ async function _editorBulkAiSolve(editorKey) {
     if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'AI Solve failed.');
   } finally {
     _editorBulkCancelToken[editorKey] = null;
-    _editorBulkSetBusy(editorKey, false);
+    _editorBulkSetBusy(editorKey, false, 'Solve');
     ed.rerender();
   }
 }
@@ -5537,7 +5574,7 @@ async function _editorBulkFillChoices(editorKey) {
   const ctx = _editorBulkGuard(editorKey);
   if (!ctx) return;
   const { ed, questions } = ctx;
-  _editorBulkSetBusy(editorKey, true);
+  _editorBulkSetBusy(editorKey, true, 'Fill');
   const token = { cancelled: false };
   _editorBulkCancelToken[editorKey] = token;
   const statusEl = _editorBulkStatusEl(editorKey);
@@ -5553,7 +5590,7 @@ async function _editorBulkFillChoices(editorKey) {
     if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'Fill Choices failed.');
   } finally {
     _editorBulkCancelToken[editorKey] = null;
-    _editorBulkSetBusy(editorKey, false);
+    _editorBulkSetBusy(editorKey, false, 'Fill');
     ed.rerender();
   }
 }
@@ -5562,7 +5599,7 @@ async function _editorBulkRefineQuestions(editorKey) {
   const ctx = _editorBulkGuard(editorKey);
   if (!ctx) return;
   const { ed, questions } = ctx;
-  _editorBulkSetBusy(editorKey, true);
+  _editorBulkSetBusy(editorKey, true, 'Refine');
   const token = { cancelled: false };
   _editorBulkCancelToken[editorKey] = token;
   const statusEl = _editorBulkStatusEl(editorKey);
@@ -5579,7 +5616,7 @@ async function _editorBulkRefineQuestions(editorKey) {
     if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'Refine failed.');
   } finally {
     _editorBulkCancelToken[editorKey] = null;
-    _editorBulkSetBusy(editorKey, false);
+    _editorBulkSetBusy(editorKey, false, 'Refine');
     ed.rerender();
   }
 }
@@ -5898,6 +5935,30 @@ function _aiToolsSyncButtons(editorKey, i, busy, action) {
       existingSpinner.remove();
     }
   }
+
+  // Show the Stop button belonging to whichever action just started; hide
+  // every other feature's Stop button on this card (only one of these four
+  // can ever be running at once per question, thanks to the busy lock).
+  const stopIdMap = {
+    refine:      `aiRefineStopBtn_${editorKey}_${i}`,
+    addChoice:   `aiAddChoiceStopBtn_${editorKey}_${i}`,
+    fillChoices: `aiFillChoicesStopBtn_${editorKey}_${i}`,
+    solve:       `cqAiSolveStopBtn_${editorKey}_${i}`
+  };
+  Object.values(stopIdMap).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (busy && id === stopIdMap[action]) ? 'inline-block' : 'none';
+  });
+}
+
+/* Stops whichever single-question AI tool (Solve / Refine / Add Choice /
+   Fill Choices) is currently running on this specific question, without
+   touching any other question or editor. Mirrors _cancelAiToken's hard,
+   immediate abort — the in-flight request is cut right away, not just
+   flagged to stop at its next checkpoint. */
+function _aiToolsStopAction(editorKey, i) {
+  const key = _aiToolsKey(editorKey, i);
+  _cancelAiToken(_aiToolsCancelToken[key]);
 }
 function _aiToolsStatusEl(editorKey, i) {
   return document.getElementById(`aiToolsStatus_${editorKey}_${i}`);
@@ -5971,6 +6032,7 @@ function _aiToolsCaseContext(questions, q) {
    aiRefineQuestion()/_toggleAiRefineInstrPicker() further down. */
 function _renderAiRefineTools(editorKey, i) {
   const busy = _aiToolsIsBusy(editorKey, i);
+  const activeAction = _aiToolsActiveAction[_aiToolsKey(editorKey, i)];
   return `
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 8px;">
       <div style="display:flex;">
@@ -5983,6 +6045,9 @@ function _renderAiRefineTools(editorKey, i) {
           onclick="_toggleAiSourcePicker('${editorKey}', ${i})"
           style="background:#F1F8F4;color:#2E7D32;border-color:#A5D6A7;border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(_aiSolveSourceShortLabel(editorKey, i))} ▾</button>
       </div>
+      <button class="ai-tool-stop-btn" type="button" id="cqAiSolveStopBtn_${editorKey}_${i}"
+        style="${busy && activeAction === 'solve' ? 'display:inline-block;' : ''}"
+        title="Stop AI Solve" onclick="_aiToolsStopAction('${editorKey}', ${i})">⏹ Stop</button>
       <div style="display:flex;">
         <button class="cq-edit-reask-btn" type="button" id="aiRefineBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
           title="Use AI to rewrite this question with clear, exam-style phrasing and no grammar mistakes or typos"
@@ -5993,6 +6058,9 @@ function _renderAiRefineTools(editorKey, i) {
           onclick="_toggleAiRefineInstrPicker('${editorKey}', ${i})"
           style="background:#F3EEFC;color:#6A1B9A;border-color:#CE93D8;border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;">${_aiRefineInstrCaretLabel(editorKey, i)} ▾</button>
       </div>
+      <button class="ai-tool-stop-btn" type="button" id="aiRefineStopBtn_${editorKey}_${i}"
+        style="${busy && activeAction === 'refine' ? 'display:inline-block;' : ''}"
+        title="Stop Refine Question" onclick="_aiToolsStopAction('${editorKey}', ${i})">⏹ Stop</button>
     </div>
     <div id="aiSourcePicker_${editorKey}_${i}" class="ai-source-picker" style="display:none;"></div>
     <div id="aiRefineInstrPicker_${editorKey}_${i}" class="ai-source-picker" style="display:none;"></div>
@@ -6004,18 +6072,25 @@ function _renderAiRefineTools(editorKey, i) {
    button in every editor's options footer. */
 function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
   const busy = _aiToolsIsBusy(editorKey, i);
-  let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:5px;">`;
+  const activeAction = _aiToolsActiveAction[_aiToolsKey(editorKey, i)];
+  let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:5px;align-items:center;">`;
   if (nextKey) {
     html += `<button class="cq-edit-reask-btn" type="button" id="aiAddChoiceBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
       title="Let AI write one more plausible answer choice for this question"
       onclick="aiAddChoice('${editorKey}', ${i})"
-      style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 Add Choice (AI)</button>`;
+      style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 Add Choice (AI)</button>
+      <button class="ai-tool-stop-btn" type="button" id="aiAddChoiceStopBtn_${editorKey}_${i}"
+        style="${busy && activeAction === 'addChoice' ? 'display:inline-block;' : ''}"
+        title="Stop Add Choice" onclick="_aiToolsStopAction('${editorKey}', ${i})">⏹ Stop</button>`;
   }
   if (optCount < 4 && nextKey) {
     html += `<button class="cq-edit-reask-btn" type="button" id="aiFillChoicesBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
       title="Let AI fill in the remaining choices (up to 4 total)"
       onclick="aiFillChoices('${editorKey}', ${i})"
-      style="background:#FFF3E0;color:#E65100;border-color:#FFB74D;">🧩 Fill Choices (AI)</button>`;
+      style="background:#FFF3E0;color:#E65100;border-color:#FFB74D;">🧩 Fill Choices (AI)</button>
+      <button class="ai-tool-stop-btn" type="button" id="aiFillChoicesStopBtn_${editorKey}_${i}"
+        style="${busy && activeAction === 'fillChoices' ? 'display:inline-block;' : ''}"
+        title="Stop Fill Choices" onclick="_aiToolsStopAction('${editorKey}', ${i})">⏹ Stop</button>`;
   }
   html += `</div>`;
   return html;
@@ -6354,6 +6429,21 @@ function cqRequestPause() {
     statusEl.insertAdjacentHTML('beforeend',
       `<div class="cq-status warning cq-pausing-banner" style="margin-top:6px;">⏳ Waiting for the nearest checkpoint to pause safely — this finishes the current step first so nothing already done is lost.</div>`);
   }
+}
+
+function cqRequestStop() {
+  if (!cqBusy) return;
+  cqStopRequested = true;
+  if (typeof cqCancelToken !== 'undefined' && cqCancelToken) _cancelAiToken(cqCancelToken);
+  cqPauseRequested = false;
+  // If it's sitting paused, wake it up so it can see the stop flag and exit.
+  if (cqIsPaused && cqResumeResolve) {
+    const resolve = cqResumeResolve;
+    cqResumeResolve = null;
+    resolve();
+  }
+  const stopBtn = document.getElementById('cqStopBtn');
+  if (stopBtn) { stopBtn.disabled = true; stopBtn.textContent = '⏳ Stopping…'; }
 }
 
 function cqResumeGeneration() {
@@ -6965,6 +7055,8 @@ function renderCustomQuizModal() {
         style="background:#FFF3E0;color:#E65100;border:1.5px solid #FFB74D;">⏸️ Pause</button>
       <button class="cq-btn" id="cqResumeBtn" type="button" onclick="cqResumeGeneration()"
         style="display:none;background:#E8F5E9;color:#2E7D32;border:1.5px solid #66BB6A;">▶️ Resume</button>
+      <button class="ai-tool-stop-btn" id="cqStopBtn" type="button" onclick="cqRequestStop()"
+        style="display:inline-block;padding:7px 12px;font-size:.82rem;" title="Stop extraction/generation immediately">⏹ Stop</button>
       <button class="apikey-open-btn ghost" type="button" onclick="openApiKeyManager()">🔑 Manage APIs</button>
     </div>
     <div id="cqStatus"></div>
@@ -8292,6 +8384,8 @@ async function generateQuizFromAI() {
   if (pauseRow)  pauseRow.style.display  = 'flex';
   if (pauseBtn)  { pauseBtn.style.display = 'inline-flex'; pauseBtn.disabled = false; pauseBtn.textContent = '⏸️ Pause'; }
   if (resumeBtn) resumeBtn.style.display = 'none';
+  const stopBtn = document.getElementById('cqStopBtn');
+  if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '⏹ Stop'; }
   statusEl.innerHTML = _cqProgressStatusHTML(`Reading your file${cqSelectedFiles.length > 1 ? 's' : ''} and extracting all questions…`, 0);
 
   try {
@@ -8416,7 +8510,7 @@ async function generateQuizFromAI() {
     const isKeyErr = err._keyError ||
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (err._cqStopped || err._cancelled) {
-      statusEl.innerHTML = `<div class="cq-status warning">⏹️ Aborted — you switched the active API key, which forcibly ended this run. Nothing extracted before the abort was lost, but you'll need to click <strong>Extract Questions</strong> again to continue.</div>`;
+      statusEl.innerHTML = `<div class="cq-status warning">⏹️ Stopped. Nothing extracted before the abort was lost, but you'll need to click <strong>Extract Questions</strong> again to continue.</div>`;
     } else if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
         <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Choose or Add a Different Key</button>
@@ -8609,6 +8703,10 @@ async function generateQuizFromLecture() {
   if (pauseRow)  pauseRow.style.display  = 'flex';
   if (pauseBtn)  { pauseBtn.style.display = 'inline-flex'; pauseBtn.disabled = false; pauseBtn.textContent = '⏸️ Pause'; }
   if (resumeBtn) resumeBtn.style.display = 'none';
+  {
+    const stopBtn = document.getElementById('cqStopBtn');
+    if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '⏹ Stop'; }
+  }
   statusEl.innerHTML = _cqProgressStatusHTML(`Reading your lecture${cqLectureFiles.length > 1 ? 's' : ''} and generating questions…`, 0);
 
   try {
@@ -8671,7 +8769,7 @@ async function generateQuizFromLecture() {
     const isKeyErr = err._keyError ||
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (err._cqStopped || err._cancelled) {
-      statusEl.innerHTML = `<div class="cq-status warning">⏹️ Aborted — you switched the active API key, which forcibly ended this run. Nothing generated before the abort was lost, but you'll need to click <strong>Generate Questions</strong> again to continue.</div>`;
+      statusEl.innerHTML = `<div class="cq-status warning">⏹️ Stopped. Nothing generated before the abort was lost, but you'll need to click <strong>Generate Questions</strong> again to continue.</div>`;
     } else if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
         <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Choose or Add a Different Key</button>
