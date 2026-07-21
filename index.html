@@ -6828,7 +6828,11 @@ function renderCustomQuizModal() {
 
   /* ── Write your own quiz by hand (no AI) ── */
   html += `<div class="cq-section">
-    <div class="cq-section-title">✍️ Create Your Own Quiz</div>`;
+    <div class="cq-section-title">✍️ Create Your Own Quiz</div>
+
+    <!-- API Key -->
+    ${renderCqApiKeyBadge()}
+    `;
   if (cqCreatingNew) {
     html += `<div class="cq-field-hint">Write your quiz from scratch — same editor as editing an existing quiz, you just start from a blank question.</div>
     <div class="cq-input-row">
@@ -8509,7 +8513,7 @@ async function generateQuizFromAI() {
     const isKeyErr = err._keyError ||
       /api.?key|invalid.?key|not.?valid|permission.?denied/i.test(err.message || '');
     if (err._cqStopped || err._cancelled) {
-      statusEl.innerHTML = `<div class="cq-status warning">⏹️ Stopped. Nothing extracted before the abort was lost, but you'll need to click <strong>Extract Questions</strong> again to continue.</div>`;
+      statusEl.innerHTML = '';
     } else if (isKeyErr) {
       statusEl.innerHTML = `<div class="cq-status error">🔑 Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
         <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">🔑 Choose or Add a Different Key</button>
