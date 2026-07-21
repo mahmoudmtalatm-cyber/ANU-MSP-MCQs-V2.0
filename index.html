@@ -1785,8 +1785,8 @@
 .icon-picker-trigger:hover { border-color: #1B4F72; }
 .icon-picker-trigger .ip-caret { font-size: .65rem; color: var(--text-muted); }
 .icon-picker-pop {
-  position: absolute; z-index: 50; top: calc(100% + 6px); left: 0;
-  width: 300px; max-width: calc(100vw - 48px); max-height: 320px; overflow-y: auto;
+  position: fixed; z-index: 15000;
+  width: 300px; max-width: calc(100vw - 24px); max-height: 320px; overflow-y: auto;
   background: #fff; border: 1px solid #B0D4F0; border-radius: 10px;
   box-shadow: 0 8px 28px rgba(20,40,60,.22); padding: 10px;
 }
@@ -13663,10 +13663,59 @@ function toggleIconPicker(inputId) {
   const pop = document.getElementById(inputId + 'Pop');
   if (!pop) return;
   const willOpen = pop.classList.contains('hidden');
-  pop.classList.toggle('hidden');
-  _openIconPickerId = willOpen ? inputId : null;
-  if (willOpen) renderIconPickerPop(inputId, '');
+  if (willOpen) {
+    pop.classList.remove('hidden');
+    _openIconPickerId = inputId;
+    renderIconPickerPop(inputId, '');
+  } else {
+    pop.classList.add('hidden');
+    _openIconPickerId = null;
+  }
 }
+
+/* Positions an icon-picker popover (position:fixed) against its trigger
+   button, clamped fully inside the viewport — flips above the trigger if
+   there isn't room below, and shrinks/shifts horizontally so a 300px
+   popover never spills past the edge of a narrow card or screen. Called
+   after every render of the popover's contents, since filtering the
+   list changes its height. */
+function positionIconPickerPop(inputId) {
+  const trigger = document.getElementById(inputId + 'Trigger');
+  const pop = document.getElementById(inputId + 'Pop');
+  if (!trigger || !pop || pop.classList.contains('hidden')) return;
+  const margin = 12;
+  const rect = trigger.getBoundingClientRect();
+
+  const popWidth = Math.min(300, window.innerWidth - margin * 2);
+  pop.style.width = popWidth + 'px';
+
+  let left = rect.left;
+  if (left + popWidth > window.innerWidth - margin) {
+    left = window.innerWidth - margin - popWidth;
+  }
+  if (left < margin) left = margin;
+  pop.style.left = left + 'px';
+
+  const maxH = Math.min(320, window.innerHeight - margin * 2);
+  pop.style.maxHeight = maxH + 'px';
+  const popHeight = Math.min(pop.scrollHeight, maxH);
+
+  const spaceBelow = window.innerHeight - rect.bottom - margin;
+  const spaceAbove = rect.top - margin;
+  let top;
+  if (spaceBelow >= popHeight || spaceBelow >= spaceAbove) {
+    top = rect.bottom + 6; // open downward (default)
+  } else {
+    top = Math.max(margin, rect.top - 6 - popHeight); // not enough room below — open upward
+  }
+  pop.style.top = top + 'px';
+}
+
+// Keep an open picker glued to its trigger through resizes and scrolling
+// (capture phase so it also catches scroll inside the admin panel body,
+// not just the window).
+window.addEventListener('resize', () => { if (_openIconPickerId) positionIconPickerPop(_openIconPickerId); });
+document.addEventListener('scroll', () => { if (_openIconPickerId) positionIconPickerPop(_openIconPickerId); }, true);
 
 function renderIconPickerPop(inputId, filter) {
   const pop = document.getElementById(inputId + 'Pop');
@@ -13684,6 +13733,7 @@ function renderIconPickerPop(inputId, filter) {
       <input type="text" id="${inputId}CustomAdd" placeholder="Add custom emoji" maxlength="4" />
       <button onclick="const v=document.getElementById('${inputId}CustomAdd').value.trim(); if(v){ selectIconForField('${inputId}', v); addCustomIcon(v); }">➕ Add</button>
     </div>`;
+  positionIconPickerPop(inputId);
 }
 
 function selectIconForField(inputId, icon) {
