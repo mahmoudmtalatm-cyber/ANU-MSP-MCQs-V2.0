@@ -6943,6 +6943,19 @@ function renderCustomQuizModal() {
   const body     = document.getElementById('customQuizBody');
   const quizzes  = loadCustomQuizzes();
 
+  // A rebuild here (e.g. triggered just by closing the API Key Manager, or
+  // switching keys, while extraction/generation is running in the
+  // background) used to blow away the live "cqStatus" progress box and the
+  // pause/resume/stop row's current state, making an actively-running job
+  // look like it had silently stopped even though it hadn't. Snapshot both
+  // before rebuilding and restore them afterwards whenever a job is busy,
+  // so the visible progress is never lost just because the modal redrew.
+  const prevStatusEl  = document.getElementById('cqStatus');
+  const prevPauseRow  = document.getElementById('cqPauseRow');
+  const preservedStatusHTML   = (cqBusy && prevStatusEl) ? prevStatusEl.innerHTML : null;
+  const preservedPauseRowHTML = (cqBusy && prevPauseRow) ? prevPauseRow.innerHTML : null;
+  const preservedPauseRowDisplay = (cqBusy && prevPauseRow) ? prevPauseRow.style.display : null;
+
   let html = '';
 
   /* ── Saved custom quizzes ── */
@@ -7250,6 +7263,22 @@ function renderCustomQuizModal() {
 
   body.innerHTML = html;
 
+  // Restore the live progress box / pause row exactly as they were, so a
+  // job that's genuinely still running never appears to have vanished just
+  // because something else (closing the key manager, switching a key,
+  // etc.) caused this modal to redraw mid-flight.
+  if (preservedStatusHTML !== null) {
+    const statusEl = document.getElementById('cqStatus');
+    if (statusEl) statusEl.innerHTML = preservedStatusHTML;
+  }
+  if (preservedPauseRowHTML !== null) {
+    const pauseRow = document.getElementById('cqPauseRow');
+    if (pauseRow) {
+      pauseRow.innerHTML = preservedPauseRowHTML;
+      if (preservedPauseRowDisplay) pauseRow.style.display = preservedPauseRowDisplay;
+    }
+  }
+
   if (cqGeneratedQuestions) renderCQPreview();
   if ((cqEditingQuizId || cqCreatingNew) && cqEditQuestions) renderCustomQuizEditor();
   setupCQDropzone();
@@ -7512,6 +7541,24 @@ function _extractKeyFromGeminiUrl(u) {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+/* Drops a one-line "🔄 switched key" note into the live custom-quiz status
+   box, if one is currently showing (i.e. an extraction/generation job is
+   actually on screen). This runs for every rotation from every call site,
+   so the indicator doesn't depend on each caller wiring up its own
+   onKeyRotated handler. Silently does nothing if #cqStatus isn't present,
+   is empty, or the modal is hidden — so it never spams unrelated screens. */
+function _announceKeyRotationInStatus(next) {
+  try {
+    const statusEl = document.getElementById('cqStatus');
+    if (!statusEl || !statusEl.innerHTML.trim()) return;
+    const body = document.getElementById('customQuizBody');
+    if (!body || !body.offsetParent) return; // modal not visible
+    statusEl.insertAdjacentHTML('beforeend',
+      `<div class="cq-status warning apikey-rotation-note" style="margin-top:6px;">🔄 Rate limit hit — switched to API key "${escapeHtml(next.label)}" automatically.</div>`
+    );
+  } catch (e) {}
+}
+
 /* Builds a friendly, actionable error for when Smart Rotation has run out of
    usable keys — every saved key is either still cooling down from a rate
    limit or has been permanently disabled. */
@@ -7581,6 +7628,11 @@ async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCh
     _lastAutoRotatedKeyId = next.id;
     _refreshApiKeyQuickButtons();
     _refreshApiKeyManagerIfOpen();
+    // Universal, call-site-agnostic feedback: if a "#cqStatus" progress box
+    // is currently on screen (custom-quiz extraction/generation of any
+    // kind), drop a one-line note into it so rotation is visible even for
+    // call sites that don't pass their own onKeyRotated handler.
+    _announceKeyRotationInStatus(next);
     if (onKeyRotated) { try { onKeyRotated(next); } catch (e) {} }
     return true;
   }
@@ -8047,11 +8099,8 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
         model: CQ_MODEL,
         onKeyRotated: (next) => {
           apiKey = next.key; // keep using the newly-active key on later batches too
-          if (statusEl) {
-            statusEl.insertAdjacentHTML('beforeend',
-              `<div class="cq-status warning" style="margin-top:6px;">🔄 Switched to API key "${escapeHtml(next.label)}" automatically.</div>`
-            );
-          }
+          // (the visible "🔄 switched key" note itself is now handled
+          // globally by _announceKeyRotationInStatus, for every call site)
         }
       });
 
