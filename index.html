@@ -10911,6 +10911,17 @@ let adminPublishInsertPosition = null;
 let adminCommunityCache = null;
 let adminBusy = false;
 
+// Search/filter state for the "🌐 Community Quizzes" source list in the
+// Publish tab — mirrors communitySearchQuery/Year/Module/SubjectFilter/Sort
+// from the student-facing Community Quizzes browse overlay, kept as its
+// own separate set of variables so browsing here never affects, and is
+// never affected by, whatever's currently set in that overlay.
+let adminCommSearchQuery   = '';
+let adminCommYearFilter    = '';
+let adminCommModuleFilter  = '';
+let adminCommSubjectFilter = '';
+let adminCommSort          = 'newest';
+
 // Inline quiz editor state (used both for "edit before publish" and "edit published lecture")
 let adminEditQuestions = null;   // working copy of questions array being edited, or null
 let adminEditMode      = null;   // 'publish' | 'published' | null
@@ -11140,6 +11151,21 @@ async function adminRemoveAdminUI(email) {
 function adminSetSourceTab(tab) {
   adminSourceTab = tab;
   adminSelectedQuiz = null;
+  adminCommSearchQuery   = '';
+  adminCommYearFilter    = '';
+  adminCommModuleFilter  = '';
+  adminCommSubjectFilter = '';
+  adminCommSort          = 'newest';
+  renderAdminPanel();
+}
+
+function adminCommOnSearchInput(val) {
+  adminCommSearchQuery = val;
+  const clearBtn = document.getElementById('adminCommClearBtn');
+  if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+  window._adminCommSearchFocused = true;
+  const el = document.getElementById('adminCommSearchInput');
+  window._adminCommSearchPos = el ? el.selectionStart : null;
   renderAdminPanel();
 }
 
@@ -11189,6 +11215,7 @@ async function renderAdminPanel() {
   body.innerHTML = `
     ${sourceTabsHtml}
     ${moderationHint}
+    <div id="adminCommFilterBar"></div>
     <div class="admin-quiz-list" id="adminQuizList">${listHtml}</div>
     <div id="adminAssignArea"></div>
   `;
@@ -11230,10 +11257,107 @@ async function renderAdminPanel() {
         return;
       }
     }
-    const shared = adminCommunityCache;
+    const allShared = adminCommunityCache;
+
+    // --- Filtering (identical logic to renderCommunityQuizzes) ---
+    let shared = allShared;
+
+    const q = adminCommSearchQuery.toLowerCase().trim();
+    if (q) {
+      shared = shared.filter(item => {
+        const inTitle  = (item.title || '').toLowerCase().includes(q);
+        const inAuthor = (item.authorName || '').toLowerCase().includes(q);
+        const inCat    = (item.category || '').toLowerCase().includes(q);
+        const inTags   = (item.tags || []).some(t => t.includes(q));
+        return inTitle || inAuthor || inCat || inTags;
+      });
+    }
+    if (adminCommYearFilter) {
+      shared = shared.filter(item => (item.year || '') === adminCommYearFilter);
+    }
+    if (adminCommModuleFilter) {
+      shared = shared.filter(item => (item.module || '') === adminCommModuleFilter);
+    }
+    if (adminCommSubjectFilter) {
+      shared = shared.filter(item => (item.subjectKey || '') === adminCommSubjectFilter);
+    }
+
+    if (adminCommSort === 'newest') {
+      shared = [...shared].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
+    } else if (adminCommSort === 'oldest') {
+      shared = [...shared].sort((a, b) => (a.sharedAt || 0) - (b.sharedAt || 0));
+    } else if (adminCommSort === 'az') {
+      shared = [...shared].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    } else if (adminCommSort === 'questions') {
+      shared = [...shared].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
+    }
+
+    // Build cascading filter options from live curriculum + shared quiz metadata
+    const allYears   = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
+    const allModules = adminCommYearFilter
+      ? Object.keys(curriculum[adminCommYearFilter] || {})
+      : [...new Set(allShared.map(i => i.module).filter(Boolean))].sort();
+    const allSubjects = (adminCommYearFilter && adminCommModuleFilter)
+      ? (curriculum[adminCommYearFilter][adminCommModuleFilter] || []).filter(k => subjects[k])
+      : [...new Set(allShared.map(i => i.subjectKey).filter(Boolean))];
+
+    const searchVal  = escapeHtml(adminCommSearchQuery);
+    const clearStyle = adminCommSearchQuery ? 'display:block' : 'display:none';
+
+    const filterBar = document.getElementById('adminCommFilterBar');
+    if (filterBar) {
+      filterBar.innerHTML = `
+        <div class="comm-filter-bar">
+          <div class="comm-search-wrap">
+            <span class="comm-search-icon">🔍</span>
+            <input class="comm-search-input" id="adminCommSearchInput" type="text"
+                   placeholder="Search by title, author, category or tag…"
+                   value="${searchVal}"
+                   oninput="adminCommOnSearchInput(this.value)" />
+            <button class="comm-search-clear" id="adminCommClearBtn" style="${clearStyle}"
+                    onclick="adminCommSearchQuery='';document.getElementById('adminCommSearchInput').value='';this.style.display='none';renderAdminPanel()">✕</button>
+          </div>
+          <div class="comm-filter-row">
+            <select class="comm-filter-select" id="adminCommYearFilter"
+                    onchange="adminCommYearFilter=this.value;adminCommModuleFilter='';adminCommSubjectFilter='';renderAdminPanel()">
+              <option value="">All Years</option>
+              ${allYears.map(y => `<option value="${escapeHtml(y)}" ${adminCommYearFilter === y ? 'selected' : ''}>${escapeHtml(y)}</option>`).join('')}
+            </select>
+            <select class="comm-filter-select" id="adminCommModuleFilter"
+                    onchange="adminCommModuleFilter=this.value;adminCommSubjectFilter='';renderAdminPanel()"
+                    ${!adminCommYearFilter ? 'disabled' : ''}>
+              <option value="">All Modules</option>
+              ${allModules.map(m => `<option value="${escapeHtml(m)}" ${adminCommModuleFilter === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+            </select>
+            <select class="comm-filter-select" id="adminCommSubjectFilter"
+                    onchange="adminCommSubjectFilter=this.value;renderAdminPanel()"
+                    ${!adminCommModuleFilter ? 'disabled' : ''}>
+              <option value="">All Subjects</option>
+              ${allSubjects.map(k => {
+                const lbl = (subjects[k] && (subjects[k].label || k)) || k;
+                const ico = (subjects[k] && subjects[k].icon) || '';
+                return `<option value="${escapeHtml(k)}" ${adminCommSubjectFilter === k ? 'selected' : ''}>${ico} ${escapeHtml(lbl)}</option>`;
+              }).join('')}
+            </select>
+            <select class="comm-filter-select" id="adminCommSortSelect"
+                    onchange="adminCommSort=this.value;renderAdminPanel()">
+              <option value="newest" ${adminCommSort==='newest'?'selected':''}>🕐 Newest</option>
+              <option value="oldest" ${adminCommSort==='oldest'?'selected':''}>🕐 Oldest</option>
+              <option value="az"     ${adminCommSort==='az'?'selected':''}>🔤 A → Z</option>
+              <option value="questions" ${adminCommSort==='questions'?'selected':''}>📝 Most Questions</option>
+            </select>
+          </div>
+          <div class="comm-results-count">${shared.length} quiz${shared.length !== 1 ? 'zes' : ''} shown</div>
+        </div>`;
+    }
+
     const list = document.getElementById('adminQuizList');
-    if (!shared.length) {
+    if (!allShared.length) {
       list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No community quizzes available.</div>`;
+      return;
+    }
+    if (!shared.length) {
+      list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No quizzes match your search. Try different keywords or clear the filters.</div>`;
       return;
     }
     list.innerHTML = shared.map(q => {
