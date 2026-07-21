@@ -10916,6 +10916,7 @@ let adminBusy = false;
 // from the student-facing Community Quizzes browse overlay, kept as its
 // own separate set of variables so browsing here never affects, and is
 // never affected by, whatever's currently set in that overlay.
+let adminCommTab           = 'browse'; // 'browse' | 'mine' — mirrors commManageTab, for the Publish tab's community source list
 let adminCommSearchQuery   = '';
 let adminCommYearFilter    = '';
 let adminCommModuleFilter  = '';
@@ -11020,6 +11021,12 @@ function openAdminPanel() {
   adminPublishInsertPosition = null;
   adminCommunityCache = null;
   adminCurrNavLevel = 'years';
+  adminCommTab           = 'browse';
+  adminCommSearchQuery   = '';
+  adminCommYearFilter    = '';
+  adminCommModuleFilter  = '';
+  adminCommSubjectFilter = '';
+  adminCommSort          = 'newest';
   commManageTab           = 'browse';
   commManageSearchQuery   = '';
   commManageYearFilter    = '';
@@ -11189,6 +11196,7 @@ async function adminRemoveAdminUI(email) {
 function adminSetSourceTab(tab) {
   adminSourceTab = tab;
   adminSelectedQuiz = null;
+  adminCommTab           = 'browse';
   adminCommSearchQuery   = '';
   adminCommYearFilter    = '';
   adminCommModuleFilter  = '';
@@ -11247,6 +11255,7 @@ async function renderAdminPanel() {
 
   body.innerHTML = `
     ${sourceTabsHtml}
+    <div id="adminCommSectionTabs"></div>
     <div id="adminCommFilterBar"></div>
     <div class="admin-quiz-list" id="adminQuizList">${listHtml}</div>
     <div id="adminAssignArea"></div>
@@ -11290,9 +11299,20 @@ async function renderAdminPanel() {
       }
     }
     const allShared = adminCommunityCache;
+    const myUid = window._currentUser ? window._currentUser.uid : null;
+    const myShared = allShared.filter(q => q.authorUid === myUid);
+
+    const sectionTabsEl = document.getElementById('adminCommSectionTabs');
+    if (sectionTabsEl) {
+      sectionTabsEl.innerHTML = `
+        <div class="community-section-tabs">
+          <button class="community-tab-btn ${adminCommTab === 'browse' ? 'active' : ''}" onclick="adminCommTab='browse';adminCommSearchQuery='';adminCommYearFilter='';adminCommModuleFilter='';adminCommSubjectFilter='';renderAdminPanel()">&#127758; Browse All (${allShared.length})</button>
+          <button class="community-tab-btn ${adminCommTab === 'mine' ? 'active' : ''}" onclick="adminCommTab='mine';renderAdminPanel()">&#128100; My Shared (${myShared.length})</button>
+        </div>`;
+    }
 
     // --- Filtering (identical logic to renderCommunityQuizzes) ---
-    let shared = allShared;
+    let shared = adminCommTab === 'mine' ? myShared : allShared;
 
     const q = adminCommSearchQuery.toLowerCase().trim();
     if (q) {
@@ -11384,12 +11404,14 @@ async function renderAdminPanel() {
     }
 
     const list = document.getElementById('adminQuizList');
-    if (!allShared.length) {
-      list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No community quizzes available.</div>`;
-      return;
-    }
+    const hasFilters = !!(adminCommSearchQuery || adminCommYearFilter || adminCommModuleFilter || adminCommSubjectFilter);
     if (!shared.length) {
-      list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No quizzes match your search. Try different keywords or clear the filters.</div>`;
+      const emptyMsg = hasFilters
+        ? 'No quizzes match your search. Try different keywords or clear the filters.'
+        : adminCommTab === 'mine'
+          ? "You haven't shared any quizzes yet."
+          : 'No community quizzes available.';
+      list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">${emptyMsg}</div>`;
       return;
     }
     list.innerHTML = shared.map(q => {
