@@ -5636,6 +5636,159 @@ const AI_TOOLS_MODEL = (typeof CQ_MODEL !== 'undefined') ? CQ_MODEL : 'gemini-2.
 const _aiToolsCustomPromptText = {};
 function _aiToolsKey(editorKey, i) { return editorKey + '_' + i; }
 
+/* ══════════════════════════════════════════════════════════
+   AI ACTIVITY TRACKER — floating panel + toast notifications
+   Tracks every per-question AI action (Solve / Refine / Fill Choices /
+   Add Choice) independently of whichever popover or card happens to be
+   on screen right now. This solves three things at once:
+     • the user can see what's still running (or just finished) without
+       opening that question's menu again and waiting for it,
+     • each running process gets its own Stop button that cancels it
+       immediately — no page refresh needed,
+     • a small toast appears the moment a process finishes (success or
+       failure), even if the user has scrolled away or closed the popover.
+══════════════════════════════════════════════════════════ */
+const _aiActivity = {};       // { [runId]: {id, editorKey, i, action, label, qLabel, status, cancelToken, ts} }
+let _aiActivityCounter = 0;
+let _aiActivityPanelCollapsed = false;
+const _aiActivityLabels = {
+  solve: '🤖 AI Solve', refine: '🪄 Refine Question',
+  fillChoices: '🧩 Fill Choices', addChoice: '🤖 Add Choice'
+};
+const _aiActivityEditorNames = { cq: 'Extraction review', admin: 'Quiz editor', customQuiz: 'Custom quiz' };
+
+function _aiActivityQuestionLabel(editorKey, i) {
+  return `${_aiActivityEditorNames[editorKey] || editorKey} — Q${i + 1}`;
+}
+
+/* Starts tracking one AI action. Returns the fresh cancelToken so the
+   caller can pass it straight into callGeminiWithRetry (via whichever
+   helper it's using), plus the runId needed to finish/cancel it later. */
+function _aiActivityStart(editorKey, i, action) {
+  const id = 'run_' + (++_aiActivityCounter);
+  const cancelToken = { cancelled: false };
+  _aiActivity[id] = {
+    id, editorKey, i, action,
+    label: _aiActivityLabels[action] || action,
+    qLabel: _aiActivityQuestionLabel(editorKey, i),
+    status: 'running',
+    cancelToken,
+    ts: Date.now()
+  };
+  _renderAiActivityPanel();
+  return { runId: id, cancelToken };
+}
+
+/* status: 'done' | 'error' | 'cancelled' */
+function _aiActivityFinish(runId, status, message) {
+  const run = _aiActivity[runId];
+  if (!run) return;
+  run.status = status;
+  run.message = message || '';
+  _renderAiActivityPanel();
+  // Also refresh this question's own inline status line, in case its card
+  // is still on screen and its popover currently showing this run's status.
+  _aiToolsSetStatus(run.editorKey, run.i, _aiActivityStatusHTML(run));
+  if (status === 'done') {
+    _showAiToast(`✅ ${run.label} finished — ${run.qLabel}`);
+  } else if (status === 'error') {
+    _showAiToast(`⚠️ ${run.label} failed — ${run.qLabel}`, true);
+  }
+  // Keep finished entries visible briefly so the user actually sees them,
+  // then drop them — running/cancelling entries never expire on their own.
+  setTimeout(() => {
+    if (_aiActivity[runId] && _aiActivity[runId].status !== 'running' && _aiActivity[runId].status !== 'cancelling') {
+      delete _aiActivity[runId];
+      _renderAiActivityPanel();
+    }
+  }, 12000);
+}
+
+/* Stops a run immediately — aborts its in-flight fetch via the same
+   AbortController mechanism every other cancel token in this app uses. */
+function _aiActivityCancel(runId) {
+  const run = _aiActivity[runId];
+  if (!run || run.status !== 'running') return;
+  _cancelAiToken(run.cancelToken);
+  run.status = 'cancelling';
+  _renderAiActivityPanel();
+  _aiToolsSetStatus(run.editorKey, run.i, _aiActivityStatusHTML(run));
+}
+
+// Returns the current run (if any) for a given "editorKey_i" question key —
+// used by _renderAiRefineTools to restore the right status line/Stop
+// button when a card gets rebuilt from scratch by a full rerender.
+function _aiActivityForQuestion(key) {
+  return Object.values(_aiActivity).find(r => _aiToolsKey(r.editorKey, r.i) === key) || null;
+}
+function _aiActivityCountRunning() {
+  return Object.values(_aiActivity).filter(r => r.status === 'running' || r.status === 'cancelling').length;
+}
+
+function _aiActivityStatusHTML(run) {
+  if (run.status === 'running' || run.status === 'cancelling') {
+    return `<div class="cq-status info" style="font-size:.75rem;padding:5px 10px;display:flex;align-items:center;gap:8px;justify-content:space-between;">
+      <span style="display:flex;align-items:center;gap:6px;"><span class="cq-spinner" style="width:12px;height:12px;border-width:2px;"></span> ${run.status === 'cancelling' ? 'Stopping…' : escapeHtml(run.label) + '…'}</span>
+      ${run.status === 'running' ? `<button type="button" class="cq-edit-reask-btn" style="font-size:.68rem;padding:2px 8px;" onclick="_aiActivityCancel('${run.id}')">⏹ Stop</button>` : ''}
+    </div>`;
+  }
+  if (run.status === 'done') return `<div class="cq-status success" style="font-size:.75rem;padding:5px 10px;">✅ ${escapeHtml(run.label)} finished</div>`;
+  if (run.status === 'cancelled') return `<div class="cq-status warning" style="font-size:.75rem;padding:5px 10px;">⏹ ${escapeHtml(run.label)} stopped</div>`;
+  return _aiToolsErrorHTML(run.message || `${run.label} failed`);
+}
+
+/* ── Floating "AI activity" panel ──
+   A single fixed-position panel (not tied to any one editor/card) listing
+   every AI action currently running or recently finished, anywhere in the
+   app, each with its own Stop button. This is what lets the user check on
+   (and stop) background processes without opening the menu they started
+   in and waiting for it to catch up. */
+function _ensureAiActivityPanelEl() {
+  let el = document.getElementById('aiActivityPanel');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'aiActivityPanel';
+  el.style.cssText = 'position:fixed;bottom:18px;right:18px;z-index:9999;width:290px;font-family:var(--font);';
+  document.body.appendChild(el);
+  return el;
+}
+function _aiActivityToggleCollapse() {
+  _aiActivityPanelCollapsed = !_aiActivityPanelCollapsed;
+  _renderAiActivityPanel();
+}
+function _renderAiActivityPanel() {
+  const runs = Object.values(_aiActivity).sort((a, b) => a.ts - b.ts);
+  const el = _ensureAiActivityPanelEl();
+  if (!runs.length) { el.innerHTML = ''; return; }
+  const runningCount = _aiActivityCountRunning();
+  const headerHtml = `<div onclick="_aiActivityToggleCollapse()"
+      style="cursor:pointer;background:#1565C0;color:#fff;padding:8px 12px;border-radius:${_aiActivityPanelCollapsed ? '10px' : '10px 10px 0 0'};
+        font-size:.78rem;font-weight:700;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 10px rgba(0,0,0,.18);">
+      <span>🤖 AI activity${runningCount ? ` (${runningCount} running)` : ''}</span><span>${_aiActivityPanelCollapsed ? '▲' : '▼'}</span>
+    </div>`;
+  if (_aiActivityPanelCollapsed) { el.innerHTML = headerHtml; return; }
+  const rowsHtml = runs.map(run => `
+    <div style="padding:8px 12px;border-bottom:1px solid #E3ECF5;background:#fff;">
+      <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:3px;">${escapeHtml(run.qLabel)}</div>
+      ${_aiActivityStatusHTML(run)}
+    </div>`).join('');
+  el.innerHTML = `${headerHtml}<div style="max-height:300px;overflow-y:auto;border-radius:0 0 10px 10px;box-shadow:0 4px 14px rgba(0,0,0,.14);">${rowsHtml}</div>`;
+}
+
+/* Small toast that pops up bottom-right the instant a process finishes,
+   so the user gets notified even if they've closed the popover/menu (or
+   the activity panel is collapsed). Purely visual — auto-dismisses. */
+function _showAiToast(message, isError) {
+  const el = document.createElement('div');
+  el.textContent = message;
+  const bottomOffset = (_aiActivityCountRunning() || Object.keys(_aiActivity).length) ? 78 : 18;
+  el.style.cssText = `position:fixed;bottom:${bottomOffset}px;right:18px;z-index:10000;background:${isError ? '#C62828' : '#2E7D32'};
+    color:#fff;padding:9px 14px;border-radius:8px;font-family:var(--font);font-size:.8rem;box-shadow:0 4px 14px rgba(0,0,0,.2);
+    max-width:290px;transition:opacity .4s;`;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 4200);
+}
+
 /* ── Per-question AI lock ──
    Refine Question, Fill Choices, Add Choice (AI), and the existing 🤖 AI
    Solve button all mutate the SAME question object. Without a lock, firing
@@ -5773,6 +5926,18 @@ function _aiToolsCaseContext(questions, q) {
    aiRefineQuestion()/_toggleAiRefineInstrPicker() further down. */
 function _renderAiRefineTools(editorKey, i) {
   const busy = _aiToolsIsBusy(editorKey, i);
+  const key = _aiToolsKey(editorKey, i);
+  // Restore whichever popover the user had open before this card got
+  // rebuilt (see _toggleAiSourcePicker/_toggleAiRefineInstrPicker) instead
+  // of always starting collapsed — this is the fix for menus losing their
+  // contents/state on close+reopen or any other full rerender.
+  const sourceOpen = _aiPopoverOpenKey === key && _aiPopoverOpenKind === 'source';
+  const refineOpen = _aiPopoverOpenKey === key && _aiPopoverOpenKind === 'refine';
+  // Restore the status line for any AI action still running (or recently
+  // finished) on this question, so reopening/rerendering the card shows
+  // exactly what's happening without the user having to wait or guess.
+  const activeRun = _aiActivityForQuestion(key);
+  const statusHtml = activeRun ? _aiActivityStatusHTML(activeRun) : '';
   return `
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 8px;">
       <div style="display:flex;">
@@ -5796,9 +5961,9 @@ function _renderAiRefineTools(editorKey, i) {
           style="background:#F3EEFC;color:#6A1B9A;border-color:#CE93D8;border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;">${_aiRefineInstrCaretLabel(editorKey, i)} ▾</button>
       </div>
     </div>
-    <div id="aiSourcePicker_${editorKey}_${i}" class="ai-source-picker" style="display:none;"></div>
-    <div id="aiRefineInstrPicker_${editorKey}_${i}" class="ai-source-picker" style="display:none;"></div>
-    <div id="aiToolsStatus_${editorKey}_${i}" style="margin:-3px 0 8px;"></div>`;
+    <div id="aiSourcePicker_${editorKey}_${i}" class="ai-source-picker" style="display:${sourceOpen ? 'block' : 'none'};">${sourceOpen ? _renderAiSourcePickerHTML(editorKey, i) : ''}</div>
+    <div id="aiRefineInstrPicker_${editorKey}_${i}" class="ai-source-picker" style="display:${refineOpen ? 'block' : 'none'};">${refineOpen ? _renderAiRefineInstrPickerHTML(editorKey, i) : ''}</div>
+    <div id="aiToolsStatus_${editorKey}_${i}" style="margin:-3px 0 8px;">${statusHtml}</div>`;
 }
 
 /* Renders the choice-related AI buttons (Add Choice AI, and Fill Choices
@@ -5835,7 +6000,7 @@ function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
    the bulk post-extraction pass (cqBulkRefineQuestions) can reuse it without
    needing an editor/card in the DOM. Returns the refined question string,
    or throws on failure. */
-async function _aiRefineQuestionCall(apiKey, questions, q, custom) {
+async function _aiRefineQuestionCall(apiKey, questions, q, custom, cancelToken) {
   const optEntries = getOptionEntries(q);
   const optsText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none yet)';
   const { textBlock: caseBlock, imagePart } = _aiToolsCaseContext(questions, q);
@@ -5867,7 +6032,7 @@ Respond ONLY with a JSON object: {"question": "the refined question text"}. No m
   const data = await callGeminiWithRetry(url, {
     contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 1024 }
-  });
+  }, { cancelToken });
   const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
   const parsed = _aiToolsParseJSON(textOut);
   const refined = (parsed && typeof parsed.question === 'string') ? parsed.question.trim() : '';
@@ -5893,13 +6058,19 @@ async function aiRefineQuestion(editorKey, i) {
 
   const custom = (_aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] || '').trim();
   _aiToolsSetBusy(editorKey, i, true, 'refine');
-  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🪄 Refining question…'));
+  const { runId, cancelToken } = _aiActivityStart(editorKey, i, 'refine');
+  _aiToolsSetStatus(editorKey, i, _aiActivityStatusHTML(_aiActivity[runId]));
 
   try {
-    q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom);
+    q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom, cancelToken);
+    _aiActivityFinish(runId, 'done');
     ed.rerender(); // rebuilds this card fresh, which also naturally re-enables its buttons
   } catch (e) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not refine this question.'));
+    if (e._cancelled) {
+      _aiActivityFinish(runId, 'cancelled');
+    } else {
+      _aiActivityFinish(runId, 'error', e.message || 'Could not refine this question.');
+    }
   } finally {
     _aiToolsSetBusy(editorKey, i, false, 'refine');
   }
@@ -5909,7 +6080,7 @@ async function aiRefineQuestion(editorKey, i) {
    Asks for exactly `count` new, plausible-but-incorrect answer choices that
    fit the question's subject, style, and difficulty — distinct from every
    existing choice and from each other, and not generic filler. */
-async function _aiGenerateDistractors(apiKey, questions, q, optEntries, count) {
+async function _aiGenerateDistractors(apiKey, questions, q, optEntries, count, cancelToken) {
   const existingText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none)';
   const correctVal = (optEntries.find(([k]) => k === q.answer) || [])[1] || '';
   const { textBlock: caseBlock, imagePart } = _aiToolsCaseContext(questions, q);
@@ -5942,7 +6113,7 @@ Respond ONLY with a JSON object: {"choices": [${Array(count).fill('"..."').join(
   const data = await callGeminiWithRetry(url, {
     contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens: 1024 }
-  });
+  }, { cancelToken });
   const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
   const parsed = _aiToolsParseJSON(textOut);
   let choices = (parsed && Array.isArray(parsed.choices)) ? parsed.choices.filter(c => typeof c === 'string' && c.trim()) : [];
@@ -5984,10 +6155,11 @@ async function aiFillChoices(editorKey, i) {
   const answerBefore = q.answer;
 
   _aiToolsSetBusy(editorKey, i, true, 'fillChoices');
-  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(`🧩 Filling ${missing.length} more choice${missing.length !== 1 ? 's' : ''}…`));
+  const { runId, cancelToken } = _aiActivityStart(editorKey, i, 'fillChoices');
+  _aiToolsSetStatus(editorKey, i, _aiActivityStatusHTML(_aiActivity[runId]));
 
   try {
-    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length);
+    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length, cancelToken);
     if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
     missing.forEach((key, idx) => {
       const val = newVals[idx] || '';
@@ -5997,9 +6169,14 @@ async function aiFillChoices(editorKey, i) {
     // Defensive guarantee: the correct answer is exactly what it was before —
     // this action only ever adds new wrong choices, never picks or changes one.
     q.answer = answerBefore;
+    _aiActivityFinish(runId, 'done');
     ed.rerender();
   } catch (e) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate choices.'));
+    if (e._cancelled) {
+      _aiActivityFinish(runId, 'cancelled');
+    } else {
+      _aiActivityFinish(runId, 'error', e.message || 'Could not generate choices.');
+    }
   } finally {
     _aiToolsSetBusy(editorKey, i, false, 'fillChoices');
   }
@@ -6036,19 +6213,25 @@ async function aiAddChoice(editorKey, i) {
   const answerBefore = q.answer;
 
   _aiToolsSetBusy(editorKey, i, true, 'addChoice');
-  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is writing a new choice…'));
+  const { runId, cancelToken } = _aiActivityStart(editorKey, i, 'addChoice');
+  _aiToolsSetStatus(editorKey, i, _aiActivityStatusHTML(_aiActivity[runId]));
 
   try {
-    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, 1);
+    const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, 1, cancelToken);
     const val = newVals[0] || '';
     if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
     q.options[nextKey] = val;
     q.optionsOrder.push({ key: nextKey, value: val });
     // Defensive guarantee: the correct answer is exactly what it was before.
     q.answer = answerBefore;
+    _aiActivityFinish(runId, 'done');
     ed.rerender();
   } catch (e) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate a new choice.'));
+    if (e._cancelled) {
+      _aiActivityFinish(runId, 'cancelled');
+    } else {
+      _aiActivityFinish(runId, 'error', e.message || 'Could not generate a new choice.');
+    }
   } finally {
     _aiToolsSetBusy(editorKey, i, false, 'addChoice');
   }
@@ -7381,7 +7564,7 @@ function cqRemoveSourceFile(idx) {
 // sourceText: optional reference text
 // sourceFiles: optional array of {file, mimeType, name}
 // onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
-async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl) {
+async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl, cancelToken) {
   if (!targetIdxs || !targetIdxs.length) return;
 
   let apiKey = getGeminiKey();
@@ -7473,7 +7656,7 @@ async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles
         system_instruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: 'user', parts }],
         generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 8192 }
-      }, { pauseCheck: () => cqPauseRequested, cancelToken: cqCancelToken });
+      }, { pauseCheck: () => cqPauseRequested, cancelToken: cancelToken || cqCancelToken });
 
       const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
       const cleanText = textOut.replace(/```json|```/g, '').trim();
@@ -7654,6 +7837,11 @@ const _aiSolveSourceChoice = {};
 // Draft state for the inline "add new source" form, keyed the same way,
 // cleared once the source is saved (or the form is cancelled/re-opened).
 const _aiSourceAddDraft = {};
+// Whether the "➕ Add new source" form is currently expanded, keyed by
+// `${editorKey}_${i}` — persisted separately from the draft itself so a
+// rerender can tell whether to show the form (with its draft contents)
+// or just the collapsed "➕ Add new source" toggle.
+const _aiSourceAddFormOpen = {};
 
 function _aiSolveBulkSourceHasContent(editorKey) {
   if (editorKey === 'cq') return !!((cqAiAnswerSource && cqAiAnswerSource.trim()) || (cqAiSourceFiles && cqAiSourceFiles.length));
@@ -7696,6 +7884,16 @@ function _aiSolveSourceShortLabel(editorKey, i) {
 // popover, and any future ones). Only one such popover stays open at a
 // time. `pickerId`/`caretId` are the DOM ids; `buildHtml` renders the
 // popover's contents fresh each time it opens.
+// Persisted "which popover is open" state, per question — only one such
+// popover is ever open at a time (across the WHOLE app, matching the
+// `.ai-source-picker` close-all-others behavior below), so this is a
+// single { key: 'source' | 'refine' } pair rather than a per-question map.
+// _renderAiRefineTools reads this when a card is rebuilt from scratch (by
+// ed.rerender()) so closing/reopening the menu — or any rerender at all —
+// no longer collapses a popover the user still had open.
+let _aiPopoverOpenKey = null;  // `${editorKey}_${i}`, or null
+let _aiPopoverOpenKind = null; // 'source' | 'refine' | null
+
 function _toggleAiPopover(pickerId, caretId, buildHtml) {
   const el = document.getElementById(pickerId);
   if (!el) return;
@@ -7708,11 +7906,19 @@ function _toggleAiPopover(pickerId, caretId, buildHtml) {
 }
 
 function _toggleAiSourcePicker(editorKey, i) {
+  const key = _aiToolsKey(editorKey, i);
+  const willOpen = !(_aiPopoverOpenKey === key && _aiPopoverOpenKind === 'source');
+  _aiPopoverOpenKey = willOpen ? key : null;
+  _aiPopoverOpenKind = willOpen ? 'source' : null;
   _toggleAiPopover(`aiSourcePicker_${editorKey}_${i}`, `aiSolveSrcCaret_${editorKey}_${i}`,
     () => _renderAiSourcePickerHTML(editorKey, i));
 }
 
 function _toggleAiRefineInstrPicker(editorKey, i) {
+  const key = _aiToolsKey(editorKey, i);
+  const willOpen = !(_aiPopoverOpenKey === key && _aiPopoverOpenKind === 'refine');
+  _aiPopoverOpenKey = willOpen ? key : null;
+  _aiPopoverOpenKind = willOpen ? 'refine' : null;
   _toggleAiPopover(`aiRefineInstrPicker_${editorKey}_${i}`, `aiRefineInstrCaret_${editorKey}_${i}`,
     () => _renderAiRefineInstrPickerHTML(editorKey, i));
 }
@@ -7756,8 +7962,15 @@ function _renderAiSourcePickerHTML(editorKey, i) {
   }
   html += `<div class="ai-source-picker-divider"></div>`;
   html += `<div class="ai-source-add-toggle" onclick="event.stopPropagation();_aiSourceAddFormToggle('${editorKey}', ${i})">➕ Add new source</div>`;
-  html += `<div id="aiSourceAddForm_${editorKey}_${i}" style="display:none;margin-top:6px;" onclick="event.stopPropagation();"></div>`;
+  const addOpen = !!_aiSourceAddFormOpen[_aiToolsKey(editorKey, i)];
+  html += `<div id="aiSourceAddForm_${editorKey}_${i}" style="display:${addOpen ? '' : 'none'};margin-top:6px;" onclick="event.stopPropagation();">${addOpen ? _renderAiSourceAddFormHTML(editorKey, i) : ''}</div>`;
   html += `</div>`;
+  if (addOpen) {
+    // The dropzone's drag&drop listeners need the element to actually
+    // exist in the DOM first — this HTML is still just a string here, so
+    // defer wiring it up until right after the browser inserts it.
+    setTimeout(() => _aiSourceSetupDropzone(editorKey, i), 0);
+  }
   return html;
 }
 
@@ -7767,13 +7980,17 @@ function _aiSolvePickSource(editorKey, i, type, id) {
   if (btn) btn.innerHTML = escapeHtml(_aiSolveSourceShortLabel(editorKey, i)) + ' ▾';
   const picker = document.getElementById(`aiSourcePicker_${editorKey}_${i}`);
   if (picker) picker.style.display = 'none';
+  const key = _aiToolsKey(editorKey, i);
+  if (_aiPopoverOpenKey === key && _aiPopoverOpenKind === 'source') { _aiPopoverOpenKey = null; _aiPopoverOpenKind = null; }
 }
 
 function _aiSourceAddFormToggle(editorKey, i) {
   const wrap = document.getElementById(`aiSourceAddForm_${editorKey}_${i}`);
   if (!wrap) return;
+  const dk = _aiToolsKey(editorKey, i);
   const showing = wrap.style.display !== 'none';
   wrap.style.display = showing ? 'none' : '';
+  _aiSourceAddFormOpen[dk] = !showing;
   if (!showing) {
     wrap.innerHTML = _renderAiSourceAddFormHTML(editorKey, i);
     _aiSourceSetupDropzone(editorKey, i);
@@ -7882,6 +8099,7 @@ function _aiSourceAddSave(editorKey, i) {
   const id = 'src_' + (++_aiSourceLibraryCounter) + '_' + Date.now();
   _aiSourceLibrary.push({ id, label, text, files });
   delete _aiSourceAddDraft[dk];
+  delete _aiSourceAddFormOpen[dk];
   _aiSolvePickSource(editorKey, i, 'lib', id);
 }
 function _aiSourceLibraryRemove(id, editorKey, i) {
@@ -7933,12 +8151,20 @@ async function aiSolveQuestion(editorKey, i) {
   // from general knowledge only.
 
   _aiToolsSetBusy(editorKey, i, true, 'solve');
-  const statusEl = _aiToolsStatusEl(editorKey, i);
-  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is solving this question…'));
+  const { runId, cancelToken } = _aiActivityStart(editorKey, i, 'solve');
+  _aiToolsSetStatus(editorKey, i, _aiActivityStatusHTML(_aiActivity[runId]));
   try {
-    await cqAiSolveQuestions(questions, [i], sourceText, sourceFiles, statusEl);
+    // No statusEl passed through here — the activity tracker's own status
+    // line (with its Stop button) is what's shown instead, and it survives
+    // the card being closed/reopened or fully rerendered mid-request.
+    await cqAiSolveQuestions(questions, [i], sourceText, sourceFiles, null, cancelToken);
+    _aiActivityFinish(runId, 'done');
   } catch (e) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not solve this question.'));
+    if (e._cancelled) {
+      _aiActivityFinish(runId, 'cancelled');
+    } else {
+      _aiActivityFinish(runId, 'error', e.message || 'Could not solve this question.');
+    }
   } finally {
     _aiToolsSetBusy(editorKey, i, false, 'solve');
   }
