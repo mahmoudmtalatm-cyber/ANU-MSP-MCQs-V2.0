@@ -4992,6 +4992,14 @@ let cqAiAnswerSource    = '';     // optional source text the AI should rely on
 let cqAiSourceFiles     = [];     // optional source images/PDFs (array of {base64, mimeType, name})
 let cqAiSolveAllToggle  = false;  // whether to also AI-solve questions that already have a key
 
+// ── Post-extraction AI polish (Refine Question / Fill Choices) ──
+// These reuse the exact same per-question AI tools available in the editor
+// (see "AI QUESTION TOOLS" above), just run once automatically across every
+// question right after extraction instead of one at a time by hand.
+let cqRefineToggle              = false; // whether to AI-refine every extracted question's wording
+let cqRefineCustomInstructions  = '';    // optional custom instructions applied to every refine call
+let cqFillChoicesToggle         = false; // whether to AI-fill every question up to 4 answer choices
+
 // ── Split quiz into multiple quizzes ──
 let cqSplitState = null;
 // shape when active: { context: 'preview'|'saved', quizId: null|string,
@@ -5394,6 +5402,39 @@ const _aiToolsCustomPromptOpen = {};
 const _aiToolsCustomPromptText = {};
 function _aiToolsKey(editorKey, i) { return editorKey + '_' + i; }
 
+/* ── Per-question AI lock ──
+   Refine Question, Fill Choices, Add Choice (AI), and the existing 🤖 AI
+   Solve button all mutate the SAME question object. Without a lock, firing
+   two of them at once on the same question is a real race: e.g. AI Solve
+   could read/settle on a fabricated distractor that Fill Choices is still
+   in the middle of writing in, or set an answer letter that Add Choice
+   then reassigns to a different option. This lock makes those five actions
+   mutually exclusive per question (not per editor) — other questions, and
+   other editors, are completely unaffected. */
+const _aiToolsBusy = {};
+function _aiToolsIsBusy(editorKey, i) { return !!_aiToolsBusy[_aiToolsKey(editorKey, i)]; }
+function _aiToolsSetBusy(editorKey, i, busy) {
+  const key = _aiToolsKey(editorKey, i);
+  if (busy) _aiToolsBusy[key] = true; else delete _aiToolsBusy[key];
+  _aiToolsSyncButtons(editorKey, i, busy);
+}
+/* Disables/enables every AI-tool button on this specific question card
+   while a lock is held, so the user can see (and can't accidentally
+   trigger) an overlapping action — success paths also re-render the whole
+   card, which naturally restores normal (enabled) buttons anyway. */
+function _aiToolsSyncButtons(editorKey, i, busy) {
+  const ids = [
+    `aiRefineBtn_${editorKey}_${i}`,
+    `aiCustomBtn_${editorKey}_${i}`,
+    `aiAddChoiceBtn_${editorKey}_${i}`,
+    `aiFillChoicesBtn_${editorKey}_${i}`,
+    `cqAiSolveBtn_${i}` // only exists in the 'cq' extraction/review editor
+  ];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = busy;
+  });
+}
 function _aiToolsStatusEl(editorKey, i) {
   return document.getElementById(`aiToolsStatus_${editorKey}_${i}`);
 }
@@ -5448,12 +5489,15 @@ function _renderAiRefineTools(editorKey, i) {
   const key = _aiToolsKey(editorKey, i);
   const open = !!_aiToolsCustomPromptOpen[key];
   const draft = _aiToolsCustomPromptText[key] || '';
+  const busy = _aiToolsIsBusy(editorKey, i);
   return `
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 8px;">
-      <button class="cq-edit-reask-btn" type="button" title="Use AI to rewrite this question with clear, exam-style phrasing and no grammar mistakes or typos"
+      <button class="cq-edit-reask-btn" type="button" id="aiRefineBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
+        title="Use AI to rewrite this question with clear, exam-style phrasing and no grammar mistakes or typos"
         onclick="aiRefineQuestion('${editorKey}', ${i})"
         style="background:#EDE7F6;color:#6A1B9A;border-color:#CE93D8;">🪄 Refine Question</button>
-      <button class="cq-edit-reask-btn" type="button" title="Add optional custom instructions for the refine"
+      <button class="cq-edit-reask-btn" type="button" id="aiCustomBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
+        title="Add optional custom instructions for the refine"
         onclick="_aiToggleCustomPrompt('${editorKey}', ${i})"
         style="background:#F0F8FF;color:var(--accent);border-color:#B0D4F0;">⚙️ Custom Instructions</button>
     </div>
@@ -5471,14 +5515,17 @@ function _renderAiRefineTools(editorKey, i) {
    when under 4 options) — placed next to the existing "＋ Add Option"
    button in every editor's options footer. */
 function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
+  const busy = _aiToolsIsBusy(editorKey, i);
   let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:5px;">`;
   if (nextKey) {
-    html += `<button class="cq-edit-reask-btn" type="button" title="Let AI write one more plausible answer choice for this question"
+    html += `<button class="cq-edit-reask-btn" type="button" id="aiAddChoiceBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
+      title="Let AI write one more plausible answer choice for this question"
       onclick="aiAddChoice('${editorKey}', ${i})"
       style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 Add Choice (AI)</button>`;
   }
   if (optCount < 4 && nextKey) {
-    html += `<button class="cq-edit-reask-btn" type="button" title="Let AI fill in the remaining choices (up to 4 total)"
+    html += `<button class="cq-edit-reask-btn" type="button" id="aiFillChoicesBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
+      title="Let AI fill in the remaining choices (up to 4 total)"
       onclick="aiFillChoices('${editorKey}', ${i})"
       style="background:#FFF3E0;color:#E65100;border-color:#FFB74D;">🧩 Fill Choices (AI)</button>`;
   }
@@ -5493,21 +5540,12 @@ function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
    optional per-question custom instruction can ask for more — it only
    overrides the default rules above where the two genuinely conflict on
    that specific point; everything else still applies. */
-async function aiRefineQuestion(editorKey, i) {
-  const ed = _caseGroupEditors[editorKey];
-  const questions = ed && ed.getQuestions();
-  if (!questions || !questions[i]) return;
-  const q = questions[i];
-  if (!q.question || !q.question.trim()) {
-    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Write the question text first.'));
-    return;
-  }
-  const apiKey = _aiToolsRequireKey(editorKey, i);
-  if (!apiKey) return;
-
-  const custom = (_aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] || '').trim();
-  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🪄 Refining question…'));
-
+/* Shared refine-prompt caller — builds the same prompt/rules used by the
+   per-question "🪄 Refine Question" button, but as a standalone function so
+   the bulk post-extraction pass (cqBulkRefineQuestions) can reuse it without
+   needing an editor/card in the DOM. Returns the refined question string,
+   or throws on failure. */
+async function _aiRefineQuestionCall(apiKey, q, custom) {
   const optEntries = getOptionEntries(q);
   const optsText = optEntries.map(([k, v]) => `${k}. ${v}`).join('\n') || '(none yet)';
 
@@ -5528,19 +5566,44 @@ ${optsText}
 Respond ONLY with a JSON object: {"question": "the refined question text"}. No markdown, no preamble.`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_TOOLS_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const data = await callGeminiWithRetry(url, {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 1024 }
+  });
+  const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+  const parsed = _aiToolsParseJSON(textOut);
+  const refined = (parsed && typeof parsed.question === 'string') ? parsed.question.trim() : '';
+  if (!refined) throw new Error('AI did not return a refined question.');
+  return refined;
+}
+
+async function aiRefineQuestion(editorKey, i) {
+  if (_aiToolsIsBusy(editorKey, i)) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Another AI action is already running on this question — please wait for it to finish.'));
+    return;
+  }
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions[i]) return;
+  const q = questions[i];
+  if (!q.question || !q.question.trim()) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Write the question text first.'));
+    return;
+  }
+  const apiKey = _aiToolsRequireKey(editorKey, i);
+  if (!apiKey) return;
+
+  const custom = (_aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] || '').trim();
+  _aiToolsSetBusy(editorKey, i, true);
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🪄 Refining question…'));
+
   try {
-    const data = await callGeminiWithRetry(url, {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 1024 }
-    });
-    const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
-    const parsed = _aiToolsParseJSON(textOut);
-    const refined = (parsed && typeof parsed.question === 'string') ? parsed.question.trim() : '';
-    if (!refined) throw new Error('AI did not return a refined question.');
-    q.question = refined;
-    ed.rerender();
+    q.question = await _aiRefineQuestionCall(apiKey, q, custom);
+    ed.rerender(); // rebuilds this card fresh, which also naturally re-enables its buttons
   } catch (e) {
     _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not refine this question.'));
+  } finally {
+    _aiToolsSetBusy(editorKey, i, false);
   }
 }
 
@@ -5589,6 +5652,10 @@ const _AI_TOOLS_ALL_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
    Tops a question up to 4 total answer choices, generating only the
    missing ones — existing choices (and which one is correct) are untouched. */
 async function aiFillChoices(editorKey, i) {
+  if (_aiToolsIsBusy(editorKey, i)) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Another AI action is already running on this question — please wait for it to finish.'));
+    return;
+  }
   const ed = _caseGroupEditors[editorKey];
   const questions = ed && ed.getQuestions();
   if (!questions || !questions[i]) return;
@@ -5607,6 +5674,11 @@ async function aiFillChoices(editorKey, i) {
   const apiKey = _aiToolsRequireKey(editorKey, i);
   if (!apiKey) return;
 
+  // Snapshot the current answer letter — Fill Choices must NEVER change which
+  // option is marked correct, only add new (incorrect) distractor text.
+  const answerBefore = q.answer;
+
+  _aiToolsSetBusy(editorKey, i, true);
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(`🧩 Filling ${missing.length} more choice${missing.length !== 1 ? 's' : ''}…`));
 
   try {
@@ -5617,9 +5689,14 @@ async function aiFillChoices(editorKey, i) {
       q.options[key] = val;
       q.optionsOrder.push({ key, value: val });
     });
+    // Defensive guarantee: the correct answer is exactly what it was before —
+    // this action only ever adds new wrong choices, never picks or changes one.
+    q.answer = answerBefore;
     ed.rerender();
   } catch (e) {
     _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate choices.'));
+  } finally {
+    _aiToolsSetBusy(editorKey, i, false);
   }
 }
 
@@ -5627,6 +5704,10 @@ async function aiFillChoices(editorKey, i) {
    Adds exactly one new, AI-written, plausible answer choice — regardless
    of how many choices already exist (up to the 10-choice max). */
 async function aiAddChoice(editorKey, i) {
+  if (_aiToolsIsBusy(editorKey, i)) {
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Another AI action is already running on this question — please wait for it to finish.'));
+    return;
+  }
   const ed = _caseGroupEditors[editorKey];
   const questions = ed && ed.getQuestions();
   if (!questions || !questions[i]) return;
@@ -5645,6 +5726,11 @@ async function aiAddChoice(editorKey, i) {
   const apiKey = _aiToolsRequireKey(editorKey, i);
   if (!apiKey) return;
 
+  // Snapshot the current answer letter — adding a choice must NEVER change
+  // which option is marked correct, only append one new (incorrect) option.
+  const answerBefore = q.answer;
+
+  _aiToolsSetBusy(editorKey, i, true);
   _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('🤖 AI is writing a new choice…'));
 
   try {
@@ -5653,9 +5739,13 @@ async function aiAddChoice(editorKey, i) {
     if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
     q.options[nextKey] = val;
     q.optionsOrder.push({ key: nextKey, value: val });
+    // Defensive guarantee: the correct answer is exactly what it was before.
+    q.answer = answerBefore;
     ed.rerender();
   } catch (e) {
     _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML(e.message || 'Could not generate a new choice.'));
+  } finally {
+    _aiToolsSetBusy(editorKey, i, false);
   }
 }
 
@@ -6206,6 +6296,77 @@ function renderCustomQuizModal() {
           </div>
         </label>
       </div>
+
+      <!-- Fill Choices toggle -->
+      <div style="margin:8px 0 4px;padding:11px 14px;background:${cqFillChoicesToggle ? '#FFF3E0' : 'var(--card)'};border:1.5px solid ${cqFillChoicesToggle ? '#FFB74D' : 'var(--border)'};border-radius:10px;transition:all .2s;">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+          <div style="position:relative;width:42px;height:24px;flex-shrink:0;">
+            <input type="checkbox" ${cqFillChoicesToggle ? 'checked' : ''}
+              onchange="cqFillChoicesToggle = this.checked; renderCustomQuizModal()"
+              style="opacity:0;width:0;height:0;position:absolute;" />
+            <span style="position:absolute;inset:0;border-radius:24px;background:${cqFillChoicesToggle ? '#E65100' : '#ccc'};transition:background .2s;"></span>
+            <span style="position:absolute;top:3px;left:${cqFillChoicesToggle ? '21px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+          </div>
+          <div>
+            <div style="font-size:.82rem;font-weight:800;color:${cqFillChoicesToggle ? '#E65100' : 'var(--text)'};letter-spacing:.2px;">
+              🧩 Fill Choices (AI)
+            </div>
+            <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
+              AI tops every question up to 4 answer choices — only adds missing distractors, never touches the correct answer
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <!-- Refine Questions toggle -->
+      <div style="margin:8px 0 4px;padding:11px 14px;background:${cqRefineToggle ? '#EDE7F6' : 'var(--card)'};border:1.5px solid ${cqRefineToggle ? '#CE93D8' : 'var(--border)'};border-radius:10px;transition:all .2s;">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+          <div style="position:relative;width:42px;height:24px;flex-shrink:0;">
+            <input type="checkbox" ${cqRefineToggle ? 'checked' : ''}
+              onchange="cqRefineToggle = this.checked; renderCustomQuizModal()"
+              style="opacity:0;width:0;height:0;position:absolute;" />
+            <span style="position:absolute;inset:0;border-radius:24px;background:${cqRefineToggle ? '#6A1B9A' : '#ccc'};transition:background .2s;"></span>
+            <span style="position:absolute;top:3px;left:${cqRefineToggle ? '21px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+          </div>
+          <div>
+            <div style="font-size:.82rem;font-weight:800;color:${cqRefineToggle ? '#6A1B9A' : 'var(--text)'};letter-spacing:.2px;">
+              🪄 Refine Questions (AI)
+            </div>
+            <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
+              AI polishes grammar &amp; exam-style phrasing on every question's wording — doesn't change what's being asked or touch the choices
+            </div>
+          </div>
+        </label>
+        ${cqRefineToggle ? `
+        <div style="margin:9px 0 0;">
+          <div style="font-size:.73rem;font-weight:700;color:#6A1B9A;margin-bottom:5px;">
+            ⚙️ Custom Instructions (optional) — applied to every question's refine
+          </div>
+          <textarea class="cq-textarea" id="cqRefineCustomInput" rows="2"
+            placeholder="Optional — anything extra you want applied to every question (e.g. &quot;keep each question to one sentence&quot;). Only overrides the default refine behavior where it truly conflicts — grammar and exam phrasing still apply otherwise."
+            oninput="cqRefineCustomInstructions = this.value"
+            style="border-color:#CE93D8;">${escapeHtml(cqRefineCustomInstructions)}</textarea>
+        </div>
+        ` : ''}
+      </div>
+
+      <!-- Sequential-run notice — shown whenever 2+ AI steps are selected,
+           since they all write to the same question objects and could
+           otherwise conflict if fired at once. -->
+      ${(() => {
+        const steps = [
+          (cqAiAnswerToggle || cqAiSolveAllToggle) ? 'Solve/Answer' : null,
+          cqFillChoicesToggle ? 'Fill Choices' : null,
+          cqRefineToggle ? 'Refine Questions' : null
+        ].filter(Boolean);
+        if (steps.length < 2) return '';
+        const stepsText = steps.map((s, idx) => `${idx + 1}) ${s}`).join('  →  ');
+        return `
+      <div style="margin:8px 0 4px;padding:10px 14px;background:#FFFDE7;border:1.5px solid #FBC02D;border-radius:10px;font-size:.75rem;color:#7A5C00;">
+        ⚙️ <strong>Multiple AI steps selected</strong> — to avoid conflicting edits on the same question, they'll run one at a time (not simultaneously), in this order:<br>
+        ${stepsText}.
+      </div>`;
+      })()}
 
       <!-- Shared source input — shown when either AI toggle is on -->
       ${(cqAiAnswerToggle || cqAiSolveAllToggle) ? `
@@ -7063,12 +7224,119 @@ async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles, statusE
   await cqAiSolveQuestions(questions, noKeyIdxs, sourceText, sourceFiles, statusEl);
 }
 
+/* ── Post-extraction bulk pass: Fill Choices ──
+   Tops every extracted question up to 4 answer choices (same rules as the
+   single-question "🧩 Fill Choices (AI)" tool: only adds missing distractors,
+   never touches which option is marked correct). Runs strictly one question
+   at a time — never in parallel with itself or with the refine pass — since
+   both this and Refine Questions mutate the same question objects, and the
+   whole point of running them sequentially is to avoid that exact race. */
+async function cqBulkFillChoices(questions, statusEl) {
+  const idxs = questions.map((q, i) => i).filter(i => {
+    const q = questions[i];
+    return q && q.question && q.question.trim() && getOptionEntries(q).length < 4;
+  });
+  if (!idxs.length) return { done: 0, errors: [] };
+
+  let apiKey = getActiveApiKey();
+  if (!apiKey) return { done: 0, errors: ['No active API key.'] };
+
+  let done = 0;
+  const errors = [];
+  for (let n = 0; n < idxs.length; n++) {
+    apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    const qi = idxs[n];
+    const q = questions[qi];
+    if (statusEl) {
+      statusEl.innerHTML = _cqProgressStatusHTML(
+        `🧩 Filling choices… (${n + 1} of ${idxs.length})`, (n / idxs.length) * 100);
+    }
+    try {
+      const optEntries = getOptionEntries(q);
+      const usedKeys = optEntries.map(([k]) => k);
+      const missing = _AI_TOOLS_ALL_KEYS.filter(k => !usedKeys.includes(k)).slice(0, Math.max(0, 4 - optEntries.length));
+      if (!missing.length) continue;
+      const answerBefore = q.answer;
+      const newVals = await _aiGenerateDistractors(apiKey, q, optEntries, missing.length);
+      if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
+      missing.forEach((key, idx) => {
+        const val = newVals[idx] || '';
+        q.options[key] = val;
+        q.optionsOrder.push({ key, value: val });
+      });
+      q.answer = answerBefore; // never change which choice is correct
+      done++;
+    } catch (e) {
+      if (e._rateLimitPauseFallback) {
+        apiKey = await cqFallbackPauseForRateLimit(statusEl, `question ${n + 1} of ${idxs.length}`);
+        n--; // retry this same question once resumed
+        continue;
+      }
+      errors.push(`Question ${qi + 1}: ${e.message || String(e)}`);
+    }
+    await cancellableSleep(250, cqCancelToken);
+  }
+  return { done, errors };
+}
+
+/* ── Post-extraction bulk pass: Refine Questions ──
+   Rewrites every extracted question's stem into clean exam-style phrasing
+   (same rules/prompt as the single-question "🪄 Refine Question" tool),
+   optionally guided by a shared custom-instructions box. Also strictly
+   one-at-a-time — see note above cqBulkFillChoices. */
+async function cqBulkRefineQuestions(questions, customInstructions, statusEl) {
+  const idxs = questions.map((q, i) => i).filter(i => questions[i] && questions[i].question && questions[i].question.trim());
+  if (!idxs.length) return { done: 0, errors: [] };
+
+  let apiKey = getActiveApiKey();
+  if (!apiKey) return { done: 0, errors: ['No active API key.'] };
+
+  const custom = (customInstructions || '').trim();
+  let done = 0;
+  const errors = [];
+  for (let n = 0; n < idxs.length; n++) {
+    apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    const qi = idxs[n];
+    const q = questions[qi];
+    if (statusEl) {
+      statusEl.innerHTML = _cqProgressStatusHTML(
+        `🪄 Refining question wording… (${n + 1} of ${idxs.length})`, (n / idxs.length) * 100);
+    }
+    try {
+      q.question = await _aiRefineQuestionCall(apiKey, q, custom);
+      done++;
+    } catch (e) {
+      if (e._rateLimitPauseFallback) {
+        apiKey = await cqFallbackPauseForRateLimit(statusEl, `question ${n + 1} of ${idxs.length}`);
+        n--; // retry this same question once resumed
+        continue;
+      }
+      errors.push(`Question ${qi + 1}: ${e.message || String(e)}`);
+    }
+    await cancellableSleep(250, cqCancelToken);
+  }
+  return { done, errors };
+}
+
 // Solve a single question from the preview panel
 async function cqAiSolveOne(i) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[i]) return;
+  // Shares a lock with Refine Question / Fill Choices / Add Choice (AI) on
+  // this same question — see _aiToolsBusy — so AI Solve can never settle on
+  // an answer while one of those is still mid-write to the same question's
+  // options, and vice versa.
+  if (_aiToolsIsBusy('cq', i)) {
+    _aiToolsSetStatus('cq', i, _aiToolsErrorHTML('Another AI action is already running on this question — please wait for it to finish.'));
+    return;
+  }
+  _aiToolsSetBusy('cq', i, true);
   const statusEl = document.getElementById('cqReaskStatus_' + i);
   if (statusEl) statusEl.innerHTML = '<div class="cq-status info" style="font-size:.75rem;padding:5px 10px;"><div class="cq-spinner" style="width:12px;height:12px;border-width:2px;"></div> 🤖 AI is solving this question…</div>';
-  await cqAiSolveQuestions(cqGeneratedQuestions, [i], cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
+  try {
+    await cqAiSolveQuestions(cqGeneratedQuestions, [i], cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
+  } finally {
+    _aiToolsSetBusy('cq', i, false);
+  }
   if (statusEl) statusEl.innerHTML = '';
   renderCQPreview();
 }
@@ -7254,6 +7522,26 @@ async function generateQuizFromAI() {
       await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl);
     }
 
+    // ── Fill Choices, then Refine Questions — run STRICTLY one after the
+    // other (never together, and never alongside the solve/answer step
+    // above, which has already finished by this point). All three steps
+    // write to the same question objects (answer/options/question text),
+    // so firing them concurrently risks one step's write clobbering
+    // another's — e.g. Fill Choices adding a distractor while Refine is
+    // mid-rewrite of the same question's stem. Running them in this fixed
+    // order — Solve/Answer → Fill Choices → Refine — also makes the most
+    // sense content-wise: nail down the correct answer first, then pad out
+    // the remaining choices around it, and only polish the wording last,
+    // once nothing about the question is still changing.
+    let fillResult   = null;
+    let refineResult = null;
+    if (cqFillChoicesToggle) {
+      fillResult = await cqBulkFillChoices(cleaned, statusEl);
+    }
+    if (cqRefineToggle) {
+      refineResult = await cqBulkRefineQuestions(cleaned, cqRefineCustomInstructions.trim(), statusEl);
+    }
+
     let warn = '';
     if (anyMaxTokens) {
       warn = ` ⚠️ One of the responses may have been cut off because the document is very large — please check below that the last question is complete, and split very long documents into smaller files if needed.`;
@@ -7269,8 +7557,24 @@ async function generateQuizFromAI() {
       : noKeyCount > 0 && cqAiAnswerToggle && aiCount > 0
       ? ` · 🤖 ${aiCount} AI-answered${guessCount > 0 ? ' (⚠️ ' + guessCount + ' from own knowledge)' : ''}`
       : noKeyCount > 0 ? ` · ⚠️ ${noKeyCount} without key` : '';
-    const fileNote = cqSelectedFiles.length > 1 ? ` from ${cqSelectedFiles.length} files` : '';
-    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${fileNote}${imgNote}${solveNote}. Review below, then save.${warn}</div>`;
+    const fileNote   = cqSelectedFiles.length > 1 ? ` from ${cqSelectedFiles.length} files` : '';
+    const fillNote   = fillResult && fillResult.done > 0
+      ? ` · 🧩 ${fillResult.done} question${fillResult.done !== 1 ? 's' : ''} filled to 4 choices` : '';
+    const refineNote = refineResult && refineResult.done > 0
+      ? ` · 🪄 ${refineResult.done} question${refineResult.done !== 1 ? 's' : ''} refined` : '';
+    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${fileNote}${imgNote}${solveNote}${fillNote}${refineNote}. Review below, then save.${warn}</div>`;
+
+    // Surface any per-question errors from the Fill Choices / Refine passes
+    // without blocking the rest of the summary — extraction itself already
+    // succeeded, these are just best-effort polish steps.
+    [['🧩 Fill Choices', fillResult], ['🪄 Refine Questions', refineResult]].forEach(([label, res]) => {
+      if (res && res.errors.length > 0) {
+        const errHtml = res.errors.map(err => `<div>⚠️ ${escapeHtml(err)}</div>`).join('');
+        statusEl.insertAdjacentHTML('beforeend',
+          `<div class="cq-status warning" style="margin-top:6px;">${label} ran into issues on some questions:<br>${errHtml}</div>`
+        );
+      }
+    });
     if (noKeyCount > 0 && !cqAiAnswerToggle && !cqAiSolveAllToggle) {
       statusEl.insertAdjacentHTML('beforeend',
         `<div class="cq-status warning" style="margin-top:6px;">⚠️ ${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong>⚠️ No Key</strong> badge. You can set the correct answer manually, or enable <strong>🤖 AI Answer Mode</strong> before extracting to let AI answer them automatically.</div>`
@@ -7609,7 +7913,8 @@ function renderCQPreview() {
       ${_renderMergeSourceBadge(q)}
       <span style="flex:1;font-size:.75rem;font-weight:700;color:var(--text-muted);">Question Text</span>
       ${_renderReorderButtons('cq', i, cqGeneratedQuestions.length)}
-      <button class="cq-edit-reask-btn" title="Ask AI to solve this question using the configured source"
+      <button class="cq-edit-reask-btn" id="cqAiSolveBtn_${i}" ${_aiToolsIsBusy('cq', i) ? 'disabled' : ''}
+        title="Ask AI to solve this question using the configured source"
         onclick="cqAiSolveOne(${i})"
         style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7;">🤖 AI Solve</button>
       <button class="cq-edit-reask-btn" title="Delete this question"
