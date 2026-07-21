@@ -964,6 +964,9 @@
   color: #1565C0; cursor: pointer; transition: background .12s;
 }
 .ai-source-add-toggle:hover { background: #F0F8FF; }
+.ai-source-dz { padding: 12px 8px; margin-bottom: 8px; }
+.ai-source-dz .cq-dz-icon { font-size: 1.3rem; margin-bottom: 3px; }
+.ai-source-dz .cq-dz-text { font-size: .72rem; }
 .cq-bulk-ai-panel {
   margin: 8px 0 12px; padding: 12px 14px; background: #F3F0FF;
   border: 1.5px solid #C5B3F0; border-radius: 10px;
@@ -7671,15 +7674,22 @@ function _aiSolveBulkSourceLabel(editorKey) {
   return editorKey === 'cq' ? 'Bulk / extraction source' : 'Editor bulk source';
 }
 
-// First time a question card is asked for its choice, default to the bulk
-// source if this editor already has one configured (mirrors the old
-// single-source behaviour), otherwise default to plain AI knowledge.
+// Computes the un-chosen default live (never cached): bulk source if this
+// editor currently has one configured, otherwise plain AI knowledge. Kept
+// live (not written into _aiSolveSourceChoice) so that adding/clearing a
+// bulk source AFTER a card was first rendered still updates that card's
+// displayed default immediately, for every question that hasn't had an
+// explicit choice made yet.
+function _aiSolveDefaultChoice(editorKey) {
+  return _aiSolveBulkSourceHasContent(editorKey) ? { type: 'bulk' } : { type: 'ai' };
+}
+// Returns the user's EXPLICIT choice for this question if one was ever
+// made (via the picker, or by saving a new source) — otherwise the live
+// default above. Only an explicit pick gets written into
+// _aiSolveSourceChoice; until then, nothing is cached for this question.
 function _aiSolveGetChoice(editorKey, i) {
   const key = _aiToolsKey(editorKey, i);
-  if (!_aiSolveSourceChoice[key]) {
-    _aiSolveSourceChoice[key] = _aiSolveBulkSourceHasContent(editorKey) ? { type: 'bulk' } : { type: 'ai' };
-  }
-  return _aiSolveSourceChoice[key];
+  return _aiSolveSourceChoice[key] || _aiSolveDefaultChoice(editorKey);
 }
 
 function _aiSolveSourceShortLabel(editorKey, i) {
@@ -7741,29 +7751,38 @@ function _aiSourceAddFormToggle(editorKey, i) {
   if (!wrap) return;
   const showing = wrap.style.display !== 'none';
   wrap.style.display = showing ? 'none' : '';
-  if (!showing) wrap.innerHTML = _renderAiSourceAddFormHTML(editorKey, i);
+  if (!showing) {
+    wrap.innerHTML = _renderAiSourceAddFormHTML(editorKey, i);
+    _aiSourceSetupDropzone(editorKey, i);
+  }
 }
 function _aiSourceAddFormRerender(editorKey, i) {
   const wrap = document.getElementById(`aiSourceAddForm_${editorKey}_${i}`);
-  if (wrap) wrap.innerHTML = _renderAiSourceAddFormHTML(editorKey, i);
+  if (!wrap) return;
+  wrap.innerHTML = _renderAiSourceAddFormHTML(editorKey, i);
+  _aiSourceSetupDropzone(editorKey, i);
 }
 function _aiSourceAddDraftChange(editorKey, i, field, val) {
   const dk = _aiToolsKey(editorKey, i);
   if (!_aiSourceAddDraft[dk]) _aiSourceAddDraft[dk] = { label: '', text: '', files: [] };
   _aiSourceAddDraft[dk][field] = val;
 }
-function _aiSourceAddFileSelect(editorKey, i, input) {
-  const files = Array.from((input && input.files) || []);
+// Shared by both the click-to-browse input and drag&drop — validates and
+// stages one file into the draft, same rules as the bulk solver's own
+// reference-source dropzone (acceptSourceFile).
+function _aiSourceAddAcceptFile(editorKey, i, file) {
   const dk = _aiToolsKey(editorKey, i);
   if (!_aiSourceAddDraft[dk]) _aiSourceAddDraft[dk] = { label: '', text: '', files: [] };
-  files.forEach(file => {
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    const isImage = file.type.startsWith('image/');
-    if (!isPdf && !isImage) { alert(`"${file.name}" isn't an image or PDF — please upload an image or a PDF file.`); return; }
-    if (file.size > GEMINI_MAX_FILE_BYTES) { alert(`"${file.name}" is ${formatBytes(file.size)} — over the ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit.`); return; }
-    const mimeType = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
-    _aiSourceAddDraft[dk].files.push({ file, mimeType, name: file.name });
-  });
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+  if (!isPdf && !isImage) { alert(`"${file.name}" isn't an image or PDF — please upload an image (JPG/PNG/WEBP) or a PDF file.`); return; }
+  if (file.size > GEMINI_MAX_FILE_BYTES) { alert(`"${file.name}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API, so it can't be used.`); return; }
+  const mimeType = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+  _aiSourceAddDraft[dk].files.push({ file, mimeType, name: file.name });
+}
+function _aiSourceAddFileSelect(editorKey, i, input) {
+  const files = Array.from((input && input.files) || []);
+  files.forEach(f => _aiSourceAddAcceptFile(editorKey, i, f));
   input.value = '';
   _aiSourceAddFormRerender(editorKey, i);
 }
@@ -7777,8 +7796,26 @@ function _aiSourceAddDraftFileListHTML(editorKey, i, files) {
   return `<div class="cq-dz-filelist">` + files.map((f, idx) => `
     <div class="cq-dz-file-item">
       <span>✅ ${escapeHtml(f.name)}</span>
-      <button type="button" onclick="_aiSourceAddRemoveFile('${editorKey}', ${i}, ${idx})" title="Remove this file">✕</button>
+      <button type="button" onclick="event.stopPropagation();_aiSourceAddRemoveFile('${editorKey}', ${i}, ${idx})" title="Remove this file">✕</button>
     </div>`).join('') + `</div>`;
+}
+// Wires drag&drop on the per-question dropzone. Called after every render
+// of the add-source form, since the form is rebuilt via innerHTML each
+// time (fresh nodes each time, so there's no stale-listener risk).
+function _aiSourceSetupDropzone(editorKey, i) {
+  const dz = document.getElementById(`aiSourceDropzone_${editorKey}_${i}`);
+  if (!dz) return;
+  ['dragenter', 'dragover'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.add('drag-over');
+  }));
+  ['dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag-over');
+  }));
+  dz.addEventListener('drop', e => {
+    const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+    files.forEach(f => _aiSourceAddAcceptFile(editorKey, i, f));
+    _aiSourceAddFormRerender(editorKey, i);
+  });
 }
 function _renderAiSourceAddFormHTML(editorKey, i) {
   const dk = _aiToolsKey(editorKey, i);
@@ -7786,14 +7823,22 @@ function _renderAiSourceAddFormHTML(editorKey, i) {
   return `
     <input type="text" placeholder="Source name (e.g. Lecture 4 slides)" value="${escapeHtml(draft.label)}"
       oninput="_aiSourceAddDraftChange('${editorKey}', ${i}, 'label', this.value)"
-      style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid #B0D4F0;border-radius:5px;margin-bottom:5px;box-sizing:border-box;">
-    <textarea rows="2" placeholder="Paste reference text (optional)…"
+      style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid #B0D4F0;border-radius:5px;margin-bottom:8px;box-sizing:border-box;">
+    <div style="font-size:.72rem;font-weight:700;color:#6A1B9A;margin-bottom:4px;">📚 Reference text (optional)</div>
+    <textarea rows="2" placeholder="Paste lecture notes, textbook excerpt, or any reference text here…"
       oninput="_aiSourceAddDraftChange('${editorKey}', ${i}, 'text', this.value)"
-      style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid #B0D4F0;border-radius:5px;margin-bottom:5px;resize:vertical;box-sizing:border-box;">${escapeHtml(draft.text)}</textarea>
-    <input type="file" accept="image/*,application/pdf" multiple
-      onchange="_aiSourceAddFileSelect('${editorKey}', ${i}, this)" style="font-size:.72rem;margin-bottom:5px;">
-    ${_aiSourceAddDraftFileListHTML(editorKey, i, draft.files)}
-    <div style="display:flex;gap:6px;">
+      style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid #B0D4F0;border-radius:5px;margin-bottom:8px;resize:vertical;box-sizing:border-box;">${escapeHtml(draft.text)}</textarea>
+    <div style="font-size:.72rem;font-weight:700;color:#6A1B9A;margin-bottom:4px;">🖼️ Source images / PDFs (optional)</div>
+    <div class="cq-dropzone cq-dz-purple ai-source-dz" id="aiSourceDropzone_${editorKey}_${i}"
+      onclick="document.getElementById('aiSourceFileInput_${editorKey}_${i}').click()">
+      <div class="cq-dz-icon">🖼️📄</div>
+      <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more reference images or PDFs</div>
+      ${_aiSourceAddDraftFileListHTML(editorKey, i, draft.files)}
+      ${draft.files.length ? `<div class="cq-dz-add-more">➕ Click again to add more files</div>` : ''}
+    </div>
+    <input type="file" id="aiSourceFileInput_${editorKey}_${i}" accept="image/*,application/pdf" multiple style="display:none;"
+      onchange="_aiSourceAddFileSelect('${editorKey}', ${i}, this)">
+    <div style="display:flex;gap:6px;margin-top:8px;">
       <button type="button" class="cq-edit-reask-btn" style="background:#1565C0;color:#fff;font-size:.72rem;"
         onclick="_aiSourceAddSave('${editorKey}', ${i})">✅ Save Source</button>
       <button type="button" class="cq-edit-reask-btn" style="font-size:.72rem;"
