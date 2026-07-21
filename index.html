@@ -927,6 +927,23 @@
   transition: background .15s; flex-shrink: 0;
 }
 .cq-edit-reask-btn:hover { background: #D1C4E9; }
+.cq-edit-reask-btn:disabled { background: #E7E7E7; color: #9E9E9E; border-color: #D4D4D4; cursor: not-allowed; opacity: .75; }
+.cq-edit-reask-btn:disabled:hover { background: #E7E7E7; }
+.cq-edit-reask-btn.cq-edit-reask-btn-active:disabled {
+  background: #EDE7F6; color: #4527A0; border-color: #B39DDB; opacity: 1; cursor: default;
+}
+.cq-bulk-ai-panel {
+  margin: 8px 0 12px; padding: 12px 14px; background: #F3F0FF;
+  border: 1.5px solid #C5B3F0; border-radius: 10px;
+}
+.cq-bulk-ai-title { font-size: .85rem; font-weight: 800; color: #4527A0; margin-bottom: 8px; }
+.cq-bulk-ai-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cq-bulk-ai-opts { margin-top: 9px; }
+.cq-bulk-ai-opts summary {
+  font-size: .76rem; font-weight: 700; color: #6A1B9A; cursor: pointer; user-select: none;
+}
+.cq-bulk-ai-label { font-size: .73rem; font-weight: 700; color: #6A1B9A; margin-bottom: 5px; }
+.cq-bulk-lock { pointer-events: none; opacity: .55; filter: grayscale(.25); transition: opacity .2s; }
 .cq-opt-edit-row {
   display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
   padding: 5px 8px; border-radius: 7px; border: 1.5px solid #D8EAF7;
@@ -5164,6 +5181,174 @@ const _caseGroupEditors = {
   }
 };
 
+/* ── Bulk (whole-quiz) AI Tools for the Admin and Custom-Quiz editors ──
+   Mirrors the AI Solve / Fill Choices / Refine Questions passes already
+   available during Custom Quiz MCQ Extraction, but scoped to a quiz
+   someone is editing after the fact — same underlying bulk functions
+   (cqAiSolveQuestions / cqBulkFillChoices / cqBulkRefineQuestions), just
+   pointed at whichever editor's live "questions" array via the registry
+   above. Runs strictly one question at a time and locks the whole editor
+   (every per-question AI button, plus reordering/add/delete/save) for the
+   duration, since these functions mutate the same question objects the
+   per-question tools do — running them concurrently would race. */
+const _editorBulkBusy = { admin: false, customQuiz: false };
+const _editorBulkAiSource = { admin: '', customQuiz: '' };
+const _editorBulkRefineInstructions = { admin: '', customQuiz: '' };
+
+function _editorBulkStatusEl(editorKey) {
+  return document.getElementById(`${editorKey}BulkAiStatus`);
+}
+
+// True if any single-question AI tool (Refine / Fill / Add Choice / Solve)
+// is mid-run anywhere in this editor — blocks a bulk pass from starting
+// underneath it, and vice versa (bulk locks disable those buttons too).
+function _aiToolsAnyBusyInEditor(editorKey) {
+  return Object.keys(_aiToolsBusy).some(k => k.startsWith(editorKey + '_'));
+}
+
+function _aiToolsSetAllDisabledForEditor(editorKey, disabled) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions) return;
+  questions.forEach((_, i) => {
+    _aiToolsButtonIds(editorKey, i).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = disabled;
+    });
+  });
+}
+
+function _editorBulkSetBusy(editorKey, busy) {
+  _editorBulkBusy[editorKey] = busy;
+  ['Solve', 'Fill', 'Refine'].forEach(name => {
+    const btn = document.getElementById(`${editorKey}Bulk${name}Btn`);
+    if (btn) btn.disabled = busy;
+  });
+  const lockWrap = document.getElementById(`${editorKey}BulkLockWrap`);
+  if (lockWrap) lockWrap.classList.toggle('cq-bulk-lock', busy);
+  _aiToolsSetAllDisabledForEditor(editorKey, busy);
+}
+
+function _renderBulkAiToolsPanel(editorKey, questions) {
+  const busy = _editorBulkBusy[editorKey];
+  const n = questions.length;
+  return `
+  <div class="cq-bulk-ai-panel">
+    <div class="cq-bulk-ai-title">🤖 AI Tools — Whole Quiz
+      <span style="font-weight:600;opacity:.7;">(${n} question${n !== 1 ? 's' : ''})</span>
+    </div>
+    <div class="cq-bulk-ai-row">
+      <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkSolveBtn" type="button"
+        ${busy ? 'disabled' : ''} onclick="_editorBulkAiSolve('${editorKey}')"
+        style="background:#1565C0;color:#fff;">🤖 AI Solve All</button>
+      <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkFillBtn" type="button"
+        ${busy ? 'disabled' : ''} onclick="_editorBulkFillChoices('${editorKey}')"
+        style="background:#E65100;color:#fff;">🧩 Fill Choices (All)</button>
+      <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkRefineBtn" type="button"
+        ${busy ? 'disabled' : ''} onclick="_editorBulkRefineQuestions('${editorKey}')"
+        style="background:#6A1B9A;color:#fff;">🪄 Refine Questions (All)</button>
+    </div>
+    <details class="cq-bulk-ai-opts">
+      <summary>⚙️ Optional settings</summary>
+      <div style="margin-top:8px;">
+        <div class="cq-bulk-ai-label">📚 Reference source for AI Solve — leave blank to answer from general knowledge</div>
+        <textarea class="cq-textarea" rows="2" id="${editorKey}BulkSourceInput" ${busy ? 'disabled' : ''}
+          oninput="_editorBulkAiSource['${editorKey}'] = this.value"
+          placeholder="Paste lecture notes or reference text (optional)…">${escapeHtml(_editorBulkAiSource[editorKey] || '')}</textarea>
+      </div>
+      <div style="margin-top:8px;">
+        <div class="cq-bulk-ai-label">🪄 Custom instructions for Refine (optional)</div>
+        <textarea class="cq-textarea" rows="2" id="${editorKey}BulkRefineInput" ${busy ? 'disabled' : ''}
+          oninput="_editorBulkRefineInstructions['${editorKey}'] = this.value"
+          placeholder="e.g. keep each question to one sentence">${escapeHtml(_editorBulkRefineInstructions[editorKey] || '')}</textarea>
+      </div>
+    </details>
+    <div id="${editorKey}BulkAiStatus" style="margin-top:8px;"></div>
+  </div>`;
+}
+
+// Shared guard for all three bulk actions below: refuses to start if a bulk
+// pass is already running in this editor, if any single-question AI tool is
+// mid-run, or if there's no active API key — surfacing whichever applies in
+// the bulk status box before anything else touches the DOM.
+function _editorBulkGuard(editorKey) {
+  const ed = _caseGroupEditors[editorKey];
+  const questions = ed && ed.getQuestions();
+  if (!questions || !questions.length) return null;
+  const statusEl = _editorBulkStatusEl(editorKey);
+  if (_editorBulkBusy[editorKey] || _aiToolsAnyBusyInEditor(editorKey)) {
+    if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML('Another AI action is already running — please wait for it to finish.');
+    return null;
+  }
+  const apiKey = getActiveApiKey();
+  if (!apiKey) {
+    if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML('Add a Gemini API key (⚙️ API Keys) to use AI tools.');
+    return null;
+  }
+  return { ed, questions };
+}
+
+async function _editorBulkAiSolve(editorKey) {
+  const ctx = _editorBulkGuard(editorKey);
+  if (!ctx) return;
+  const { ed, questions } = ctx;
+  _editorBulkSetBusy(editorKey, true);
+  const statusEl = _editorBulkStatusEl(editorKey);
+  if (statusEl) statusEl.innerHTML = _cqProgressStatusHTML('🤖 AI is solving all questions…', 0);
+  try {
+    const source = (_editorBulkAiSource[editorKey] || '').trim();
+    const allIdxs = questions.map((q, i) => i).filter(i => questions[i] && questions[i].question && questions[i].question.trim());
+    await cqAiSolveQuestions(questions, allIdxs, source, [], statusEl);
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ AI Solve finished — ${allIdxs.length} question${allIdxs.length !== 1 ? 's' : ''} checked.</div>`;
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'AI Solve failed.');
+  } finally {
+    _editorBulkSetBusy(editorKey, false);
+    ed.rerender();
+  }
+}
+
+async function _editorBulkFillChoices(editorKey) {
+  const ctx = _editorBulkGuard(editorKey);
+  if (!ctx) return;
+  const { ed, questions } = ctx;
+  _editorBulkSetBusy(editorKey, true);
+  const statusEl = _editorBulkStatusEl(editorKey);
+  if (statusEl) statusEl.innerHTML = _cqProgressStatusHTML('🧩 Filling choices…', 0);
+  try {
+    const { done, errors } = await cqBulkFillChoices(questions, statusEl);
+    let html = `<div class="cq-status success">✅ Fill Choices finished — topped up ${done} question${done !== 1 ? 's' : ''}.</div>`;
+    if (errors.length) html += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;">⚠️ ${escapeHtml(e)}</div>`).join('');
+    if (statusEl) statusEl.innerHTML = html;
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'Fill Choices failed.');
+  } finally {
+    _editorBulkSetBusy(editorKey, false);
+    ed.rerender();
+  }
+}
+
+async function _editorBulkRefineQuestions(editorKey) {
+  const ctx = _editorBulkGuard(editorKey);
+  if (!ctx) return;
+  const { ed, questions } = ctx;
+  _editorBulkSetBusy(editorKey, true);
+  const statusEl = _editorBulkStatusEl(editorKey);
+  if (statusEl) statusEl.innerHTML = _cqProgressStatusHTML('🪄 Refining question wording…', 0);
+  try {
+    const custom = (_editorBulkRefineInstructions[editorKey] || '').trim();
+    const { done, errors } = await cqBulkRefineQuestions(questions, custom, statusEl);
+    let html = `<div class="cq-status success">✅ Refine finished — rewrote ${done} question${done !== 1 ? 's' : ''}.</div>`;
+    if (errors.length) html += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;">⚠️ ${escapeHtml(e)}</div>`).join('');
+    if (statusEl) statusEl.innerHTML = html;
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML(e.message || 'Refine failed.');
+  } finally {
+    _editorBulkSetBusy(editorKey, false);
+    ed.rerender();
+  }
+}
+
 /* Swaps question `i` with its neighbor (dir: -1 = up, +1 = down) in
    whichever editor invoked it, via the registry above. Case-group links
    are matched by id rather than array position, so reordering never
@@ -5440,14 +5625,17 @@ function _aiToolsSetBusy(editorKey, i, busy, action) {
    spinning circle inserted into it (via `action`), so it's obvious AT A
    GLANCE which of the several AI tools is the one currently working —
    the other, merely-disabled buttons stay plain. */
-function _aiToolsSyncButtons(editorKey, i, busy, action) {
-  const ids = [
+function _aiToolsButtonIds(editorKey, i) {
+  return [
     `aiRefineBtn_${editorKey}_${i}`,
     `aiCustomBtn_${editorKey}_${i}`,
     `aiAddChoiceBtn_${editorKey}_${i}`,
     `aiFillChoicesBtn_${editorKey}_${i}`,
     `cqAiSolveBtn_${i}` // only exists in the 'cq' extraction/review editor
   ];
+}
+function _aiToolsSyncButtons(editorKey, i, busy, action) {
+  const ids = _aiToolsButtonIds(editorKey, i);
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
@@ -5463,6 +5651,7 @@ function _aiToolsSyncButtons(editorKey, i, busy, action) {
   const activeId = action && idMap[action];
   const activeEl = activeId && document.getElementById(activeId);
   if (activeEl) {
+    activeEl.classList.toggle('cq-edit-reask-btn-active', busy);
     const existingSpinner = activeEl.querySelector('.ai-btn-spinner');
     if (busy && !existingSpinner) {
       activeEl.insertAdjacentHTML('afterbegin', '<span class="ai-btn-spinner"></span>');
@@ -10671,6 +10860,8 @@ function renderAdminQuestionEditor(containerId) {
       🔘 = correct answer &nbsp;·&nbsp; 🔗 = linked case questions
     </div>
   </div>`;
+  html += _renderBulkAiToolsPanel('admin', adminEditQuestions);
+  html += `<div id="adminBulkLockWrap"${_editorBulkBusy.admin ? ' class="cq-bulk-lock"' : ''}>`;
   html += `<div class="cq-preview-list" id="adminEditList">`;
 
   adminEditQuestions.forEach((q, i) => {
@@ -10788,6 +10979,7 @@ function renderAdminQuestionEditor(containerId) {
     `}
   </div>
   ${adminEditMode === 'published' ? renderSplitPanel('adminPublished', adminEditingPublishedId, adminEditQuestions.length) : ''}
+  </div>
   <div class="admin-status" id="adminEditStatus"></div>`;
 
   area.innerHTML = html;
@@ -10999,6 +11191,8 @@ function renderCustomQuizEditor() {
       🔘 = correct answer &nbsp;·&nbsp; 🔗 = linked case questions
     </div>
   </div>`;
+  html += _renderBulkAiToolsPanel('customQuiz', cqEditQuestions);
+  html += `<div id="customQuizBulkLockWrap"${_editorBulkBusy.customQuiz ? ' class="cq-bulk-lock"' : ''}>`;
   html += `<div class="cq-preview-list" id="cqCustomEditList_${key}">`;
 
   cqEditQuestions.forEach((q, i) => {
@@ -11112,6 +11306,7 @@ function renderCustomQuizEditor() {
     <button class="cq-btn cq-btn-secondary" onclick="closeCustomQuizEditor()">✖ Cancel</button>
   </div>
   ${!cqCreatingNew ? renderSplitPanel('saved', cqEditingQuizId, cqEditQuestions.length) : ''}
+  </div>
   <div class="admin-status" id="cqCustomEditStatus_${key}"></div>`;
 
   area.innerHTML = html;
