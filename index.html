@@ -2131,7 +2131,7 @@
 .apikey-item.active {
   border-color: var(--apikey-color, var(--accent));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--apikey-color, var(--accent)) 18%, transparent);
-  background: var(--bg-card);
+  background: #FFFFFF;
 }
 .apikey-num {
   width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
@@ -2169,13 +2169,8 @@
 }
 .apikey-item-actions button:hover { filter: brightness(1.08); }
 .apikey-use-btn { background: var(--apikey-color, var(--accent)); color: #fff; }
-button.apikey-use-btn:disabled {
-  opacity: 1; cursor: default;
-  background: color-mix(in srgb, var(--apikey-color, var(--accent)) 20%, transparent);
-  color: var(--apikey-color, var(--accent));
-  border: 1.5px solid var(--apikey-color, var(--accent));
-}
-button.apikey-view-btn { background: var(--surface-2-hover); color: var(--text-main); border: 1.5px solid var(--border-soft); }
+.apikey-use-btn:disabled { opacity: .55; cursor: default; }
+.apikey-view-btn { background: #ECEFF1; color: var(--text-main); }
 .apikey-edit-btn { background: var(--violet-pale); color: var(--violet-dark); }
 .apikey-del-btn { background: var(--wrong-bg); color: var(--wrong-fg); }
 .apikey-edit-row { margin-top: 4px; }
