@@ -1667,6 +1667,12 @@
   transition: background .15s;
 }
 .admin-remove-btn:hover { background: #FFCDD2; }
+.admin-assigned-insert-summary {
+  font-size: .78rem; font-weight: 700; color: #1B4F72;
+  background: #EAF6FF; border: 1px solid #B0D4F0; border-radius: 8px;
+  padding: 7px 11px; margin-bottom: 9px;
+}
+.admin-insert-btn-active { border-color: var(--accent) !important; font-weight: 800; box-shadow: 0 0 0 1.5px var(--accent) inset; }
 
 /* Admin panel top-level tabs (Publish / Curriculum) */
 .admin-panel-tabs {
@@ -10339,9 +10345,26 @@ async function confirmMergeSelectedQuizzes() {
 ══════════════════════════════════════════════════════════ */
 let adminSourceTab   = 'custom';   // 'custom' | 'community'
 let adminSelectedQuiz = null;      // { title, questions, sourceType, sourceId }
+// NOTE: adminTargetYear/Module/Subject below are used EXCLUSIVELY by the
+// "📚 Manage Curriculum" tab's own drill-down navigation (adminCurrNavLevel
+// etc.) — they track where the admin is browsing *in that tab*.
 let adminTargetYear   = '';
 let adminTargetModule = '';
 let adminTargetSubject= '';
+
+// The Publish tab's own "where does this quiz go" destination picker keeps
+// a fully separate set of Year/Module/Subject targets so that clicking
+// through it never changes — or gets clobbered by — whatever the admin was
+// last browsing in the Manage Curriculum tab, and vice versa.
+let adminPubTargetYear   = '';
+let adminPubTargetModule = '';
+let adminPubTargetSubject= '';
+
+// Where to insert a newly-published quiz among a subject's existing
+// published quizzes: null = append at the end (default), otherwise
+// { lectureId, position } with position 'before' | 'after'.
+let adminPublishInsertPosition = null;
+
 let adminCommunityCache = null;
 let adminBusy = false;
 
@@ -10351,13 +10374,25 @@ let adminEditMode      = null;   // 'publish' | 'published' | null
 let adminEditingPublishedId   = null; // lectureId when editing an already-published lecture
 let adminEditingPublishedName = '';   // its lecture name
 
-// Cache of the currently-listed published lectures for adminTargetSubject.
-// Populated by renderAdminAssignedList(); used as the Split-Quiz source so
-// re-rendering the split panel (mode switches, range edits) doesn't need to
-// re-hit Firestore every keystroke.
+// Cache of the currently-listed published lectures for whichever subject is
+// in focus (adminPubTargetSubject in the Publish tab, adminTargetSubject in
+// the Curriculum tab — see _pubListSubject()). Populated by
+// renderAdminAssignedList(); used as the Split-Quiz source so re-rendering
+// the split panel (mode switches, range edits) doesn't need to re-hit
+// Firestore every keystroke.
 let adminAssignedEntries = [];
 
 let adminActiveTab = 'publish'; // 'publish' | 'curriculum' | 'admins'
+
+// Returns whichever Year/Module/Subject target is relevant to the tab
+// currently on screen — the Curriculum tab's own drill-down position, or
+// the Publish tab's separate destination-picker selection. Used by the
+// shared "already published" list renderer / reorder logic so the exact
+// same functions work correctly from either tab without the two tabs'
+// navigation state bleeding into each other.
+function _pubListSubject() {
+  return adminActiveTab === 'curriculum' ? adminTargetSubject : adminPubTargetSubject;
+}
 
 /* Build the admin panel tab bar to match exactly what this user is allowed to see. */
 function renderAdminPanelTabs() {
@@ -10397,6 +10432,10 @@ function openAdminPanel() {
   adminTargetYear   = '';
   adminTargetModule = '';
   adminTargetSubject= '';
+  adminPubTargetYear   = '';
+  adminPubTargetModule = '';
+  adminPubTargetSubject= '';
+  adminPublishInsertPosition = null;
   adminCommunityCache = null;
   adminCurrNavLevel = 'years';
   const defaultTab = adminDefaultTab();
@@ -10723,21 +10762,25 @@ async function adminDeleteSourceQuiz(sourceType, sourceId) {
 }
 
 /* ── Visual publish-destination picker ──
-   Replaces the old Year/Module/Subject <select> chain with the same
-   click-through card style used by the "📚 Manage Curriculum" browser
-   (_moduleIcon, .curr-item-row, etc.) so picking where a quiz goes is a
-   direct, visual "tap the right box" action instead of three dropdowns. */
+   Same click-through card style used by the "📚 Manage Curriculum" browser
+   (_moduleIcon, .curr-item-row, .curr-back-btn, etc.) so picking where a
+   quiz goes is a direct, visual "tap the right box" action. Uses its own
+   adminPubTargetYear/Module/Subject state — entirely separate from the
+   Curriculum tab's adminTargetYear/Module/Subject — so browsing here never
+   affects, and is never affected by, wherever the admin last was in
+   📚 Manage Curriculum. Picking a new subject always simply replaces
+   whatever was previously chosen. */
 function adminAssignBreadcrumbHtml() {
   let html = `<div class="curr-breadcrumb">`;
-  html += `<span class="curr-crumb ${!adminTargetYear ? 'active' : ''}" onclick="adminOnYearChange('')">📅 Years</span>`;
-  if (adminTargetYear) {
-    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${!adminTargetModule ? 'active' : ''}" onclick="adminOnModuleChange('')">${escapeHtml(adminTargetYear)}</span>`;
+  html += `<span class="curr-crumb ${!adminPubTargetYear ? 'active' : ''}" onclick="adminOnYearChange('')">📅 Years</span>`;
+  if (adminPubTargetYear) {
+    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${!adminPubTargetModule ? 'active' : ''}" onclick="adminOnModuleChange('')">${escapeHtml(adminPubTargetYear)}</span>`;
   }
-  if (adminTargetModule) {
-    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${!adminTargetSubject ? 'active' : ''}" onclick="adminOnSubjectChange('')">${escapeHtml(adminTargetModule)}</span>`;
+  if (adminPubTargetModule) {
+    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${!adminPubTargetSubject ? 'active' : ''}" onclick="adminOnSubjectChange('')">${escapeHtml(adminPubTargetModule)}</span>`;
   }
-  if (adminTargetSubject) {
-    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb active">${escapeHtml(subjects[adminTargetSubject]?.label || adminTargetSubject)}</span>`;
+  if (adminPubTargetSubject) {
+    html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb active">${escapeHtml(subjects[adminPubTargetSubject]?.label || adminPubTargetSubject)}</span>`;
   }
   html += `</div>`;
   return html;
@@ -10747,9 +10790,18 @@ function adminPublishTargetPickerHtml() {
   let html = `<div class="curr-section admin-publish-picker">`;
   html += `<div class="curr-section-title" style="margin-bottom:8px;">📍 Publish Destination</div>`;
   html += adminAssignBreadcrumbHtml();
+
+  if (adminPubTargetSubject) {
+    html += `<button class="curr-back-btn" onclick="adminOnSubjectChange('')">← Back to Subjects</button>`;
+  } else if (adminPubTargetModule) {
+    html += `<button class="curr-back-btn" onclick="adminOnModuleChange('')">← Back to Modules</button>`;
+  } else if (adminPubTargetYear) {
+    html += `<button class="curr-back-btn" onclick="adminOnYearChange('')">← Back to Years</button>`;
+  }
+
   html += `<div style="margin-top:9px;display:flex;flex-direction:column;gap:6px;">`;
 
-  if (!adminTargetYear) {
+  if (!adminPubTargetYear) {
     const years = Object.keys(curriculum);
     html += years.length ? years.map(y => `
       <div class="curr-item-row curr-item-open" onclick="adminOnYearChange('${escapeHtml(y)}')">
@@ -10760,35 +10812,34 @@ function adminPublishTargetPickerHtml() {
         <span class="curr-item-arrow">▶</span>
       </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No years yet — add one in 📚 Manage Curriculum first.</div>`;
 
-  } else if (!adminTargetModule) {
-    const mods = Object.keys(curriculum[adminTargetYear] || {});
+  } else if (!adminPubTargetModule) {
+    const mods = Object.keys(curriculum[adminPubTargetYear] || {});
     html += mods.length ? mods.map(m => `
       <div class="curr-item-row curr-item-open" onclick="adminOnModuleChange('${escapeHtml(m)}')">
         <div style="flex:1;">
-          <div class="curr-item-name">${escapeHtml(_moduleIcon(adminTargetYear, m))} ${escapeHtml(m)}</div>
-          <div class="curr-item-sub">${(curriculum[adminTargetYear][m] || []).filter(k => subjects[k]).length} subject(s)</div>
+          <div class="curr-item-name">${escapeHtml(_moduleIcon(adminPubTargetYear, m))} ${escapeHtml(m)}</div>
+          <div class="curr-item-sub">${(curriculum[adminPubTargetYear][m] || []).filter(k => subjects[k]).length} subject(s)</div>
         </div>
         <span class="curr-item-arrow">▶</span>
-      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No modules yet in ${escapeHtml(adminTargetYear)}.</div>`;
+      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No modules yet in ${escapeHtml(adminPubTargetYear)}.</div>`;
 
-  } else if (!adminTargetSubject) {
-    const subs = (curriculum[adminTargetYear][adminTargetModule] || []).filter(k => subjects[k]);
+  } else if (!adminPubTargetSubject) {
+    const subs = (curriculum[adminPubTargetYear][adminPubTargetModule] || []).filter(k => subjects[k]);
     html += subs.length ? subs.map(s => `
       <div class="curr-item-row curr-item-open" onclick="adminOnSubjectChange('${escapeHtml(s)}')">
         <div style="flex:1;">
           <div class="curr-item-name">${escapeHtml(subjects[s].icon || '📘')} ${escapeHtml(subjects[s].label || s)}</div>
         </div>
         <span class="curr-item-arrow">▶</span>
-      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No subjects yet in ${escapeHtml(adminTargetModule)}.</div>`;
+      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No subjects yet in ${escapeHtml(adminPubTargetModule)}.</div>`;
 
   } else {
     html += `
       <div class="curr-item-row admin-publish-target-selected">
         <div style="flex:1;">
-          <div class="curr-item-name">✅ ${escapeHtml(subjects[adminTargetSubject].icon || '📘')} ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}</div>
-          <div class="curr-item-sub">${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)}</div>
+          <div class="curr-item-name">✅ ${escapeHtml(subjects[adminPubTargetSubject].icon || '📘')} ${escapeHtml(subjects[adminPubTargetSubject].label || adminPubTargetSubject)}</div>
+          <div class="curr-item-sub">${escapeHtml(adminPubTargetYear)} → ${escapeHtml(adminPubTargetModule)}</div>
         </div>
-        <button class="curr-item-btn edit" onclick="adminOnSubjectChange('')">🔁 Change</button>
       </div>`;
   }
 
@@ -10797,18 +10848,21 @@ function adminPublishTargetPickerHtml() {
 }
 
 function adminOnYearChange(val) {
-  adminTargetYear   = val;
-  adminTargetModule = '';
-  adminTargetSubject = '';
+  adminPubTargetYear   = val;
+  adminPubTargetModule = '';
+  adminPubTargetSubject = '';
+  adminPublishInsertPosition = null;
   renderAdminAssignForm();
 }
 function adminOnModuleChange(val) {
-  adminTargetModule = val;
-  adminTargetSubject = '';
+  adminPubTargetModule = val;
+  adminPubTargetSubject = '';
+  adminPublishInsertPosition = null;
   renderAdminAssignForm();
 }
 function adminOnSubjectChange(val) {
-  adminTargetSubject = val;
+  adminPubTargetSubject = val;
+  adminPublishInsertPosition = null;
   renderAdminAssignForm();
 }
 
@@ -10843,7 +10897,7 @@ function renderAdminAssignForm() {
       </div>
 
       <button class="admin-assign-btn" id="adminPublishBtn" onclick="adminPublishQuiz()"
-        ${(!adminTargetYear || !adminTargetModule || !adminTargetSubject) ? 'disabled' : ''}>
+        ${(!adminPubTargetYear || !adminPubTargetModule || !adminPubTargetSubject) ? 'disabled' : ''}>
         📤 Publish to Question Bank
       </button>
       <div class="admin-status" id="adminStatus"></div>
@@ -10853,7 +10907,7 @@ function renderAdminAssignForm() {
 
   if (adminEditMode === 'publish') renderAdminQuestionEditor('adminEditorArea');
 
-  if (adminTargetSubject) renderAdminAssignedList();
+  if (adminPubTargetSubject) renderAdminAssignedList();
 }
 
 function adminToggleEditBeforePublish() {
@@ -11532,9 +11586,10 @@ async function saveCustomQuizEdits() {
    bumps both entries' manifest timestamp so every user's cache picks up
    the new order on their next load, and refreshes the current view. */
 async function adminSwapLectureOrder(lectureId, direction) {
-  if (!adminTargetSubject) return;
+  const subj = _pubListSubject();
+  if (!subj) return;
   try {
-    const col  = window._collection(window._db, 'publishedQuestions', adminTargetSubject, 'lectures');
+    const col  = window._collection(window._db, 'publishedQuestions', subj, 'lectures');
     const snap = await window._getDocs(col);
     const entries = [];
     snap.forEach(d => entries.push({ id: d.id, ...d.data() }));
@@ -11551,23 +11606,23 @@ async function adminSwapLectureOrder(lectureId, direction) {
     const bOrder = b.order ?? b.publishedAt ?? 0;
 
     await window._setDoc(
-      window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', a.id),
+      window._doc(window._db, 'publishedQuestions', subj, 'lectures', a.id),
       { order: bOrder }, { merge: true }
     );
     await window._setDoc(
-      window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', b.id),
+      window._doc(window._db, 'publishedQuestions', subj, 'lectures', b.id),
       { order: aOrder }, { merge: true }
     );
 
     // Only these two quizzes are invalidated for every other user — nothing
     // else they've already cached is touched.
     const now = Date.now();
-    await _updatePublishedManifest(adminTargetSubject, a.id, now);
-    await _updatePublishedManifest(adminTargetSubject, b.id, now + 1);
+    await _updatePublishedManifest(subj, a.id, now);
+    await _updatePublishedManifest(subj, b.id, now + 1);
 
     // Refresh in-memory ordering + whatever the admin currently has open
     await loadPublishedQuestionsIntoSubjects();
-    if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
+    if (selectedSubject === subj) selectSubject(subj);
     renderAdminAssignedList();
   } catch (e) {
     alert('Failed to reorder: ' + (e.message || e));
@@ -11577,11 +11632,13 @@ async function adminSwapLectureOrder(lectureId, direction) {
 async function renderAdminAssignedList() {
   const sec = document.getElementById('adminAssignedSection');
   if (!sec) return;
-  sec.innerHTML = `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
+  const subj = _pubListSubject();
+  if (!subj) { sec.innerHTML = ''; return; }
+  sec.innerHTML = `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[subj].label || subj)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
 
   let entries = [];
   try {
-    const col = window._collection(window._db, 'publishedQuestions', adminTargetSubject, 'lectures');
+    const col = window._collection(window._db, 'publishedQuestions', subj, 'lectures');
     const snap = await window._getDocs(col);
     snap.forEach(d => entries.push({ id: d.id, ...d.data() }));
   } catch (e) {
@@ -11591,6 +11648,12 @@ async function renderAdminAssignedList() {
 
   entries.sort((a, b) => (a.order ?? a.publishedAt ?? 0) - (b.order ?? b.publishedAt ?? 0));
   adminAssignedEntries = entries;
+
+  // A previously-chosen before/after insertion target might no longer
+  // exist in this subject's freshly-loaded list — drop it if so.
+  if (adminPublishInsertPosition && !entries.some(e => e.id === adminPublishInsertPosition.lectureId)) {
+    adminPublishInsertPosition = null;
+  }
 
   _renderAdminAssignedListHTML();
 }
@@ -11603,17 +11666,31 @@ function _renderAdminAssignedListHTML() {
   const sec = document.getElementById('adminAssignedSection');
   if (!sec) return;
   const entries = adminAssignedEntries;
+  const subj = _pubListSubject();
+  if (!subj) { sec.innerHTML = ''; return; }
 
   // The "Publish Quizzes" tab only needs a quick read-only glance at what's
   // already there (so the admin doesn't duplicate a lecture by accident) —
   // reordering, editing, copy/move, and delete all live one place now:
   // the "📚 Manage Curriculum" tab. Showing them here too was redundant
-  // and easy to trigger by mistake mid-publish.
+  // and easy to trigger by mistake mid-publish. It does let the admin pick
+  // where the new quiz will land relative to these, via before/after markers.
   const simple = adminActiveTab !== 'curriculum';
 
   sec.innerHTML = simple
-    ? `<div class="admin-assigned-title">Already published in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}"</div>`
-    : `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
+    ? `<div class="admin-assigned-title">Already published in "${escapeHtml(subjects[subj].label || subj)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— tap 📍 to choose where the new quiz lands</span></div>`
+    : `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[subj].label || subj)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
+
+  if (simple) {
+    const pos = adminPublishInsertPosition;
+    const posEntry = pos ? entries.find(e => e.id === pos.lectureId) : null;
+    sec.innerHTML += pos && posEntry
+      ? `<div class="admin-assigned-insert-summary">
+           📍 New quiz will publish <strong>${pos.position}</strong> "${escapeHtml(posEntry.lectureName || posEntry.id)}"
+           <span style="color:var(--accent);cursor:pointer;font-weight:800;margin-left:6px;" onclick="adminClearPublishInsertPosition()">✖ clear</span>
+         </div>`
+      : `<div class="admin-assigned-insert-summary" style="color:var(--text-muted);">📍 New quiz will publish at the end of the list (default) — tap before/after a quiz below to change that.</div>`;
+  }
 
   if (!entries.length) {
     sec.innerHTML += `<div style="color:var(--text-muted);font-size:.82rem;">No quizzes have been published to this subject yet.</div>`;
@@ -11622,11 +11699,19 @@ function _renderAdminAssignedListHTML() {
 
   if (simple) {
     entries.forEach(e => {
+      const selBefore = adminPublishInsertPosition && adminPublishInsertPosition.lectureId === e.id && adminPublishInsertPosition.position === 'before';
+      const selAfter  = adminPublishInsertPosition && adminPublishInsertPosition.lectureId === e.id && adminPublishInsertPosition.position === 'after';
       sec.innerHTML += `
         <div class="admin-assigned-item">
           <div class="admin-assigned-info">
             <div class="admin-assigned-name">${escapeHtml(e.lectureName || e.id)}</div>
             <div class="admin-assigned-path">${(e.questions || []).length} question${(e.questions||[]).length !== 1 ? 's' : ''}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;">
+            <button class="admin-remove-btn ${selBefore ? 'admin-insert-btn-active' : ''}" style="padding:3px 8px;background:${selBefore ? '#D6EAFB' : '#F0F8FF'};color:var(--accent);border:1.5px solid #B0D4F0;line-height:1;" title="Publish new quiz before this one"
+              onclick="adminSetPublishInsertPosition('${e.id}','before')">📍⬆️ Before</button>
+            <button class="admin-remove-btn ${selAfter ? 'admin-insert-btn-active' : ''}" style="padding:3px 8px;background:${selAfter ? '#D6EAFB' : '#F0F8FF'};color:var(--accent);border:1.5px solid #B0D4F0;line-height:1;" title="Publish new quiz after this one"
+              onclick="adminSetPublishInsertPosition('${e.id}','after')">📍⬇️ After</button>
           </div>
         </div>`;
     });
@@ -11649,7 +11734,7 @@ function _renderAdminAssignedListHTML() {
         </div>
         <div class="admin-assigned-info">
           <div class="admin-assigned-name">${escapeHtml(e.lectureName || e.id)}</div>
-          <div class="admin-assigned-path">${(e.questions || []).length} question${(e.questions||[]).length !== 1 ? 's' : ''} · ${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)} → ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}</div>
+          <div class="admin-assigned-path">${(e.questions || []).length} question${(e.questions||[]).length !== 1 ? 's' : ''} · ${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)} → ${escapeHtml(subjects[subj].label || subj)}</div>
         </div>
         <button class="admin-remove-btn" style="background:#EDE7F6;color:#4527A0;border:1.5px solid #B39DDB;"
           onclick="adminEditPublished('${e.id}')">✏️ Edit</button>
@@ -11666,10 +11751,31 @@ function _renderAdminAssignedListHTML() {
   }
 }
 
+// Toggle which existing quiz the about-to-be-published one should land
+// before/after. Clicking the already-selected button clears it (back to
+// the default: append at the end).
+function adminSetPublishInsertPosition(lectureId, position) {
+  if (adminPublishInsertPosition && adminPublishInsertPosition.lectureId === lectureId && adminPublishInsertPosition.position === position) {
+    adminPublishInsertPosition = null;
+  } else {
+    adminPublishInsertPosition = { lectureId, position };
+  }
+  _renderAdminAssignedListHTML();
+}
+function adminClearPublishInsertPosition() {
+  adminPublishInsertPosition = null;
+  _renderAdminAssignedListHTML();
+}
+
 // Shortcut from the simplified "Publish Quizzes" list straight to the same
-// subject's full quiz-management view in "📚 Manage Curriculum" — the
-// year/module/subject targets carry over since both tabs share them.
+// subject's full quiz-management view in "📚 Manage Curriculum". This is a
+// deliberate one-time hand-off — it copies the Publish tab's destination
+// into the Curriculum tab's own (otherwise entirely separate) navigation
+// state, rather than the two tabs sharing state all the time.
 function adminJumpToCurriculumQuizzes() {
+  adminTargetYear    = adminPubTargetYear;
+  adminTargetModule  = adminPubTargetModule;
+  adminTargetSubject = adminPubTargetSubject;
   adminCurrNavLevel = 'quizzes';
   adminSwitchTab('curriculum');
 }
@@ -11862,7 +11968,8 @@ async function adminRemovePublished(lectureId) {
 
 async function adminPublishQuiz() {
   if (adminBusy) return;
-  if (!adminSelectedQuiz || !adminTargetSubject) return;
+  if (!adminSelectedQuiz || !adminPubTargetSubject) return;
+  const targetSubject = adminPubTargetSubject;
 
   const nameInput = document.getElementById('adminLectureName');
   let lectureName = (nameInput?.value || '').trim();
@@ -11908,10 +12015,41 @@ async function adminPublishQuiz() {
     // 1 MB limit — and so the published lecture is fully self-contained, independent of the
     // source quiz.  Even if the source quiz is later deleted, images remain here.
     if (statusEl) statusEl.innerHTML = `<div class="cq-status">⏳ Uploading images…</div>`;
-    await uploadPublishedLectureImages(adminTargetSubject, lectureId, cleanQuestions);
+    await uploadPublishedLectureImages(targetSubject, lectureId, cleanQuestions);
 
-    const ref = window._doc(window._db, 'publishedQuestions', adminTargetSubject, 'lectures', lectureId);
     const publishedAt = Date.now();
+
+    // Work out where in the list this new quiz should sit. Default: newest
+    // goes last (order = publishedAt, the largest of all existing values).
+    // If the admin picked a before/after spot in the picker, compute an
+    // order value that slots it exactly there — midpoint between the two
+    // neighboring order values (or one below/above the first/last entry).
+    let order = publishedAt;
+    const pos = adminPublishInsertPosition;
+    if (pos) {
+      try {
+        const col  = window._collection(window._db, 'publishedQuestions', targetSubject, 'lectures');
+        const snap = await window._getDocs(col);
+        const existing = [];
+        snap.forEach(d => existing.push({ id: d.id, ...d.data() }));
+        existing.sort((a, b) => (a.order ?? a.publishedAt ?? 0) - (b.order ?? b.publishedAt ?? 0));
+        const idx = existing.findIndex(e => e.id === pos.lectureId);
+        if (idx !== -1) {
+          const targetOrder = existing[idx].order ?? existing[idx].publishedAt ?? 0;
+          if (pos.position === 'before') {
+            const prev = existing[idx - 1];
+            order = prev ? ((prev.order ?? prev.publishedAt ?? 0) + targetOrder) / 2 : targetOrder - 1;
+          } else {
+            const next = existing[idx + 1];
+            order = next ? (targetOrder + (next.order ?? next.publishedAt ?? 0)) / 2 : targetOrder + 1;
+          }
+        }
+      } catch (e) {
+        // If this lookup fails for any reason, just fall back to appending at the end.
+      }
+    }
+
+    const ref = window._doc(window._db, 'publishedQuestions', targetSubject, 'lectures', lectureId);
     await window._setDoc(ref, cleanForFirestore({
       id: lectureId,
       lectureName,
@@ -11920,23 +12058,23 @@ async function adminPublishQuiz() {
       sourceType: adminSelectedQuiz.sourceType,
       publishedBy: window._currentUser ? window._currentUser.uid : null,
       publishedAt,
-      order: publishedAt // default position: newest goes last; admin can reorder afterward
+      order // newest goes last by default, or the admin-chosen before/after spot
     }));
 
     // Merge into the in-memory subject so it's usable immediately.
     // Build a hydrated copy (with q.image restored) for in-memory use,
     // while cleanQuestions (with pubImageIdx sentinels) was what we saved to Firestore.
     const hydratedForMemory = JSON.parse(JSON.stringify(cleanQuestions));
-    await hydratePublishedLectureImages(adminTargetSubject, lectureId, hydratedForMemory);
-    if (!subjects[adminTargetSubject].lectures) subjects[adminTargetSubject].lectures = {};
-    subjects[adminTargetSubject].lectures[lectureName] = hydratedForMemory;
+    await hydratePublishedLectureImages(targetSubject, lectureId, hydratedForMemory);
+    if (!subjects[targetSubject].lectures) subjects[targetSubject].lectures = {};
+    subjects[targetSubject].lectures[lectureName] = hydratedForMemory;
 
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Published "${escapeHtml(lectureName)}" to ${escapeHtml(subjects[adminTargetSubject].label || adminTargetSubject)}!</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Published "${escapeHtml(lectureName)}" to ${escapeHtml(subjects[targetSubject].label || targetSubject)}!</div>`;
     if (nameInput) nameInput.value = '';
 
     // Only THIS new quiz shows up as changed for every other user —
     // their cache for every other quiz/subject stays untouched.
-    await _updatePublishedManifest(adminTargetSubject, lectureId, publishedAt);
+    await _updatePublishedManifest(targetSubject, lectureId, publishedAt);
 
     // Close the editor after a successful publish
     adminEditMode = null;
@@ -11944,8 +12082,11 @@ async function adminPublishQuiz() {
     const editorArea = document.getElementById('adminEditorArea');
     if (editorArea) editorArea.innerHTML = '';
 
+    // Reset the insert-position picker for next time
+    adminPublishInsertPosition = null;
+
     // Refresh subject view if currently open
-    if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
+    if (selectedSubject === targetSubject) selectSubject(targetSubject);
 
     renderAdminAssignedList();
   } catch (e) {
