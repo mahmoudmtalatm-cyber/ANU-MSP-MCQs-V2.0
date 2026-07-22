@@ -70,6 +70,11 @@
       --shadow-ambient: rgba(15, 30, 42, .10);
       --sigil-line:     rgba(14,110,130,.5);
       --carved-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%230E6E82' stroke-width='1' opacity='.16'%3E%3Cpath d='M0 60 L60 0 L120 60 L60 120 Z'/%3E%3Cpath d='M60 0 L60 120 M0 60 L120 60'/%3E%3Ccircle cx='60' cy='60' r='19'/%3E%3Ccircle cx='60' cy='60' r='3'/%3E%3C/g%3E%3C/svg%3E");
+      /* Same line-work as --carved-pattern, but drawn fully opaque/white so it
+         works cleanly as a mask under EITHER alpha- or luminance-based mask
+         compositing (the visible pattern above is too faint at 16% opacity to
+         use directly — it would render the sheen almost invisible). */
+      --carved-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M0 60 L60 0 L120 60 L60 120 Z'/%3E%3Cpath d='M60 0 L60 120 M0 60 L120 60'/%3E%3Ccircle cx='60' cy='60' r='19'/%3E%3Ccircle cx='60' cy='60' r='3'/%3E%3C/g%3E%3C/svg%3E");
 
       --font: 'Plus Jakarta Sans', sans-serif;
       --font-display: 'Fraunces', 'Plus Jakarta Sans', serif;
@@ -93,9 +98,16 @@
     .carved-surface::after {
       content: "";
       position: absolute; inset: 0;
-      background: linear-gradient(115deg, transparent 35%, var(--sigil-line) 49%, transparent 63%);
-      background-size: 240% 240%;
-      background-position: 200% 200%;
+      background: linear-gradient(100deg, transparent 38%, var(--sigil-line) 50%, transparent 62%);
+      background-repeat: no-repeat;
+      background-size: 340% 100%;
+      background-position: 220% 0%;
+      -webkit-mask-image: var(--carved-mask);
+      mask-image: var(--carved-mask);
+      -webkit-mask-repeat: repeat;
+      mask-repeat: repeat;
+      -webkit-mask-size: 120px 120px;
+      mask-size: 120px 120px;
       animation: carvedSheen 30s ease-in-out infinite;
       mix-blend-mode: screen;
       pointer-events: none;
@@ -103,8 +115,9 @@
     }
     .carved-surface > * { position: relative; z-index: 1; }
     @keyframes carvedSheen {
-      0%        { background-position: 220% 220%; }
-      15%, 100% { background-position: -40% -40%; }
+      0%       { background-position: 220% 0%; }
+      15%      { background-position: -70% 0%; }
+      100%     { background-position: -70% 0%; }
     }
     @media (prefers-reduced-motion: reduce) {
       .carved-surface::after { animation: none; }
