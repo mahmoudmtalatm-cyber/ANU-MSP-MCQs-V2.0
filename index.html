@@ -3188,7 +3188,7 @@ function startQuiz() {
   selectedSubject  = involvedSubjects.length === 1 ? involvedSubjects[0] : involvedSubjects.join(' + ');
   currentLecture   = totalLecCount === 1
     ? [...selectedLectures[involvedSubjects[0]]][0]
-    : `${totalLecCount} lectures (${involvedSubjects.join(', ')})`;
+    : `${totalLecCount} lectures (${involvedSubjects.map(subjectDisplayName).join(', ')})`;
   currentQuestions = combined;
   currentIndex = 0; userAnswers = {}; markedSet = new Set();
   questionTimes = {}; correctToWrong = 0; wrongToCorrect = 0; changeLog = [];
@@ -3682,6 +3682,20 @@ function persistStats(st) {
   }
 }
 
+/* Stats/Retake history stores whatever was in `selectedSubject` at quiz-submit
+   time, which — for curriculum quizzes — is the raw subject key (e.g.
+   "biochem1"), not its display label. Resolve it here at render time so the
+   Statistics and Retake screens always show real subject names, without
+   touching the stored data (subjectStats is keyed by the raw value, and
+   changing that would split one subject's history across two entries). */
+function subjectDisplayName(raw) {
+  if (!raw) return raw;
+  if (raw.indexOf(' + ') !== -1) {
+    return raw.split(' + ').map(k => (subjects[k] && subjects[k].label) || k).join(' + ');
+  }
+  return (subjects[raw] && subjects[raw].label) || raw;
+}
+
 function saveQuizStats(score, total, wrong, unanswered, timeSecs, timedQs, c2w, w2c, subject, lecture) {
   const st  = loadStats();
   const pct = Math.round(score / total * 100);
@@ -3856,7 +3870,7 @@ function renderStatsModal() {
         const row = document.createElement('div');
         row.className = 'subject-stat-row';
         row.innerHTML = `
-          <div class="subj-stat-name">${subj}</div>
+          <div class="subj-stat-name">${escapeHtml(subjectDisplayName(subj))}</div>
           <div class="subj-bar-wrap"><div class="subj-bar" style="width:${pct}%"></div></div>
           <div class="subj-stat-pct">${pct}%</div>
           <div class="subj-quizzes">${s.quizzes} quiz${s.quizzes!==1?'zes':''}</div>`;
@@ -3880,7 +3894,7 @@ function renderStatsModal() {
         ? ` · ✘${h.c2w||0} ✔${h.w2c||0} changes` : '';
       item.innerHTML = `
         <div>
-          <div class="h-subject">${h.subject}</div>
+          <div class="h-subject">${escapeHtml(subjectDisplayName(h.subject))}</div>
           <div class="h-lecture">${lecShort}</div>
           <div class="h-lecture">⏱ ${fmtTime(h.avgTime)}/q${changeNote} · ${h.date}</div>
         </div>
@@ -3948,7 +3962,7 @@ function renderRetakeSelector() {
     row.innerHTML = `
       <input type="checkbox" data-idx="${idx}" ${count === 0 ? 'disabled' : ''} style="width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;" />
       <div style="flex:1;">
-        <div style="font-weight:700;font-size:.88rem;">${h.subject}</div>
+        <div style="font-weight:700;font-size:.88rem;">${escapeHtml(subjectDisplayName(h.subject))}</div>
         <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px;">${lecShort}</div>
         <div style="font-size:.78rem;margin-top:3px;">
           ${h.date} &nbsp;·&nbsp; Score ${h.score}/${h.total} (${h.pct}%)
