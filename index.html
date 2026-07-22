@@ -2068,6 +2068,29 @@ button.apikey-use-btn:disabled {
   border: 1.5px solid var(--apikey-color, var(--accent));
 }
 button.apikey-view-btn { background: var(--surface-2-hover); color: var(--text-main); border: 1.5px solid var(--border-soft); }
+.apikey-toggle-btn {
+  border: none; cursor: pointer; font-family: var(--font);
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px 5px 9px; border-radius: 20px;
+  font-size: .72rem; font-weight: 700; letter-spacing: .1px;
+  background: var(--surface-2-hover); color: var(--text-muted);
+  border: 1.5px solid var(--border-soft);
+  transition: background .18s, border-color .18s, color .18s, transform .12s, box-shadow .18s;
+  flex-shrink: 0;
+}
+.apikey-toggle-btn:hover {
+  background: var(--surface-2); border-color: var(--accent);
+  color: var(--accent-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(15,30,42,.10);
+}
+.apikey-toggle-btn:active { transform: translateY(0); }
+.apikey-toggle-btn.apikey-toggle-on {
+  background: color-mix(in srgb, var(--apikey-color, var(--accent)) 14%, var(--bg-card));
+  border-color: var(--apikey-color, var(--accent));
+  color: var(--apikey-color, var(--accent));
+}
+
 .apikey-edit-btn { background: var(--violet-pale); color: var(--violet-dark); }
 .apikey-del-btn { background: var(--wrong-bg); color: var(--wrong-fg); }
 .apikey-edit-row { margin-top: 4px; }
@@ -4192,14 +4215,17 @@ function toggleApiKeyVisibility(btn, id) {
   const keys = loadApiKeys();
   const entry = keys.find(k => k.id === id);
   if (!entry) return;
+  const label = btn.querySelector('.apikey-toggle-label');
   if (span.dataset.shown === '1') {
     span.textContent = maskApiKey(entry.key);
     span.dataset.shown = '0';
-    btn.textContent = 'Show';
+    btn.classList.remove('apikey-toggle-on');
+    if (label) label.textContent = 'Show';
   } else {
     span.textContent = entry.key;
     span.dataset.shown = '1';
-    btn.textContent = 'Hide';
+    btn.classList.add('apikey-toggle-on');
+    if (label) label.textContent = 'Hide';
   }
 }
 
@@ -4254,7 +4280,9 @@ function renderApiKeyManager() {
           ` : `
           <div class="apikey-masked-row">
             <span class="apikey-masked" id="apikeyMasked_${k.id}" data-shown="0">${maskApiKey(k.key)}</span>
-            <button class="apikey-view-btn" style="padding:2px 6px;font-size:.7rem;" onclick="toggleApiKeyVisibility(this,'${k.id}')" type="button">Show</button>
+            <button class="apikey-toggle-btn" id="apikeyToggleBtn_${k.id}" onclick="toggleApiKeyVisibility(this,'${k.id}')" type="button">
+              <span class="apikey-toggle-label">Show</span>
+            </button>
           </div>
           `}
         </div>
