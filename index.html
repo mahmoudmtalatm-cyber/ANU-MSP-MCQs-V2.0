@@ -967,6 +967,36 @@
 .cq-btn:disabled { opacity: .5; cursor: not-allowed; }
 .cq-btn-secondary { background: var(--slate); }
 .cq-btn-danger { background: var(--wrong-fg); }
+.apikey-save-btn {
+  width: 100%; justify-content: center;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff; border: none; border-radius: 9px;
+  padding: 12px 18px; font-family: var(--font); font-size: .92rem; font-weight: 800;
+  letter-spacing: .2px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  box-shadow: 0 4px 14px var(--accent-soft);
+  transition: transform .15s, box-shadow .2s, filter .15s;
+}
+.apikey-save-btn:hover:not(:disabled) {
+  transform: translateY(-1px); filter: brightness(1.07);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.apikey-save-btn:active:not(:disabled) { transform: translateY(0); }
+.apikey-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+.cq-save-mine-btn {
+  background: linear-gradient(135deg, var(--violet-strong) 0%, var(--violet-dark) 100%);
+  color: #fff; border: none; border-radius: 8px;
+  padding: 11px 16px; font-family: var(--font); font-size: .9rem; font-weight: 700;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--violet-strong) 30%, transparent);
+  transition: transform .15s, box-shadow .2s, filter .15s;
+}
+.cq-save-mine-btn:hover:not(:disabled) {
+  transform: translateY(-1px); filter: brightness(1.06);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--violet-strong) 40%, transparent);
+}
+.cq-save-mine-btn:active:not(:disabled) { transform: translateY(0); }
+.cq-save-mine-btn:disabled { opacity: .5; cursor: not-allowed; }
 .cq-dropzone {
   border: 2px dashed var(--border-soft); border-radius: 10px; padding: 22px 14px;
   text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
@@ -4340,7 +4370,7 @@ function renderApiKeyManager() {
       <input type="password" id="apikeyValueInput" placeholder="Paste your Gemini API key here" oninput="this.style.borderColor='var(--border-soft)'" style="flex:1;min-width:180px;" />
     </div>
     <div id="apikeyAddStatus"></div>
-    <button class="cq-btn" id="apikeyAddBtn" onclick="submitNewApiKey()" type="button">💾 Save Key</button>
+    <button class="apikey-save-btn" id="apikeyAddBtn" onclick="submitNewApiKey()" type="button">💾 Save Key</button>
   </div>`;
 
   body.innerHTML = html;
@@ -10637,7 +10667,7 @@ async function renderCommunityQuizzes(forceReload) {
             <input type="checkbox" id="cqCommShuffle_${idx}" style="width:14px;height:14px;accent-color:var(--accent);" /> &#128256;
           </label>
           <button class="cq-btn" onclick="startCommunityQuizByIdx(${idx})">&#9654; Start</button>
-          <button class="cq-btn cq-btn-secondary" onclick="importCommunityQuiz('${escapeHtml(item.id)}')">&#128229; Save to Mine</button>
+          <button class="cq-save-mine-btn" onclick="importCommunityQuiz('${escapeHtml(item.id)}')">&#128229; Save to Mine</button>
           ${isOwn ? `<button class="cq-btn cq-btn-danger" onclick="deleteCommunityQuiz('${escapeHtml(item.id)}')">&#128465; Unshare</button>` : ''}
         </div>
       </div>`;
