@@ -2562,9 +2562,6 @@ button.apikey-view-btn { background: var(--surface-2-hover); color: var(--text-m
   </div>
 
 </div>
-<script src="data/git_module.js"></script>
-<script src="data/endocrine_module.js"></script>
-<script src="data/research2_module.js"></script>
 <script>
   /* ══════════════════════════════════════════════════════════
    ADMIN CONFIG — permission-based admin system
@@ -2859,54 +2856,11 @@ async function fbSignOut() {
      answer: "B"
    }
 ══════════════════════════════════════════════════════════ */
-const subjects = {
-  // GIT Module
-  "GIT_Anatomy":      DATA_Anatomy,
-  "GIT_Histology":    DATA_Histology,
-  "GIT_Physiology":   DATA_Physiology,
-  "GIT_Biochemistry": DATA_Biochemistry,
-  "GIT_Pharmacology": DATA_Pharmacology,
-  "GIT_Microbiology": DATA_Microbiology,
-  "GIT_Pathology":    DATA_Pathology,
-  "GIT_Parasitology": DATA_Parasitology,
-  "GIT_General":      DATA_GeneralGIT,
-
-  // Endocrine Module
-  "Endo_Anatomy":      DATA_Endo_Anatomy,
-  "Endo_Histology":    DATA_Endo_Histology,
-  "Endo_Physiology":   DATA_Endo_Physiology,
-  "Endo_Biochemistry": DATA_Endo_Biochemistry,
-  "Endo_Pharmacology": DATA_Endo_Pharmacology,
-  "Endo_Pathology":    DATA_Endo_Pathology,
-  "Endo_General":      DATA_Endo_General,
-
-  // Research II Module
-  "Res2_Questions":    DATA_Res2_Questions,
-};
+const subjects = {};
 const curriculum = {
   "First Year":  {},
-  "Second Year": {
-    "GIT and Nutrition": [
-      "GIT_Anatomy","GIT_Histology","GIT_Physiology",
-      "GIT_Biochemistry","GIT_Pharmacology","GIT_Microbiology",
-      "GIT_Pathology","GIT_Parasitology","GIT_General"
-    ],
-    "Endocrine System and Metabolism": [
-      "Endo_Anatomy","Endo_Histology","Endo_Physiology",
-      "Endo_Biochemistry","Endo_Pharmacology",
-      "Endo_Pathology","Endo_General"
-    ],
-    "Research ll": [
-      "Res2_Questions"
-    ]
-  },
+  "Second Year": {},
   "Third Year":  {}
-};
-
-/* Legacy hardcoded module icon fallback (pre-existing, kept for old modules) */
-const LEGACY_MODULE_ICONS = {
-  "GIT and Nutrition":               "🏥",
-  "Endocrine System and Metabolism": "🧬"
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -14497,10 +14451,9 @@ async function adminAddModule() {
   setTimeout(() => renderAdminCurriculumPanel(), 400);
 }
 
-/* Look up the icon for a module: admin-set icon > legacy hardcoded map > default */
+/* Look up the icon for a module: admin-set icon > default */
 function _moduleIcon(year, mod) {
   return (moduleIconMap[year] && moduleIconMap[year][mod])
-    || LEGACY_MODULE_ICONS[mod]
     || '📚';
 }
 
