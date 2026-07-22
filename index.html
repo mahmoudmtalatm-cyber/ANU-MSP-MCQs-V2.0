@@ -868,31 +868,34 @@
         padding: 7px 12px; border-radius: 8px;
       }
       .subject-stat-row {
-        display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+        display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;
       }
       .subj-stat-name {
-        font-weight: 700; font-size: .83rem; min-width: 70px; max-width: 100px; flex-shrink: 0;
-        color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        font-weight: 700; font-size: .83rem; min-width: 70px; max-width: 150px; flex-shrink: 0;
+        color: var(--text-main); white-space: normal; overflow-wrap: break-word; line-height: 1.25;
+        padding-top: 1px;
       }
       .subj-bar-wrap {
         flex: 1; background: var(--chip-blue-bg); border-radius: 4px; height: 12px; overflow: hidden;
+        margin-top: 3px;
       }
       .subj-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s; }
       .subj-stat-pct {
         font-weight: 800; font-size: .85rem; color: var(--accent);
-        min-width: 38px; text-align: right;
+        min-width: 38px; text-align: right; margin-top: 2px;
       }
-      .subj-quizzes { font-size: .75rem; color: var(--text-muted); min-width: 48px; text-align: right; }
+      .subj-quizzes { font-size: .75rem; color: var(--text-muted); min-width: 48px; text-align: right; margin-top: 3px; }
       .history-list { display: flex; flex-direction: column; gap: 7px; }
       .history-item {
-        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+        display: flex; flex-direction: column; gap: 8px;
         background: var(--surface-2); border: 1px solid var(--border-soft-2);
         border-radius: 8px; padding: 10px 14px;
       }
-      .history-item > div:first-child { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
-      .h-subject { font-weight: 700; font-size: .88rem; color: var(--text-main); }
+      .h-top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      .h-top-row > div:first-child { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
+      .h-subject { font-weight: 700; font-size: .88rem; color: var(--text-main); overflow-wrap: anywhere; }
       .h-lecture { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
-      .h-score { font-weight: 800; font-size: 1rem; white-space: nowrap; margin-left: 10px; }
+      .h-score { font-weight: 800; font-size: 1rem; white-space: nowrap; flex-shrink: 0; }
       .stats-reset-btn {
         background: var(--wrong-bg); color: var(--wrong-fg);
         border: 1px solid var(--red-soft-border); border-radius: 8px;
@@ -923,7 +926,7 @@
       @media (max-width: 600px) {
         .stats-grid { grid-template-columns: repeat(3, 1fr); }
         .stat-tile .stat-val { font-size: 1.1rem; }
-        .subj-stat-name { min-width: 56px; max-width: 74px; font-size: .75rem; }
+        .subj-stat-name { min-width: 56px; max-width: 100px; font-size: .75rem; }
       }
 /* ── CUSTOM QUIZZES (AI) ── */
 .cq-section {
@@ -3893,15 +3896,17 @@ function renderStatsModal() {
       const changeNote = (h.c2w||0)+(h.w2c||0) > 0
         ? ` · ✘${h.c2w||0} ✔${h.w2c||0} changes` : '';
       item.innerHTML = `
-        <div>
-          <div class="h-subject">${escapeHtml(subjectDisplayName(h.subject))}</div>
-          <div class="h-lecture">${lecShort}</div>
-          <div class="h-lecture">⏱ ${fmtTime(h.avgTime)}/q${changeNote} · ${h.date}</div>
-        </div>
-        <div class="h-score" style="color:${h.pct>=70?'var(--correct-fg)':'var(--wrong-fg)'}">${h.score}/${h.total}<br><span style="font-size:.8rem">(${h.pct}%)</span></div>`;
+        <div class="h-top-row">
+          <div>
+            <div class="h-subject">${escapeHtml(subjectDisplayName(h.subject))}</div>
+            <div class="h-lecture">${lecShort}</div>
+            <div class="h-lecture">⏱ ${fmtTime(h.avgTime)}/q${changeNote} · ${h.date}</div>
+          </div>
+          <div class="h-score" style="color:${h.pct>=70?'var(--correct-fg)':'var(--wrong-fg)'}">${h.score}/${h.total}<br><span style="font-size:.8rem">(${h.pct}%)</span></div>
+        </div>`;
       const wrongCount = (h.wrongQuestions || []).length;
 const retakeBtn = document.createElement('button');
-retakeBtn.style.cssText = 'margin-top:8px;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:white;font-weight:700;cursor:pointer;font-size:.8rem;opacity:' + (wrongCount > 0 ? '1' : '.4') + ';';
+retakeBtn.style.cssText = 'display:block;width:100%;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:white;font-weight:700;cursor:pointer;font-size:.8rem;opacity:' + (wrongCount > 0 ? '1' : '.4') + ';';
 retakeBtn.textContent = `🔄 Retake ${wrongCount} wrong Q${wrongCount !== 1 ? 's' : ''}`;
 retakeBtn.disabled = wrongCount === 0;
 retakeBtn.onclick = (e) => { e.stopPropagation(); retakeSingleQuiz(h); };
