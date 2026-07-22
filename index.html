@@ -11535,18 +11535,14 @@ async function renderAdminPanel() {
     } else {
       listHtml = quizzes.map(q => {
         const sel = adminSelectedQuiz && adminSelectedQuiz.sourceType === 'custom' && adminSelectedQuiz.sourceId === q.id;
-        const isEditing = cqEditorContext === 'admin' && cqEditingQuizId === q.id;
         return `
           <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('custom','${q.id}')">
             <div class="admin-quiz-item-info">
               <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
               <div class="admin-quiz-item-meta">${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
             </div>
-            <button class="cq-btn cq-btn-secondary" style="background:var(--accent);color:#fff;flex-shrink:0;"
-              onclick="event.stopPropagation();${isEditing ? 'closeCustomQuizEditor()' : `openAdminCustomQuizEditor('${q.id}')`}">${isEditing ? '✖ Close Editor' : '✏️ Edit'}</button>
             <div class="admin-quiz-item-check">✓</div>
-          </div>
-          ${isEditing ? `<div class="cq-inline-editor" id="adminCqEditorArea_${q.id}" onclick="event.stopPropagation()" style="margin:-2px 0 10px;"></div>` : ''}`;
+          </div>`;
       }).join('');
     }
   } else {
