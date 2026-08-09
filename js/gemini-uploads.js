@@ -1,0 +1,1630 @@
+/* ══════════════════════════════════════════════════════════
+   GEMINI FILE UPLOADS — no size cap of our own.
+   Small files are sent inline as base64 (one request, no extra
+   round trip). Anything too big for a single inline request is
+   streamed straight to Google's Files API instead and referenced
+   by URI — the bytes are sent directly from the File/Blob, so a
+   large file never has to be fully base64-encoded in memory first.
+   The only real ceiling left is the one the Gemini API itself
+   enforces (2GB per file — included on the free tier), so this app
+   no longer imposes anything smaller on top of that.
+══════════════════════════════════════════════════════════ */
+const GEMINI_MAX_FILE_BYTES         = 2 * 1024 * 1024 * 1024; // Gemini Files API hard limit, per file (free tier included)
+const GEMINI_INLINE_THRESHOLD_BYTES = 15 * 1024 * 1024;       // stay safely under Gemini's ~20MB inline request cap once base64 (~33%) overhead is added
+
+/* Bounding-box lookup (getBoundingBoxes, used by extractImagesForQuestions)
+   asks about at most this many image-bearing questions per request instead
+   of every one of them in a single call. Two independent problems this
+   fixes:
+     1. maxOutputTokens on that request is a fixed 4096 — a file with many
+        image questions could produce a response that gets cut off
+        mid-array, which fails JSON.parse and previously lost EVERY image
+        in the file, not just the ones past the cutoff. A bounded batch
+        keeps the expected response comfortably under that limit.
+     2. A single 429 used to wipe out every image in the file at once
+        (see callGeminiWithRetry's doc comment above getBoundingBoxes).
+        Batching doesn't prevent a 429 — callGeminiWithRetry still retries/
+        rotates/pauses on one same as before — but if a batch is the one
+        that can't ultimately be recovered, only THAT batch's questions
+        miss their image; every other batch in the file still succeeds
+        independently, instead of an all-or-nothing result for the whole
+        file. See extractImagesForQuestions below for the batching loop
+        itself.
+   Sized from the response shape, not guessed: each returned entry is
+   `{ "q_index": 25, "page": 4, "x": 0.12, "y": 0.34, "w": 0.56, "h": 0.22 }`
+   — roughly 20–25 tokens even accounting for formatting/whitespace — so 15
+   entries lands around 300–375 tokens, well under the 4096 cap with a wide
+   safety margin for a verbose or oddly-formatted response, while cutting
+   the number of requests (and therefore rate-limit exposure) noticeably
+   versus a smaller batch. */
+const GEMINI_BOUNDING_BOX_BATCH_SIZE = 15;
+
+/* ══════════════════════════════════════════════════════════
+   MODEL CONFIG — single source of truth.
+   Every feature (extraction, AI Solve, chat, explain, bulk tools,
+   bounding-box detection) builds its request URL through
+   geminiEndpoint() instead of hardcoding a model string, so:
+     1. There's exactly one place to change the default model.
+     2. If Google ever renames/retires GEMINI_PRIMARY_MODEL, the
+        app self-heals to Google's auto-updating alias instead of
+        hard-failing — or, worse, silently retrying a permanent
+        bad-request response forever. See isGeminiModelFallbackTrigger()
+        and its call sites in callGeminiWithRetry and getBoundingBoxes
+        below, which is what actually triggers the fallback.
+══════════════════════════════════════════════════════════ */
+const GEMINI_PRIMARY_MODEL  = 'gemini-2.5-flash';
+const GEMINI_FALLBACK_MODEL = 'gemini-flash-latest'; // Google's auto-updating "current stable Flash" alias
+
+/* Any of these HTTP statuses is treated as "this model isn't valid for
+   this request/account" rather than a transient failure — a retired or
+   renamed model can come back as either a 404 (Not Found) or a 400
+   (Bad Request), depending on the account and which Gemini endpoint
+   version is hit. Both are handled identically: swap in
+   GEMINI_FALLBACK_MODEL and let the caller's existing retry loop try
+   again. Auth/key problems (401/403, or a 400 whose message names an
+   API_KEY_* error) are NOT in this set — those are genuine key errors
+   and are always surfaced immediately by isKeyError() instead, checked
+   first at every call site below. */
+const GEMINI_MODEL_FALLBACK_STATUSES = [400, 404];
+
+function isGeminiModelFallbackTrigger(status) {
+  return GEMINI_MODEL_FALLBACK_STATUSES.includes(status);
+}
+
+/* Sampling params are only safe on the primary model. GEMINI_FALLBACK_MODEL
+   currently resolves to a Gemini 3.x model, which hard-rejects a
+   generationConfig containing temperature/topP/topK with an HTTP 400 --
+   even after the URL has already been switched to the fallback, those keys
+   left over from the original request would keep failing forever. Rather
+   than have every call site guess in advance whether it'll end up on the
+   fallback (it can't know that before the first attempt), each feature sets
+   its own tuned sampling values unconditionally and this list is stripped
+   out of the request body, in place, at the exact moment
+   resolveGeminiFallbackUrl() below decides to switch models -- so the
+   primary model always gets the tuned values, and the fallback model never
+   sees a key it would reject. */
+const GEMINI_SAMPLING_PARAM_KEYS = ['temperature', 'topP', 'topK'];
+
+function _stripGeminiSamplingParams(bodyObj) {
+  if (!bodyObj || !bodyObj.generationConfig) return;
+  GEMINI_SAMPLING_PARAM_KEYS.forEach(k => { delete bodyObj.generationConfig[k]; });
+}
+
+/* Same story as the sampling params above, for a different field:
+   js/ai-question-tools.js (Refine Question, Fill Choices, Add Choice) sets
+   `generationConfig.thinkingConfig: { thinkingBudget: 0 }` by default to
+   turn OFF Gemini 2.5's reasoning pass for those tools. GEMINI_FALLBACK_MODEL's
+   Gemini 3.x family uses a different thinking-config shape and hard-rejects
+   that field with its own HTTP 400 -- and because it was never being
+   stripped, every retry after the switch kept resending the exact same
+   rejected field, re-triggering the exact same 400 forever. That's why
+   this specifically showed up as a repeating "model error" loop only on
+   Refine/Fill Choices/Add Choice (the only features that ever set this
+   field), and only on keys that actually needed the fallback model in the
+   first place (a key that stays on the primary model never sends this
+   field to a model that rejects it). Stripped here, in place, the same
+   moment sampling params are, so the very next retry against the fallback
+   model doesn't carry over a field it doesn't understand either. */
+function _stripGeminiThinkingConfig(bodyObj) {
+  if (!bodyObj || !bodyObj.generationConfig) return;
+  delete bodyObj.generationConfig.thinkingConfig;
+}
+
+/* Both strips above only ever ran REACTIVELY, at the exact moment
+   resolveGeminiFallbackUrl() decided to switch a request from the primary
+   to the fallback model mid-loop. That covers a request that starts on the
+   primary model and gets rejected once. It does NOT cover a request that
+   is ALREADY pointed at the fallback model from the very first attempt —
+   which happens any time _geminiResolvedModel was already set to the
+   fallback by an earlier, unrelated call this session (e.g. extraction
+   already discovered this key needs the fallback, and now Refine Question
+   runs for the first time). That first attempt still carries whatever
+   temperature/thinkingConfig the feature unconditionally set, draws an
+   immediate 400 from the fallback model, and then resolveGeminiFallbackUrl's
+   own "already on the fallback, nothing left to switch to" early return
+   (see below) skips the strip entirely — so the exact same rejected body
+   gets resent forever, an infinite 400 loop that looks identical to the
+   original bug from the outside. This helper closes that gap by stripping
+   proactively, before the very first attempt, whenever the URL already
+   points at the fallback model — regardless of whether a switch is
+   happening in this call or already happened in a previous one. */
+function _stripGeminiFallbackIncompatibleParamsIfNeeded(url, bodyObj) {
+  if (!url || !url.includes(`/models/${GEMINI_FALLBACK_MODEL}:`)) return;
+  _stripGeminiSamplingParams(bodyObj);
+  _stripGeminiThinkingConfig(bodyObj);
+}
+
+// Set once, automatically, the first time the primary model draws one of
+// the statuses above (see isGeminiModelFallbackTrigger). After that every
+// NEW request goes straight to the fallback so the app doesn't re-discover
+// the same bad request on every call.
+let _geminiResolvedModel = null;
+
+/* Called whenever the active API key actually changes — both on an
+   auto-rotation (see _tryRotate below) and on a manual switch from the API
+   Key Manager (see useApiKey in ai-features.js). A model that 404s/400s on
+   one Google account/project isn't guaranteed to do the same on another,
+   so a key change should behave exactly like opening the site fresh: try
+   GEMINI_PRIMARY_MODEL again first, and only re-discover the fallback if
+   this key actually needs it too — rather than silently carrying over
+   whatever model the *previous* key happened to settle on. */
+function resetGeminiModelResolution() { _geminiResolvedModel = null; }
+
+function geminiActiveModel() { return _geminiResolvedModel || GEMINI_PRIMARY_MODEL; }
+
+function geminiEndpoint(model) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model || geminiActiveModel()}:generateContent`;
+}
+
+function _geminiSwapModelInUrl(url, model) {
+  return url.replace(/\/models\/[^/:]+:generateContent/, `/models/${model}:generateContent`);
+}
+
+/* Shared by callGeminiWithRetry and getBoundingBoxes: given a failed
+   response's status/body and the request URL that produced it, decides
+   whether to switch to GEMINI_FALLBACK_MODEL and returns the corrected
+   URL to use for the next attempt (or the original URL, unchanged, if no
+   switch is warranted). Centralizing this means both call sites — the
+   main retry loop and the best-effort bounding-box helper — treat every
+   bad-request status exactly the same way instead of drifting apart.
+
+   Only actually switches once: if the request is already pointed at
+   GEMINI_FALLBACK_MODEL, there's no second model left to fall back to,
+   so a repeat bad request here is left alone and falls through to the
+   caller's normal retry/give-up handling instead of re-logging a
+   no-op "switching..." message that wouldn't reflect anything real —
+   at that point the problem is something other than "wrong model"
+   (bad key, quota, network, account issue), and should be treated like
+   any other error rather than re-announcing a switch that isn't
+   happening. */
+function resolveGeminiFallbackUrl(status, url, logPrefix, bodyObj) {
+  if (!isGeminiModelFallbackTrigger(status)) return url;
+  if (url.includes(`/models/${GEMINI_FALLBACK_MODEL}:`)) return url; // already on the fallback — nothing left to switch to
+  console.warn(`${logPrefix}: "${geminiActiveModel()}" returned ${status} — switching to fallback model "${GEMINI_FALLBACK_MODEL}"${logPrefix === 'Gemini' ? ' for this and future requests' : ''}.`);
+  _geminiResolvedModel = GEMINI_FALLBACK_MODEL;
+  // The fallback model rejects temperature/topP/topK, and separately
+  // rejects thinkingConfig (a different field, different reason — see
+  // _stripGeminiThinkingConfig above) -- strip both from THIS request's
+  // body (in place) so the very next retry attempt against the new URL
+  // doesn't just trade a 404/400 "wrong model" for a fresh 400 on
+  // whichever of these fields it happens to hit first.
+  _stripGeminiSamplingParams(bodyObj);
+  _stripGeminiThinkingConfig(bodyObj);
+  return _geminiSwapModelInUrl(url, GEMINI_FALLBACK_MODEL);
+}
+
+/* Parses a JSON array returned by Gemini, and — if generation was cut off
+   partway through (hit maxOutputTokens, so the JSON is syntactically
+   incomplete) — salvages every fully-formed element instead of discarding
+   the whole response. Without this, one truncated response used to throw
+   away ALL items already generated (a whole file's worth of questions, or
+   every choice already written), not just the one that got cut off.
+
+   Returns { data, truncated }:
+     - data:      the parsed array (possibly shorter than what the model
+                   intended to return), or null if nothing usable was found.
+     - truncated: true if repair kicked in, so callers can flag the result
+                   as MAX_TOKENS-affected even when the API's own
+                   `finishReason` was missing/wrong.
+
+   Repair strategy: walk the raw text tracking string/escape state and
+   bracket depth to find the exact character range of every top-level
+   array element — an object ({...}), or a bare value (string/number/
+   true/false/null, for arrays of strings like {"choices": [...]}'s inner
+   array) — then JSON.parse each range ON ITS OWN, independently.
+
+   This matters because a malformed response isn't always cut off at the
+   very end — Gemini occasionally drops a comma or otherwise breaks the
+   syntax of ONE element in the middle of an otherwise-complete array (this
+   is what produced the "Expected ',' or '}' after property value" error
+   reported against this function: a defect partway through the response,
+   not a truncation at the tail). Re-parsing one giant prefix up to the
+   last-recognized element boundary — the previous approach — still
+   contains that bad element and fails identically. Parsing each element
+   separately means a defect anywhere only drops the one entry it's in;
+   every other element, before or after it, is still recovered. */
+function parseGeminiJsonArray(text) {
+  const clean = (text || '').replace(/```json|```/g, '').trim();
+  try {
+    const data = JSON.parse(clean);
+    return { data, truncated: false };
+  } catch (_) { /* fall through to repair */ }
+
+  if (!clean.startsWith('[')) return { data: null, truncated: false };
+
+  let depth = 0, inString = false, escaped = false, elStart = -1;
+  let closedProperly = false, sawBadElement = false;
+  const data = [];
+  const flushElement = (end) => {
+    const raw = clean.slice(elStart, end).trim();
+    elStart = -1;
+    if (!raw) return; // trailing comma, or nothing between separators
+    try { data.push(JSON.parse(raw)); }
+    catch (_) { sawBadElement = true; } // this one entry is malformed — skip just it
+  };
+
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    // First non-whitespace character of a not-yet-started element, at the
+    // top level of the array (depth 1) — marks where it begins, whatever
+    // kind of value it turns out to be.
+    if (depth === 1 && elStart === -1 && ch !== ',' && ch !== ']' && !/\s/.test(ch)) {
+      elStart = i;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{' || ch === '[') { depth++; continue; }
+    if (ch === '}') { depth--; continue; }
+    if (ch === ']') {
+      depth--;
+      if (depth === 0) { flushElement(i); closedProperly = true; break; }
+      continue;
+    }
+    if (depth === 1 && ch === ',') { flushElement(i); continue; }
+  }
+  // Ran out of text mid-element (a genuine truncation) — try parsing
+  // whatever's left anyway; it usually fails (incomplete), which is fine,
+  // it just means that last dangling entry gets skipped like any other bad
+  // one, while everything recovered before it is kept.
+  if (!closedProperly && elStart !== -1) flushElement(clean.length);
+
+  const truncated = !closedProperly || sawBadElement;
+  return { data: data.length ? data : null, truncated };
+}
+
+/* Same salvage idea as parseGeminiJsonArray, but for a small JSON OBJECT
+   whose one array-valued field got cut off mid-generation — e.g.
+   {"choices": ["...", "...", "..."]} from the distractor-writing tools,
+   where a small maxOutputTokens budget occasionally isn't quite enough.
+   Finds `"<fieldName>":` then locates that field's own '[' ... and runs it
+   through the same bracket/string-aware repair used above.
+
+   Returns { data, truncated } where `data` is the recovered array (or null
+   if nothing after the field name was complete). */
+function parseGeminiJsonObjectArrayField(text, fieldName) {
+  const clean = (text || '').replace(/```json|```/g, '').trim();
+  const keyMatch = clean.match(new RegExp(`"${fieldName}"\\s*:\\s*\\[`));
+  if (!keyMatch) return { data: null, truncated: true };
+  const arrayText = clean.slice(keyMatch.index + keyMatch[0].length - 1); // from the '[' onward
+  return parseGeminiJsonArray(arrayText);
+}
+
+function formatBytes(bytes) {
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + 'GB';
+  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+  if (bytes >= 1024) return (bytes / 1024).toFixed(0) + 'KB';
+  return bytes + 'B';
+}
+
+/* Throws a friendly error if a file exceeds Gemini's own per-file limit —
+   the only size restriction this app enforces. */
+function assertWithinGeminiFileLimit(file) {
+  if (file.size > GEMINI_MAX_FILE_BYTES) {
+    throw new Error(`"${file.name}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API, so it can't be uploaded.`);
+  }
+}
+
+/* Uploads a file to Gemini's resumable Files API and waits for it to
+   finish processing. Returns { mime_type, file_uri }. */
+async function uploadFileToGeminiFileAPI(file, apiKey, mimeType) {
+  mimeType = mimeType || file.type || 'application/octet-stream';
+
+  const startResp = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files`, {
+    method: 'POST',
+    headers: {
+      'x-goog-api-key': apiKey,
+      'X-Goog-Upload-Protocol': 'resumable',
+      'X-Goog-Upload-Command': 'start',
+      'X-Goog-Upload-Header-Content-Length': String(file.size),
+      'X-Goog-Upload-Header-Content-Type': mimeType,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ file: { display_name: file.name } })
+  });
+  if (!startResp.ok) throw new Error(`Google rejected the upload of "${file.name}" — please check your connection and try again.`);
+  const uploadUrl = startResp.headers.get('x-goog-upload-url');
+  if (!uploadUrl) throw new Error(`Google didn't return an upload URL for "${file.name}" — please try again.`);
+
+  const uploadResp = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Length': String(file.size),
+      'X-Goog-Upload-Offset': '0',
+      'X-Goog-Upload-Command': 'upload, finalize'
+    },
+    body: file
+  });
+  if (!uploadResp.ok) throw new Error(`Uploading "${file.name}" to Google failed — please try again.`);
+  const info = await uploadResp.json();
+  let fileInfo = info && info.file;
+  if (!fileInfo || !fileInfo.uri) throw new Error(`Google didn't return a usable reference for "${file.name}".`);
+
+  // Large PDFs/videos can take a few seconds to finish processing server-side.
+  let attempts = 0;
+  while (fileInfo.state === 'PROCESSING' && attempts < 30) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const checkResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileInfo.name}`, {
+        headers: { 'x-goog-api-key': apiKey }
+      });
+      if (checkResp.ok) fileInfo = await checkResp.json();
+    } catch (e) {}
+    attempts++;
+  }
+  if (fileInfo.state === 'FAILED') throw new Error(`Google failed to process "${file.name}" — try a different file.`);
+
+  return { mime_type: fileInfo.mimeType || mimeType, file_uri: fileInfo.uri };
+}
+
+/* Builds a Gemini request "part" for a file: inline base64 for small files,
+   automatic Files-API upload for anything bigger. This is the one place
+   that decides inline-vs-upload and enforces Gemini's own size ceiling, so
+   every upload path in the app behaves consistently and stays Gemini-only. */
+async function buildGeminiFilePart(file, apiKey, mimeTypeOverride) {
+  assertWithinGeminiFileLimit(file);
+  const mimeType = mimeTypeOverride || file.type || 'application/octet-stream';
+  if (file.size <= GEMINI_INLINE_THRESHOLD_BYTES) {
+    const base64 = await fileToBase64(file);
+    return { inline_data: { mime_type: mimeType, data: base64 } };
+  }
+  const { mime_type, file_uri } = await uploadFileToGeminiFileAPI(file, apiKey, mimeType);
+  return { file_data: { mime_type, file_uri } };
+}
+
+const CQ_EXTRACTION_PROMPT = `You are extracting multiple-choice quiz questions from an uploaded document (image or PDF).
+
+STRICT RULES — follow exactly, no exceptions:
+1. Extract EVERY single question that appears anywhere in the document. Do not skip, merge, summarize, or leave out any question — even ones that look incomplete, partial, blurry, or unusual.
+2. Reproduce each question's text EXACTLY as written in the source — same wording, numbers, punctuation, and even typos. Do NOT correct, rephrase, shorten, translate, or "improve" anything.
+3. Reproduce EVERY answer choice EXACTLY as written, in the same order, using the same labels (A, B, C, D, E, ... — convert numeric labels like 1,2,3 to A,B,C). Do not omit, reorder, merge, or reword any choice.
+4. If the document indicates which choice is correct (circled, bolded, underlined, highlighted, starred, checked, or listed in a separate answer key), use EXACTLY that choice as the "answer" for that question. Do not second-guess or change a marked answer.
+5. If a specific question has NO indicated correct answer anywhere in the document, set its "answer" to the special value "__NO_KEY__". Do NOT guess or infer an answer — use "__NO_KEY__" exactly.
+6. Do not invent, add, duplicate, or remove any questions or options that are not present in the source document.
+7. For each question, set "has_image" to true if THIS SPECIFIC question is accompanied by an image, diagram, figure, table, chart, graph, X-ray, CT scan, ECG, histology slide, or any other visual element that is part of it. Set it to false otherwise.
+8. CASE / VIGNETTE CLUSTERS: sometimes a shared clinical case, patient vignette, scenario, lab panel, or image is presented ONCE and then several questions that follow it all refer back to it (e.g. "A 45-year-old man presents with... Questions 12–15 refer to the scenario above."), without repeating that shared information in each question's own text. Whenever you detect this pattern, structure it as ONE core question plus its dependent questions:
+   - Identify the ONE question that is paired with the shared case/vignette/scenario/lab panel/image in the source document — this is the CORE question. Its "question" field MUST include the FULL case/vignette text verbatim (reproduced exactly as written, same as any other question text) followed by that question's own actual question — the case must live IN the core question's own text, never only in a separate field. Set "case_is_core" to true on this question. If the image is part of the case, set "has_image" true on this question.
+   - For every OTHER question in the cluster (the dependents), keep its "question" field as ONLY that question's own specific wording — do NOT repeat the shared case text inside it, exactly as the source document itself doesn't repeat it. Set "case_is_core" to false (or omit it) on these.
+   - Give every question in the cluster — the core question AND every question that depends on it — the SAME "case_group" string (e.g. "case_1", "case_2", ...). Leave "case_group" empty/omitted for standalone questions that don't share context with any other question.
+   - Output the core question immediately followed by its dependent questions, in the same order they appear in the source document.
+   - Do not invent a cluster — only use "case_group"/"case_is_core" when the source document actually presents shared context that multiple questions depend on. A cluster always needs exactly one core question — never zero, never more than one.
+   - NESTED SUB-CASES (use this whenever the source itself nests context, not by default): sometimes ONE question inside a cluster introduces its OWN additional shared information — e.g. a follow-up lab result, imaging finding, or scenario update — that only SOME of the cluster's remaining questions depend on, while the rest still depend only on the outer case. When you see this, that in-between question becomes a "sub-case": give it a "case_link_id" string that's unique within this cluster (e.g. "sub_1"), still keep it in the same "case_group" as everything else, and leave its own "case_parent_id" pointing at whatever it itself depends on (empty/omitted if it depends directly on the outer case_group's core). Then, on each question that depends specifically on that sub-case rather than on the outer case directly, set "case_parent_id" to that same "case_link_id" string instead of leaving it empty. This can nest to any depth — a sub-case can itself have a further sub-case inside it — always by chaining "case_parent_id" to the immediate parent's own "case_link_id", never by inventing a second "case_group" for the nested part. A question with no "case_parent_id" set is understood to depend directly on the cluster's root core — this is the common case; only set "case_parent_id" when a question genuinely depends on a MORE SPECIFIC nested sub-case, not the outer one. Example: Q1 is the root core (case_group "case_1"). Q2 depends directly on Q1 (case_group "case_1", no case_parent_id). Q3 also depends directly on Q1, AND itself introduces a follow-up lab result some later questions depend on — so Q3 gets case_group "case_1", case_link_id "sub_1" (no case_parent_id of its own, since Q3 depends directly on Q1). Q4 and Q5 depend on that lab result specifically — both get case_group "case_1" and case_parent_id "sub_1".
+9. CROSS-PAGE CONTINUATIONS: treat the ENTIRE document as one continuous stream of content — page boundaries are just where the scan/print was cut and carry NO semantic meaning. Never let a page break cause you to drop, truncate, or duplicate anything. Before you emit anything, apply this merging rule at EVERY page transition in the document: mentally stitch the bottom portion of page N directly onto the top portion of page N+1 and read that stitched region as a single uninterrupted block of content, exactly as if the page break were never there — do this for every single page boundary, not just ones that look like they cut something off. In particular, watch for these two exact failure patterns and never let either happen:
+   - PATTERN A — stem on one page, only SOME of its choices on the next: the question stem and the first choice(s) (e.g. A–C) end at the bottom of one page, and the remaining choice(s) (e.g. D, or D and E) start at the top of the next page. The wrong behavior is emitting the question with only the choices found on the first page and silently leaving off the rest. The correct behavior: pull the remaining choice(s) from the top of the next page and merge them into the SAME question's "options" object, in their original A/B/C/D/E order, so the emitted question has every choice.
+   - PATTERN B — stem on one page, ALL of its choices on the next: the question stem (and possibly its number) ends at the bottom of one page with no choices visible below it, and every one of its choices actually starts at the top of the next page. The wrong behavior is discarding the whole question because no complete question was visible on either page by itself. The correct behavior: recognize the stem at the bottom of one page as belonging to the choices at the top of the next page, and emit ONE complete question combining both — never drop the question just because its stem and its choices happened to fall on different pages.
+   - The same stitching applies to an indicated correct answer split from its question this way — e.g. the stem and choices end one page and an underlined/circled/starred choice or "Ans: C" marking appears at the top of the next — or a question appearing on one page with its answer key only in an answer-key section on a different/later page. Always look across the WHOLE document and merge these into a single complete question object. Do not treat "no answer choices found on this page" or "question looks cut off at the page edge" as a reason to drop the question or drop any of its choices — first search the rest of the document (including the very next page and any answer-key section) for the missing pieces before falling back to the "no options" or "__NO_KEY__" handling.
+   - Likewise, if an answer-key section (e.g. a list like "12-C, 13-A, 14-B...") appears anywhere in the document — even on a page far from the questions themselves, such as at the very end — match each entry to its corresponding question by number and use it to set "answer", even though the key is physically separated from the question text.
+   - A case/vignette cluster (rule 8), including any nested sub-cases inside it, can itself span a page break — the shared case text may end one page and the dependent questions continue on the next; keep them in the same cluster (and the same sub-case nesting) and never cut the case text short just because the page changed.
+   - Never emit a partial or truncated question just because its remaining text, options, or answer live on a different page. If, after checking the entire document, some piece genuinely cannot be found anywhere, apply rule 5 ("__NO_KEY__") for a missing answer, but still include every option and word of stem text that does exist anywhere in the document — do not drop the question outright.
+   - FINAL CHECK before you output the array: walk through every page boundary in the document one more time and specifically ask, for each one, "is there a stem at the bottom of this page whose choices are missing or incomplete, and do they appear at the top of the next page? Is there a block of choices at the top of this page with no stem above them, meaning the stem is actually at the bottom of the previous page?" If either is true, that is exactly Pattern A or Pattern B above — go back and merge before finalizing your answer. Do this for every page transition, not only the ones that seem obviously cut off.
+
+Return ONLY a JSON array, one object per question, in exactly this format:
+[
+  {
+    "question": "exact question text",
+    "options": { "A": "exact choice text", "B": "exact choice text", "C": "exact choice text", "D": "exact choice text" },
+    "answer": "A",
+    "has_image": false,
+    "case_group": "",
+    "case_is_core": false,
+    "case_link_id": "",
+    "case_parent_id": ""
+  }
+]
+
+The "answer" value must be one of the keys present in that question's "options" object. Output nothing besides this JSON array — no markdown fences, no commentary.
+
+Be fully deterministic: given the same document, always extract the exact same questions, options, and answers, in the exact same way every time.`;
+
+const CQ_RESPONSE_SCHEMA = {
+  type: 'ARRAY',
+  items: {
+    type: 'OBJECT',
+    properties: {
+      question: { type: 'STRING' },
+      options: {
+        type: 'OBJECT',
+        properties: {
+          A: { type: 'STRING' }, B: { type: 'STRING' }, C: { type: 'STRING' }, D: { type: 'STRING' },
+          E: { type: 'STRING' }, F: { type: 'STRING' }, G: { type: 'STRING' }, H: { type: 'STRING' },
+          I: { type: 'STRING' }, J: { type: 'STRING' }
+        }
+      },
+      answer: { type: 'STRING' },
+      has_image: { type: 'BOOLEAN' },
+      case_group: { type: 'STRING' },
+      case_is_core: { type: 'BOOLEAN' },
+      case_link_id: { type: 'STRING' },
+      case_parent_id: { type: 'STRING' }
+    },
+    required: ['question', 'options', 'answer']
+  }
+};
+
+/* ══════════════════════════════════════════════════════════
+   PAGE-BOUNDARY VERIFICATION PASS — a second, targeted request that
+   re-checks the just-extracted draft against the source document for
+   exactly the two cross-page failure patterns rule 9 above exists to
+   prevent. This exists because rule 9 is a prompting instruction, not a
+   code-level guarantee — Gemini can still occasionally miss a page-break
+   merge on the first pass. This is a FIXED cost (exactly one extra
+   request per uploaded file, regardless of how many pages it has — see
+   _verifyExtractionPageBoundaries in ai-solve.js), not a per-page or
+   per-question chunking scheme, so it doesn't scale with document size
+   and stays governed by the same GEMINI_MIN_REQUEST_SPACING_MS pacing
+   gate as every other request (see callGeminiWithRetry → _geminiRateGate
+   above — nothing extra to opt into, it's automatic for any call through
+   that function). If this call fails, times out, or comes back
+   unusable, the caller silently keeps the original extraction result —
+   verification is a best-effort improvement, never a blocker. */
+const CQ_VERIFICATION_PROMPT_HEADER = `You already extracted the multiple-choice questions below from the attached document. Your ONLY job now is to re-check them against the document for content lost or wrongly split at page breaks — nothing else.
+
+Re-read the ENTIRE attached document, then re-check every page boundary for these two exact problems:
+   - PATTERN A — a question's stem and SOME of its choices end at the bottom of one page, and its REMAINING choice(s) are at the top of the next page, but the draft below only has the choices that were on the first page. Fix: add the missing choice(s) from the top of the next page into that question's "options", in their correct A/B/C/D/E order.
+   - PATTERN B — a question's stem ends at the bottom of one page with ALL of its choices at the top of the next page, but the draft below is MISSING that question entirely. Fix: insert the complete question (stem + all its choices) at the correct position in the array, in the same document reading order it appears in.
+   - Also check: an indicated correct answer split from its question across a page break (e.g. the answer marking is on the next page from the stem/choices), or an answer-key section anywhere in the document (even far from the questions) whose entries weren't matched to their question by number — fix "answer" for any question this applies to.
+
+STRICT: this is a correction pass, not a rewrite. If a question already has all its choices and nothing is missing, leave it EXACTLY as given below — same wording, same order, same case_group/case_is_core/case_link_id/case_parent_id, same has_image, same answer. Only touch a question if you find one of the exact problems above. Do not reorder, reword, merge, split, or drop anything that isn't affected. If the draft below is already complete and correct, return it back unchanged.
+
+Return ONLY the corrected JSON array in the exact same schema as the draft — no markdown fences, no commentary, no explanation of what you changed.
+
+Draft extracted so far:
+`;
+
+/* ── Shared request pacing (prevents hitting Gemini's free-tier RPM cap) ──
+   Google's free tier caps Gemini 2.5 Flash at roughly 10–15 requests per
+   minute *per project* (see https://ai.google.dev/gemini-api/docs/rate-limits) —
+   and that cap is shared across every request this app makes with a given
+   key, no matter which feature fired it.
+
+   Extraction only ever sends one request per uploaded file (usually just a
+   couple), so it naturally stays well under that cap. The bulk per-question
+   passes — AI Solve, Fill Choices, Refine Questions, whether run from the
+   post-extraction pipeline or from an editor's own bulk-tools panel — fire
+   one request per question (or per 20-question batch, for Solve) and used
+   to only pace themselves internally (250ms, or nothing at all) — nowhere
+   near enough spacing, and each loop only knew about its OWN requests, so
+   two bulk passes running at once (e.g. one editor's Fill Choices while
+   another's Refine is also going) could double up and blow through the cap
+   even faster.
+
+   This gate enforces one shared minimum spacing between ANY two Gemini
+   requests the app sends, tracked globally rather than per-loop, so every
+   caller — bulk or single, extraction or editor — automatically queues
+   behind the same pace instead of assuming it has the whole rate budget to
+   itself. If your key is on a paid tier (much higher RPM), this constant
+   can safely be lowered. */
+const GEMINI_MIN_REQUEST_SPACING_MS = 6500; // ≈9 requests/minute — a safe margin under the ~10–15 RPM free-tier cap
+let _geminiLastRequestAt = 0;
+async function _geminiRateGate(cancelToken) {
+  const wait = _geminiLastRequestAt + GEMINI_MIN_REQUEST_SPACING_MS - Date.now();
+  if (wait > 0) await cancellableSleep(wait, cancelToken);
+  _geminiLastRequestAt = Date.now();
+}
+
+/* Finds the single file_data part (a reference into Google's Files API)
+   inside a request body, if any — inline_data (base64) parts don't need
+   this since those bytes are valid under any key. Returns a mutable
+   { parts, idx } handle so a rotation can patch it in place, or null if
+   this request doesn't reference an uploaded file at all. */
+function _findFileDataPartRef(bodyObj) {
+  if (!bodyObj || !Array.isArray(bodyObj.contents)) return null;
+  for (const content of bodyObj.contents) {
+    if (!Array.isArray(content.parts)) continue;
+    const idx = content.parts.findIndex(p => p && p.file_data);
+    if (idx !== -1) return { parts: content.parts, idx };
+  }
+  return null;
+}
+
+/* ── Retry helper: retries indefinitely with exponential back-off (2s, 4s, 8s… capped at 30s).
+   Only surfaces an error immediately if it's API-key-related
+   (HTTP 400 with API_KEY_INVALID / 401 / 403) AND no other configured
+   API key can be rotated to instead (see SMART API ROTATION below).
+
+   A bad-request response — HTTP 404 ("model not found") or HTTP 400
+   ("bad request", e.g. an invalid model name/parameter) — does NOT
+   surface immediately and does NOT change the loop's structure — it
+   still goes through the exact same onRetry/backoff/continue path as any
+   other error below. The only extra thing that happens is that `url`
+   gets corrected in place to point at GEMINI_FALLBACK_MODEL before that
+   same retry fires, so the loop it's already going to run keeps
+   retrying, just against a request that's actually able to succeed.
+   Both statuses are handled identically via resolveGeminiFallbackUrl();
+   see the model config at the top of this file for
+   GEMINI_PRIMARY_MODEL / GEMINI_FALLBACK_MODEL /
+   GEMINI_MODEL_FALLBACK_STATUSES. A 400 whose message names an
+   API_KEY_* error is still caught by isKeyError() below FIRST, so
+   genuine key problems never fall through to this fallback path.
+
+   The API key is sent via the `x-goog-api-key` header (Google's documented
+   auth method: https://ai.google.dev/gemini-api/docs/api-key), NOT as a
+   `?key=` query parameter. As of mid-2026 Google AI Studio issues new keys
+   in the "Auth key" format (prefixed `AQ.`, replacing the old `AIza...`
+   "Standard key" format) — Auth keys are unreliable when passed as a query
+   parameter (inconsistent 401/403/404 responses depending on the account),
+   but work correctly via this header regardless of which key format the
+   user has. Every caller must pass `apiKey` in the options object instead
+   of appending it to `url` itself.
+
+   ── SMART API ROTATION ──
+   This function is the single place rotation actually happens, so every
+   feature that calls it (extraction, generation, explanations, chat, bulk
+   tools…) gets it for free with no per-feature plumbing:
+     - Each key's consecutive-429 streak is tracked centrally (js/api-rotation.js),
+       not just for this one call — so the "3 strikes" rule holds even
+       across separate calls/questions using the same key back to back.
+     - The moment a key crosses that threshold, the ACTIVE key is switched
+       (setActiveApiKeyId) and every "currently using…" badge/button in the
+       UI is refreshed immediately (see _broadcastRotationUI), then this
+       same retry loop just continues with the new key — the caller's own
+       state (loop position, accumulated results, etc.) is completely
+       untouched, since none of that ever left this one function call.
+     - A rotation also resets the resolved model back to
+       GEMINI_PRIMARY_MODEL (see resetGeminiModelResolution) — exactly the
+       same as opening the site fresh — since a model that needed the
+       fallback on one key/project isn't guaranteed to need it on another.
+     - If the request carried an uploaded (Files-API) document, that
+       reference belongs to the OLD key/project and won't resolve under the
+       new one — so when `fileForReupload` is given, the file is silently
+       re-uploaded under the new key and the request body patched in place
+       before the retry fires.
+     - If literally every configured key is currently excluded (all rate-
+       limited / invalid), rotation keeps cycling between them anyway
+       (a key's cooldown can lapse at any moment) instead of getting stuck
+       on one — see pickNextApiKey()'s doc comment. `onAllRateLimited`, if
+       given, fires once per attempt so callers can surface a persistent
+       "add another key" note while this is happening.
+     - A brand-new key pasted in mid-run is picked up on the very next
+       rotation decision with no extra wiring — pickNextApiKey() always
+       reads the live key list fresh. While a call is asleep between
+       retries with nothing left to rotate to, that sleep also wakes early
+       the instant the key list changes, instead of finishing its full
+       backoff first.
+     - On success, the returned object gets two extra (non-API) fields
+       attached — `__rotatedApiKey` and `__rotatedFilePart` — set only if
+       a rotation actually happened during this call, so callers that keep
+       their own local `apiKey`/`filePart` variables for later requests
+       (e.g. the extraction pipeline's follow-up image-cropping pass) can
+       pick up the values that actually ended up succeeding. ──────── */
+async function callGeminiWithRetry(url, bodyObj, { onRetry, cancelToken, pauseCheck, apiKey, fileForReupload, onAllRateLimited } = {}) {
+  const KEY_ERRORS = ['API_KEY_INVALID', 'API_KEY_NOT_VALID', 'INVALID_API_KEY',
+                      'PERMISSION_DENIED', 'API key not valid'];
+
+  function isKeyError(status, data) {
+    if (status === 401 || status === 403) return true;
+    const msg = (data && data.error && data.error.message) || '';
+    const code = (data && data.error && data.error.code) || 0;
+    if (code === 400 && KEY_ERRORS.some(k => msg.includes(k))) return true;
+    return false;
+  }
+
+  // How many *successive* rate-limit/model-error failures to tolerate,
+  // once a pause has actually been requested, before giving up on reaching
+  // the next checkpoint normally and falling back to pausing right here
+  // instead of retrying forever. While no pause is requested, these are
+  // retried exactly as before — this only changes behavior when the user
+  // is actively trying to pause.
+  // (In practice, automatic key rotation below now resolves most such
+  // streaks long before this even has a chance to matter — this remains
+  // as a last-resort safety net for the single-key case.)
+  const RATE_LIMIT_PAUSE_FALLBACK_THRESHOLD = 20;
+
+  const initialKeyId = _findKeyIdByValue(apiKey);
+  let currentKeyId    = initialKeyId;
+  let rotatedFilePart = null; // set if a Files-API re-upload happened mid-call
+
+  // Wait for a shared slot before this call's very first attempt — retries
+  // after a failure already back off exponentially below, so they don't
+  // need (and shouldn't get) a second helping of this same delay.
+  await _geminiRateGate(cancelToken);
+  if (cancelToken && cancelToken.cancelled) {
+    const e = new Error('cancelled'); e._cancelled = true; throw e;
+  }
+
+  // See _stripGeminiFallbackIncompatibleParamsIfNeeded above: covers the
+  // case where this call's very first attempt is already pointed at
+  // GEMINI_FALLBACK_MODEL (because an earlier, unrelated call this session
+  // already resolved to it), which the reactive strip inside the retry
+  // loop below never reaches.
+  _stripGeminiFallbackIncompatibleParamsIfNeeded(url, bodyObj);
+
+  /* Attempts to rotate away from `fromKeyId` to another configured key.
+     Returns true if a rotation actually happened (and updates `apiKey` /
+     `currentKeyId` / the request body / the global active key / the UI
+     as a side effect); false if there's nowhere else to rotate to. */
+  async function _tryRotate(fromKeyId) {
+    const next = (typeof pickNextApiKey === 'function') ? pickNextApiKey(fromKeyId) : null;
+    if (!next) return false;
+
+    const fromId = fromKeyId;
+    apiKey       = next.key;
+    currentKeyId = next.id;
+    try { setActiveApiKeyId(next.id); } catch (e) {}
+    // Same reset a manual key switch gets (see useApiKey in ai-features.js)
+    // — try the primary model again on the new key rather than carrying
+    // over a fallback the OLD key needed. If this particular request had
+    // already been switched to the fallback URL, point it back at the
+    // primary model too so the very next attempt actually tries it.
+    if (typeof resetGeminiModelResolution === 'function') resetGeminiModelResolution();
+    if (url.includes(`/models/${GEMINI_FALLBACK_MODEL}:`)) {
+      url = _geminiSwapModelInUrl(url, GEMINI_PRIMARY_MODEL);
+    }
+
+    // Files-API uploads are scoped to the key/project that made them — a
+    // key rotation invalidates any file_data reference already in this
+    // request, so re-upload under the new key before retrying.
+    const fileRef = _findFileDataPartRef(bodyObj);
+    if (fileRef && fileForReupload && fileForReupload.file) {
+      try {
+        const newPart = await buildGeminiFilePart(fileForReupload.file, apiKey, fileForReupload.mimeType);
+        fileRef.parts[fileRef.idx] = newPart;
+        rotatedFilePart = newPart;
+      } catch (e) {
+        // Re-upload failed — fall through and let the next attempt surface
+        // whatever real error Google returns for the now-stale reference,
+        // rather than silently pretending the rotation fully succeeded.
+        console.warn('callGeminiWithRetry: file re-upload after key rotation failed:', e && e.message);
+      }
+    }
+
+    try { _broadcastRotationUI({ fromId, toId: next.id, toLabel: next.label, reason: 'rotation' }); } catch (e) {}
+    return true;
+  }
+
+  let attempt = 0;
+  let consecutiveRotatableFail = 0; // 429s AND plain (non-key-error) 400s both count here
+  while (true) {
+    // Check for cancellation before every attempt (including between retries)
+    if (cancelToken && cancelToken.cancelled) {
+      const e = new Error('cancelled'); e._cancelled = true; throw e;
+    }
+    attempt++;
+
+    // Real abort — not just "ignore the result once it comes back". Stashing
+    // the controller on the token means whoever cancels it (e.g. the user
+    // confirming they want to switch API keys mid-request) can call
+    // controller.abort() and the actual network request is killed immediately.
+    const controller = new AbortController();
+    if (cancelToken) cancelToken.controller = controller;
+
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['x-goog-api-key'] = apiKey;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(bodyObj),
+        signal: controller.signal
+      });
+      if (cancelToken) cancelToken.controller = null;
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        const msg = (data && data.error && data.error.message) || `HTTP ${resp.status}`;
+        const err = new Error(msg);
+        err._httpStatus = resp.status;
+        err._apiData    = data;
+        if (isKeyError(resp.status, data)) {
+          // The key itself is broken (revoked/invalid) — no amount of
+          // retrying fixes that, but another configured key might still
+          // work fine, so try rotating once before giving up entirely.
+          if (currentKeyId && typeof markKeyInvalid === 'function') markKeyInvalid(currentKeyId);
+          if (await _tryRotate(currentKeyId)) {
+            consecutiveRotatableFail = 0; attempt = 0;
+            if (onRetry) onRetry(attempt, { rotated: true });
+            continue;
+          }
+          throw Object.assign(err, { _keyError: true });
+        }
+
+        // A bad-request response (404 "model not found", or 400 "bad
+        // request") usually means the model this app is requesting isn't
+        // valid for this account (renamed/retired/not enabled). Correct
+        // the URL itself here — swap in Google's auto-updating fallback
+        // alias — so the *next* iteration of this same infinite retry
+        // loop (below, unchanged) has a real chance of succeeding instead
+        // of retrying the identical broken request forever.
+        url = resolveGeminiFallbackUrl(resp.status, url, 'Gemini', bodyObj);
+
+        // A plain 400 ("bad request" — usually the model isn't valid for
+        // this account/key, or some other request-shape rejection that
+        // isn't about the key itself) is treated exactly like a 429 here:
+        // 2 consecutive hits triggers the same rotation/cooldown logic in
+        // js/api-rotation.js. The only difference is cosmetic — it's
+        // recorded under reason 'model_error' instead of 'rate_limited',
+        // so the API Key Manager's status chip reads "Model error" rather
+        // than "Rate-limited" for a key excluded this way.
+        if (resp.status === 429 || resp.status === 400) {
+          consecutiveRotatableFail++;
+          const justExcluded = currentKeyId && typeof recordApiFailure === 'function'
+            ? recordApiFailure(currentKeyId, resp.status) : false;
+
+          if (justExcluded || (currentKeyId && typeof isKeyExcluded === 'function' && isKeyExcluded(currentKeyId))) {
+            if (await _tryRotate(currentKeyId)) {
+              // Fresh key, fresh streak — retry right away instead of
+              // sleeping out a backoff that belonged to the old, exhausted key.
+              consecutiveRotatableFail = 0; attempt = 0;
+              if (onRetry) onRetry(attempt, { rotated: true });
+              continue;
+            }
+          }
+
+          if (typeof allKeysRateLimited === 'function' && allKeysRateLimited() && onAllRateLimited) {
+            try { onAllRateLimited(); } catch (e) {}
+          }
+
+          if (pauseCheck && pauseCheck() && consecutiveRotatableFail >= RATE_LIMIT_PAUSE_FALLBACK_THRESHOLD) {
+            throw Object.assign(err, { _rateLimitPauseFallback: true });
+          }
+        } else {
+          consecutiveRotatableFail = 0;
+        }
+
+        if (onRetry) onRetry(attempt);
+        // Cancellable sleep between retries — also wakes early if the key
+        // list changes (e.g. the user just pasted in a new key), so a
+        // freshly-added key gets used on the very next attempt instead of
+        // waiting out the rest of this backoff first.
+        await cancellableSleep(Math.min(2000 * Math.pow(2, attempt - 1), 30000), cancelToken, true);
+        continue;
+      }
+
+      // Even on success, honor a cancellation that happened while this request was in flight
+      if (cancelToken && cancelToken.cancelled) {
+        const e = new Error('cancelled'); e._cancelled = true; throw e;
+      }
+
+      if (currentKeyId && typeof recordApiSuccess === 'function') recordApiSuccess(currentKeyId);
+      if (currentKeyId && currentKeyId !== initialKeyId) data.__rotatedApiKey = apiKey;
+      if (rotatedFilePart) data.__rotatedFilePart = rotatedFilePart;
+      return data; // success
+    } catch (err) {
+      if (cancelToken) cancelToken.controller = null;
+      // fetch() rejects with an AbortError the instant controller.abort() is called
+      if (err.name === 'AbortError' || (cancelToken && cancelToken.cancelled)) {
+        const e = new Error('cancelled'); e._cancelled = true; throw e;
+      }
+      if (err._keyError || err._cancelled || err._rateLimitPauseFallback) throw err; // propagate immediately
+      consecutiveRotatableFail = 0; // a genuine network error resets the streak (unrelated to key health)
+      if (onRetry) onRetry(attempt);
+      await cancellableSleep(Math.min(2000 * Math.pow(2, attempt - 1), 30000), cancelToken);
+    }
+  }
+}
+
+/* Resolves after `ms` OR immediately if cancelToken.cancelled becomes true
+   OR — when `wakeOnKeysChange` is true — the instant the configured API
+   key list changes (add/remove/edit), so a retry loop that's waiting out
+   a backoff with no key left to rotate to notices a freshly-added key
+   right away instead of finishing its full sleep first. */
+function cancellableSleep(ms, cancelToken, wakeOnKeysChange) {
+  return new Promise(resolve => {
+    if (cancelToken && cancelToken.cancelled) { resolve(); return; }
+    const startGen = (wakeOnKeysChange && typeof getApiKeysGeneration === 'function') ? getApiKeysGeneration() : null;
+    const t = setTimeout(resolve, ms);
+    if (cancelToken || startGen !== null) {
+      // Poll every 100 ms so cancellation/key changes are near-instant even mid-sleep
+      const poll = setInterval(() => {
+        if (cancelToken && cancelToken.cancelled) { clearTimeout(t); clearInterval(poll); resolve(); return; }
+        if (startGen !== null && getApiKeysGeneration() !== startGen) { clearTimeout(t); clearInterval(poll); resolve(); }
+      }, 100);
+      // Also clear the poll when the timer fires naturally
+      setTimeout(() => clearInterval(poll), ms + 50);
+    }
+  });
+}
+
+/* ── Load an HTMLImageElement from a data-URL ── */
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload  = () => resolve(img);
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = dataUrl;
+  });
+}
+
+/* ── Render a single PDF page to a canvas using pdf.js, return dataURL ── */
+async function renderPdfPageToDataUrl(base64Data, pageNum) {
+  // Lazy-load pdf.js from CDN
+  if (!window.pdfjsLib) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload  = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+  const pdfLib = window.pdfjsLib;
+  const binary = atob(base64Data);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const pdf  = await pdfLib.getDocument({ data: bytes }).promise;
+  const page = await pdf.getPage(pageNum);
+  const scale    = 2;
+  const viewport = page.getViewport({ scale });
+  const canvas   = document.createElement('canvas');
+  canvas.width   = viewport.width;
+  canvas.height  = viewport.height;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
+}
+
+/* ── Ask Gemini for bounding boxes of visual elements for each image-bearing question ── */
+/* filePart: a Gemini request part for the source document — either
+   { inline_data: {...} } for small files or { file_data: {...} } for large
+   ones uploaded via the Files API. Callers build this via buildGeminiFilePart
+   so this function works the same regardless of source file size. */
+/* `pauseCheck` and `fileForReupload` are forwarded straight through to
+   callGeminiWithRetry — see its doc comment above for what they do.
+   `pauseCheck` is only meaningfully set by the main bulk-extraction pass
+   (extractImagesForQuestions → _extractQuestionsFromFile), which already
+   has a pause/resume UI to fall back into; the single-question 🔁
+   Re-extract Image path leaves it undefined, matching every other
+   per-question AI tool (aiRefineQuestion, aiFillChoices, …), which just
+   retries with backoff/rotation until it succeeds or the user hits Stop. */
+async function getBoundingBoxes(questions, filePart, apiKey, customInstructions, cancelToken, pauseCheck, fileForReupload) {
+  const imageQs = questions.map((q, i) => ({ idx: i, q })).filter(({ q }) => q.has_image);
+  if (!imageQs.length) return null;
+
+  // The label sent to Gemini for each question ("Q<n>") uses its permanent
+  // _extractedQuestionNumber when the question has one — the number
+  // assigned once, at extraction time, from its actual position in
+  // Gemini's original response (see _extractQuestionsFromFile in
+  // ai-solve.js) — rather than `idx`, its position in the *live* `questions`
+  // array passed in here. That live position can freely change afterwards
+  // (the preview lets questions be reordered, deleted, or merged in
+  // alongside another quiz's questions), but the extracted number never
+  // does, so a single-question Re-extract Image always identifies the
+  // right question by this fixed number no matter where it now sits.
+  // Falls back to live position only for questions that predate this field
+  // (already-saved quizzes) or were never extracted (hand-typed) — for
+  // those, live position is all there ever was.
+  const descriptions = imageQs.map(({ idx, q }) =>
+    `Q${q._extractedQuestionNumber || (idx + 1)}: "${q.question.substring(0, 200)}"`
+  ).join('\n');
+
+  // customInstructions is optional and only ever set by a manual re-extract
+  // (see cqReextractImage in ai-solve.js) — it lets the user correct a
+  // specific, observed mistake (box too tight/wide, wrong region, wrong
+  // page) instead of retrying blind. Omitted entirely (undefined/'') on the
+  // normal bulk extraction pass, so that call's prompt/behavior is unchanged.
+  const instructionsBlock = (customInstructions && customInstructions.trim())
+    ? `\n\nThe user has manually reviewed a previous attempt and left this correction —\nfollow it carefully, it takes priority over your own judgement:\n"${customInstructions.trim()}"\n`
+    : '';
+
+  const prompt = `You are given a document. For each question below, locate the visual element (image, diagram, figure, table, chart, X-ray, ECG, histology slide, graph, etc.) associated with it.
+
+For each question, return the bounding box of ONLY that visual element on the page where it appears, as normalized coordinates (0.0 to 1.0 relative to the full page width and height). Also return the 1-based page number where the visual element appears.
+
+Questions:
+${descriptions}
+${instructionsBlock}
+Return ONLY a JSON array — one entry per question — in exactly this format:
+[
+  { "q_index": 1, "page": 1, "x": 0.05, "y": 0.10, "w": 0.90, "h": 0.35 }
+]
+
+Where:
+- q_index matches the Q number above (1-based)
+- page is the 1-based page number containing this visual element
+- x, y = top-left corner of the bounding box (normalized 0–1)
+- w, h = width and height of the bounding box (normalized 0–1)
+
+If you cannot find a visual element for a question, omit that entry from the array.
+Output nothing besides the JSON array.
+
+Be fully deterministic: given the same document and questions, always locate the same coordinates the same way. Do not introduce arbitrary variation between runs.`;
+
+  const requestBody = {
+    contents: [{ parts: [filePart, { text: prompt }] }],
+    // temperature: 0 — this is coordinate detection, not creative
+    // generation, so deterministic is what we want. Safe to always set:
+    // callGeminiWithRetry strips it automatically the moment a
+    // fallback-model switch happens (see GEMINI_SAMPLING_PARAM_KEYS above),
+    // so it never reaches a model that rejects it.
+    //
+    // Gemini 3.x (what GEMINI_FALLBACK_MODEL resolves to) no longer treats
+    // temperature as a reliable lever — Google's own guidance is to keep it
+    // at the default and steer determinism through the prompt instead (see
+    // GEMINI_SAMPLING_PARAM_KEYS comment above). The "Be fully
+    // deterministic" line above is that prompt-level backstop, so
+    // coordinate detection stays consistent even on a fallback-model call
+    // where temperature:0 gets stripped and never reaches the request.
+    generationConfig: { maxOutputTokens: 4096, temperature: 0 }
+  };
+
+  // This feature stays best-effort in the sense that a genuinely bad
+  // response (blocked content, empty output, no usable entries at all)
+  // still fails silently — a question just doesn't get its image
+  // auto-cropped, nothing else breaks. But a 429 (rate limit) is no
+  // longer an instant, silent give-up: it now goes through the exact same
+  // retry-with-backoff + automatic multi-key rotation + pause-fallback
+  // machinery every other Gemini call in the app already gets via
+  // callGeminiWithRetry (see its doc comment above this file). Previously
+  // this used its own minimal hand-rolled fetch loop that only retried a
+  // 400/404 model-routing error and gave up immediately on anything else,
+  // including 429 — and because this covers every image-bearing question
+  // in the batch, a single rate-limit hit silently skipped all of that
+  // batch's images at once. That's exactly what a document with many
+  // image-heavy questions tends to trigger (a bigger request, and more of
+  // them in a row), which is what was being reported.
+  const url = geminiEndpoint();
+  try {
+    const data = await callGeminiWithRetry(url, requestBody,
+      { cancelToken, apiKey, pauseCheck, fileForReupload });
+    const textOut = ((data.candidates || [])[0]?.content?.parts || [])
+      .map(p => p.text || '').join('').trim();
+    if (!textOut) return null;
+    // parseGeminiJsonArray (see its doc comment above) salvages every
+    // fully-formed { q_index, page, x, y, w, h } entry already generated
+    // even if the response was cut off mid-array — GEMINI_BOUNDING_BOX_
+    // BATCH_SIZE keeps this rare (see its own doc comment above), but a
+    // batch containing unusually verbose/long question text could still
+    // push a response past maxOutputTokens. Without this, a truncated
+    // response used to throw away every entry in the batch, not just the
+    // one that got cut off mid-object. `truncated` is intentionally not
+    // surfaced to the caller — this is a best-effort lookup either way,
+    // and a partially-salvaged batch is strictly better than the same
+    // batch returning nothing.
+    const { data: parsed } = parseGeminiJsonArray(textOut);
+    if (!parsed) console.warn('getBoundingBoxes: response had no usable entries:', textOut.slice(0, 200));
+    return parsed;
+  } catch (e) {
+    // Cancellation and the pause-fallback signal are real state the caller
+    // needs to react to (stop the whole run / enter the pause UI) — let
+    // those propagate exactly like every other step of extraction does,
+    // instead of swallowing them here.
+    if (e && (e._cancelled || e._rateLimitPauseFallback)) throw e;
+    console.warn('getBoundingBoxes failed:', e && e.message ? e.message : e);
+    return null;
+  }
+}
+
+/* ── Crop a region from a rendered image using Canvas ── */
+async function cropRegionFromDataUrl(pageDataUrl, pageWidth, pageHeight, box) {
+  const img = await loadImageFromDataUrl(pageDataUrl);
+  const sx = Math.max(0, Math.round(box.x * pageWidth));
+  const sy = Math.max(0, Math.round(box.y * pageHeight));
+  const sw = Math.min(Math.round(box.w * pageWidth),  pageWidth  - sx);
+  const sh = Math.min(Math.round(box.h * pageHeight), pageHeight - sy);
+  if (sw <= 0 || sh <= 0) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width  = sw;
+  canvas.height = sh;
+  canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  return canvas.toDataURL('image/png');
+}
+
+/* ── Compress / resize a base64 data URL so it fits well under Firestore's 1 MB doc limit.
+   Target: ≤ 800 px on the longest side, JPEG quality 0.82.
+   Returns the compressed data URL (always image/jpeg). ── */
+async function compressImageDataUrl(dataUrl, maxPx = 800, quality = 0.82) {
+  try {
+    const img = await loadImageFromDataUrl(dataUrl);
+    let { naturalWidth: w, naturalHeight: h } = img;
+    if (w > maxPx || h > maxPx) {
+      if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+      else        { w = Math.round(w * maxPx / h); h = maxPx; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width  = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', quality);
+  } catch (e) {
+    return dataUrl; // fallback: return original if compression fails
+  }
+}
+
+/* ── Main: extract images from source for all has_image questions ──
+   Accepts the File itself (not raw base64) so it can decide, via
+   buildGeminiFilePart, whether to send it inline or through Gemini's
+   Files API depending on size — this is what makes bounding-box lookups
+   work correctly for large PDFs/images, not just the initial extraction.
+   An already-built `filePart` can optionally be passed in (e.g. by the
+   main extraction call, which builds one anyway) to avoid uploading the
+   same large file to the Files API twice.
+
+   `customInstructions` is optional and forwarded as-is to getBoundingBoxes
+   — used only by a manual single-question re-extract (cqReextractImage in
+   ai-solve.js) to let the user correct a mistake they've actually seen
+   (e.g. "widen the frame", "wrong position, it's the graph on page 2").
+   Left undefined on the normal bulk pass, so nothing changes there.
+
+   `cancelToken` is likewise optional and forwarded to getBoundingBoxes —
+   lets a manual re-extract's ⏹ Stop button actually abort the in-flight
+   request (see cqReextractImage), rather than just hiding the busy state
+   while the request keeps running unseen.
+
+   `pauseCheck` is optional and forwarded to getBoundingBoxes, which in turn
+   hands it straight to callGeminiWithRetry (see its doc comment above) —
+   this is what lets a run of consecutive 429s pause into the same "all
+   keys rate-limited" UI as every other step of extraction, instead of
+   retrying silently in the background. Passed by the main bulk pass
+   (_extractQuestionsFromFile in ai-solve.js), which already has that
+   pause/resume UI to fall back into. Left undefined by the single-question
+   🔁 Re-extract Image path (cqReextractImage), matching every other
+   per-question AI tool (aiRefineQuestion, aiFillChoices, …), which just
+   retries with backoff/rotation until it succeeds or the user hits Stop.
+
+   `fileForReupload` is NOT a parameter — it's built here, from `file` and
+   the `mimeType` already computed below, and forwarded to getBoundingBoxes
+   for every caller automatically. This is what lets callGeminiWithRetry
+   silently re-upload the file and get a fresh Files API reference if the
+   one in `filePart`/`part` has gone stale (e.g. rotated onto a different
+   API key mid-request — see its doc comment), rather than every caller
+   having to remember to build and pass this itself.
+
+   Bounding-box lookup itself happens in batches of
+   GEMINI_BOUNDING_BOX_BATCH_SIZE image-bearing questions per request, not
+   all of them in one call — see that constant's doc comment near the top
+   of this file. A batch that can't ultimately be recovered just leaves its
+   own questions without an image; every other batch in the file is
+   requested and resolved independently, so one bad or rate-limited batch
+   no longer costs the whole file its images. ── */
+async function extractImagesForQuestions(questions, file, apiKey, filePart, customInstructions, cancelToken, pauseCheck) {
+  const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+  const isPdf = mimeType === 'application/pdf';
+
+  // Step 1: ask Gemini for bounding boxes of image-bearing questions, in
+  // batches of GEMINI_BOUNDING_BOX_BATCH_SIZE rather than all of them in
+  // one request — see that constant's doc comment above for why. Reuse a
+  // pre-built part when given one; otherwise build it now (inline for
+  // small files, Files API upload for large ones — same size ceiling as
+  // question extraction, so this never hits Gemini's ~20MB inline cap).
+  // Built once and reused across every batch below, exactly as it would
+  // have been reused across retries of the old single request.
+  const part = filePart || await buildGeminiFilePart(file, apiKey, mimeType);
+
+  const imageQuestions = questions.filter(q => q.has_image);
+  let boxes = [];
+  for (let start = 0; start < imageQuestions.length; start += GEMINI_BOUNDING_BOX_BATCH_SIZE) {
+    const batch = imageQuestions.slice(start, start + GEMINI_BOUNDING_BOX_BATCH_SIZE);
+    // getBoundingBoxes itself is best-effort per call — a batch that can't
+    // ultimately be recovered (bad JSON, blocked content, etc.) resolves
+    // to null rather than throwing, so it's simply skipped here and the
+    // NEXT batch still gets its own independent shot, instead of one bad
+    // batch losing every image in the file. Cancellation and the
+    // pause-fallback signal are real state, not a per-batch miss, so
+    // those still propagate straight out of this loop (getBoundingBoxes
+    // throws them rather than returning null — see its doc comment).
+    const batchBoxes = await getBoundingBoxes(batch, part, apiKey, customInstructions, cancelToken,
+      pauseCheck, { file, mimeType });
+    if (Array.isArray(batchBoxes) && batchBoxes.length) boxes = boxes.concat(batchBoxes);
+  }
+  if (!boxes.length) return;
+
+  if (cancelToken && cancelToken.cancelled) {
+    const e = new Error('cancelled'); e._cancelled = true; throw e;
+  }
+
+  // Map each question's Gemini-facing label (its permanent
+  // _extractedQuestionNumber, or live position as a fallback — see the
+  // matching comment in getBoundingBoxes above) to its CURRENT index in
+  // this array. Gemini's response is keyed by that same label, so looking
+  // results up through this map — instead of assuming q_index-1 IS the
+  // array index — means a returned box always lands on the right question
+  // even if the array has been reordered, had entries deleted, or had
+  // other quizzes' questions merged in since the label was decided.
+  const numberToIdx = {};
+  questions.forEach((q, i) => {
+    numberToIdx[q._extractedQuestionNumber || (i + 1)] = i;
+  });
+
+  // Build a map: question index (0-based) → box info
+  const boxMap = {};
+  boxes.forEach(b => {
+    if (typeof b.q_index === 'number' && numberToIdx.hasOwnProperty(b.q_index)) {
+      boxMap[numberToIdx[b.q_index]] = b;
+    }
+  });
+
+  // Step 2: render pages and crop. This happens entirely in the browser via
+  // Canvas/pdf.js, so it needs the raw bytes locally regardless of file size —
+  // that's a local-memory concern, not a Gemini request-size one, so it's
+  // read here lazily, only once we know there's actually something to crop.
+  const sourceBase64 = await fileToBase64(file);
+  const pageCache = {}; // page number → { dataUrl, width, height }
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    if (!q.has_image) continue;
+    const box = boxMap[i];
+    if (!box) continue;
+
+    try {
+      const pageNum = box.page || 1;
+
+      if (!pageCache[pageNum]) {
+        if (isPdf) {
+          pageCache[pageNum] = await renderPdfPageToDataUrl(sourceBase64, pageNum);
+        } else {
+          // Single image — treat as page 1
+          const img = await loadImageFromDataUrl(`data:${mimeType};base64,${sourceBase64}`);
+          const canvas = document.createElement('canvas');
+          canvas.width  = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          pageCache[pageNum] = {
+            dataUrl: canvas.toDataURL('image/png'),
+            width: img.naturalWidth,
+            height: img.naturalHeight
+          };
+        }
+      }
+
+      const { dataUrl, width, height } = pageCache[pageNum];
+      const cropped = await cropRegionFromDataUrl(dataUrl, width, height, box);
+      if (cropped) q.image = await compressImageDataUrl(cropped);
+
+    } catch (e) {
+      // Skip silently
+    }
+  }
+}
+
+// AI-answer questions that have no key in the PDF
+// Source file helpers for AI Answer Mode
+function setupSourceDropzone() {
+  const dz = document.getElementById('cqSourceDropzone');
+  if (!dz) return;
+  ['dragenter', 'dragover'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.add('drag-over');
+  }));
+  ['dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag-over');
+  }));
+  dz.addEventListener('drop', e => {
+    const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+    files.forEach(acceptSourceFile);
+  });
+}
+
+function handleCqSourceFileSelect(event) {
+  const files = Array.from((event.target && event.target.files) || []);
+  files.forEach(acceptSourceFile);
+  event.target.value = '';
+}
+
+function acceptSourceFile(file) {
+  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+
+  if (!isPdf && !isImage) {
+    alert(`"${file.name}" isn't an image or PDF — please upload an image (JPG/PNG/WEBP) or a PDF file.`);
+    return;
+  }
+  if (file.size > GEMINI_MAX_FILE_BYTES) {
+    alert(`"${file.name}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API, so it can't be used.`);
+    return;
+  }
+  const mimeType = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+  cqAiSourceFiles.push({ file, mimeType, name: file.name });
+  renderCustomQuizModal();
+}
+
+function cqRemoveSourceFile(idx) {
+  cqAiSourceFiles.splice(idx, 1);
+  renderCustomQuizModal();
+}
+
+// General-purpose AI solver: solves questions at given indices using Gemini.
+// targetIdxs: array of question indices to solve (can be no-key or keyed questions)
+// sourceText: optional reference text
+// sourceFiles: optional array of {file, mimeType, name}
+// onlyIfNoKey: if true, only process questions with no_answer_key (legacy behaviour)
+async function cqAiSolveQuestions(questions, targetIdxs, sourceText, sourceFiles, statusEl, cancelToken) {
+  if (!targetIdxs || !targetIdxs.length) return;
+
+  let apiKey = getGeminiKey();
+  if (!apiKey) { console.warn('cqAiSolveQuestions: no Gemini API key'); return; }
+
+  const hasSource = (sourceText && sourceText.trim()) || (sourceFiles && sourceFiles.length > 0);
+
+  // The trailing "Be fully deterministic" sentence on both branches is a
+  // prompt-level backstop for temperature: 0 below (see comment at the
+  // generationConfig further down) — Gemini 3.x, what GEMINI_FALLBACK_MODEL
+  // resolves to, no longer treats temperature as a reliable determinism
+  // lever, so the same instruction is spelled out in the prompt itself and
+  // holds even on a fallback-model call where temperature gets stripped.
+  const systemInstruction = hasSource
+    ? 'You are a medical/academic expert. Reference source material is provided (text and/or images/PDFs). ' +
+      'For each question, answer based on the source. ' +
+      'If the answer is clearly found in the source, set found_in_source to true; otherwise set it to false and use your own knowledge. ' +
+      'Some questions may include an image — analyse it carefully. ' +
+      'Respond ONLY with a JSON array. ' +
+      'Be fully deterministic: given the same question and source material, always give the same answer.'
+    : 'You are a medical/academic expert. Answer each question using your expert knowledge. ' +
+      'Since no source is provided, set found_in_source to false for all. ' +
+      'Some questions may include an image — analyse it carefully. ' +
+      'Respond ONLY with a JSON array. ' +
+      'Be fully deterministic: given the same question, always give the same answer.';
+
+  // Build source parts (shared across all chunks)
+  const sourceParts = [];
+  if (sourceText && sourceText.trim()) {
+    sourceParts.push({ text: '## Reference Source Material (Text)\n' + sourceText.trim() + '\n\n---\n' });
+  }
+  if (sourceFiles && sourceFiles.length > 0) {
+    sourceParts.push({ text: '## Reference Source Material (Images/PDFs):' });
+    for (let sfi = 0; sfi < sourceFiles.length; sfi++) {
+      const sf = sourceFiles[sfi];
+      sourceParts.push({ text: 'Source file ' + (sfi + 1) + ' (' + sf.name + '):' });
+      sourceParts.push(await buildGeminiFilePart(sf.file, apiKey, sf.mimeType));
+    }
+    sourceParts.push({ text: '---' });
+  }
+
+  const instructionPart = {
+    text: 'For each question below, determine the correct answer letter. ' +
+          'Respond ONLY with a JSON array (one object per question, same order) with keys:\n' +
+          '  "index": the number inside [index:N]\n' +
+          '  "answer": the correct option letter (e.g. "A")\n' +
+          '  "found_in_source": true if the answer was clearly found in the provided source material, false if you used your own knowledge\n' +
+          'No explanation, no preamble, no markdown.'
+  };
+
+  // Chunk into batches of 20 to stay well within token limits
+  const CHUNK_SIZE = 20;
+  const chunks = [];
+  for (let i = 0; i < targetIdxs.length; i += CHUNK_SIZE) {
+    chunks.push(targetIdxs.slice(i, i + CHUNK_SIZE));
+  }
+
+  let totalSolved = 0;
+  const errors = [];
+
+  for (let ci = 0; ci < chunks.length; ci++) {
+    if (cancelToken && cancelToken.cancelled) break;
+    // Safe checkpoint between batches — lets the user pause and switch keys
+    // without losing any batches already solved.
+    apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    if (cancelToken && cancelToken.cancelled) break;
+    const url = geminiEndpoint();
+
+    const chunk = chunks[ci];
+
+    if (statusEl) {
+      const label = chunks.length > 1
+        ? `🤖 AI is solving questions… (batch ${ci + 1} of ${chunks.length})`
+        : `🤖 AI is solving ${chunk.length} question${chunk.length !== 1 ? 's' : ''}…`;
+      statusEl.innerHTML = _cqProgressStatusHTML(label, (ci / chunks.length) * 100);
+    }
+
+    const parts = [...sourceParts, instructionPart];
+
+    chunk.forEach((qi, serial) => {
+      const q = questions[qi];
+      const opts = Object.entries(q.options).map(([k, v]) => '  ' + k + '. ' + v).join('\n');
+      let qText = 'Question ' + (serial + 1) + ' [index:' + qi + ']:\n';
+      qText += _cqCaseContextBlock(questions, q);
+      qText += q.question + '\n' + opts;
+      parts.push({ text: qText });
+      const imgForThis = q.image || _cqFindCaseGroupImage(questions, q);
+      if (imgForThis) {
+        const match = imgForThis.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          parts.push({ text: '(Image for question ' + (serial + 1) + ':)' });
+          parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
+        }
+      }
+    });
+
+    try {
+      const data = await callGeminiWithRetry(url, {
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ role: 'user', parts }],
+        // temperature: 0 — solving questions from the given source material
+        // is a factual task, not creative generation. Auto-stripped on a
+        // fallback-model switch (see GEMINI_SAMPLING_PARAM_KEYS above); the
+        // "Be fully deterministic" line in systemInstruction above is the
+        // prompt-level backstop for that case.
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 8192, temperature: 0 }
+      }, { pauseCheck: () => cqPauseRequested, cancelToken: cancelToken, apiKey });
+
+      const textOut = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+      const cleanText = textOut.replace(/```json|```/g, '').trim();
+
+      const { data: answers, truncated } = parseGeminiJsonArray(cleanText);
+      if (!answers) {
+        errors.push(`Batch ${ci + 1}: Could not parse AI response (response may have been truncated).`);
+        continue;
+      }
+      if (truncated) {
+        errors.push(`Batch ${ci + 1}: response was cut off partway through — recovered ${answers.length} answer${answers.length !== 1 ? 's' : ''} from it; the rest of this batch may need re-running.`);
+      }
+
+      if (Array.isArray(answers)) {
+        answers.forEach(item => {
+          const qi = item.index;
+          const ans = (item.answer || '').trim().toUpperCase();
+          if (questions[qi] !== undefined && questions[qi].options && questions[qi].options[ans]) {
+            questions[qi].answer      = ans;
+            questions[qi].ai_answered = true;
+            questions[qi].ai_guessed  = !item.found_in_source;
+            totalSolved++;
+          }
+        });
+      } else {
+        errors.push(`Batch ${ci + 1}: AI returned unexpected format (not an array).`);
+      }
+    } catch (e) {
+      if (e._cancelled) {
+        // User clicked "pause now" instead of waiting for this batch to
+        // finish — step back to the last completed checkpoint (before this
+        // batch) instead of losing the whole run. A plain Stop leaves
+        // cqPauseSkipRequested false, so it still just breaks as before.
+        if (typeof cqPauseSkipRequested !== 'undefined' && cqPauseSkipRequested) {
+          cqPauseSkipRequested = false;
+          cqCancelToken = { cancelled: false }; // old token is permanently cancelled — start fresh
+          cancelToken = cqCancelToken;
+          apiKey = (await _cqEnterPause(statusEl,
+            `⏸️ Paused — stepped back to before ${chunks.length > 1 ? `batch ${ci + 1} of ${chunks.length}` : 'this batch'} so nothing already done is lost. Open 🔑 Manage APIs to switch keys, then press ▶️ Resume to continue.`)) || apiKey;
+          ci--; // retry this same batch once resumed
+          continue;
+        }
+        break; // user stopped — not an error, just stop here
+      }
+      if (e._rateLimitPauseFallback) {
+        apiKey = await cqFallbackPauseForRateLimit(statusEl, chunks.length > 1 ? `batch ${ci + 1} of ${chunks.length}` : null);
+        ci--; // retry this same batch (not counted as an error) once resumed
+        continue;
+      }
+      console.warn('cqAiSolveQuestions batch ' + (ci + 1) + ' failed:', e);
+      errors.push(`Batch ${ci + 1}: ${e.message || String(e)}`);
+    }
+  }
+
+  // Surface any errors to the user
+  if (errors.length > 0 && statusEl) {
+    const errHtml = errors.map(err => `<div>⚠️ ${escapeHtml(err)}</div>`).join('');
+    statusEl.insertAdjacentHTML('beforeend',
+      `<div class="cq-status warning" style="margin-top:6px;">
+        🤖 AI Solve encountered issues — ${totalSolved} question${totalSolved !== 1 ? 's' : ''} solved successfully:<br>${errHtml}
+      </div>`
+    );
+  }
+}
+
+// Backward-compat wrapper used in the extraction flow for no-key questions
+async function cqAiAnswerMissingKeys(questions, sourceText, sourceFiles, statusEl, cancelToken) {
+  const noKeyIdxs = questions.map((q, i) => q.no_answer_key ? i : -1).filter(i => i >= 0);
+  await cqAiSolveQuestions(questions, noKeyIdxs, sourceText, sourceFiles, statusEl, cancelToken);
+}
+
+/* ── Post-extraction bulk pass: Fill Choices ──
+   Tops every extracted question up to 4 answer choices (same rules as the
+   single-question "🧩 Fill Choices (AI)" tool: only adds missing distractors,
+   never touches which option is marked correct). Runs strictly one question
+   at a time — never in parallel with itself or with the refine pass — since
+   both this and Refine Questions mutate the same question objects, and the
+   whole point of running them sequentially is to avoid that exact race. */
+async function cqBulkFillChoices(questions, statusEl, cancelToken) {
+  const idxs = questions.map((q, i) => i).filter(i => {
+    const q = questions[i];
+    return q && q.question && q.question.trim() && getOptionEntries(q).length < 4;
+  });
+  if (!idxs.length) return { done: 0, errors: [] };
+
+  let apiKey = getActiveApiKey();
+  if (!apiKey) return { done: 0, errors: ['No active API key.'] };
+
+  let done = 0;
+  const errors = [];
+  for (let n = 0; n < idxs.length; n++) {
+    if (cancelToken && cancelToken.cancelled) break;
+    apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    if (cancelToken && cancelToken.cancelled) break;
+    const qi = idxs[n];
+    const q = questions[qi];
+    if (statusEl) {
+      statusEl.innerHTML = _cqProgressStatusHTML(
+        `🧩 Filling choices… (${n + 1} of ${idxs.length})`, (n / idxs.length) * 100);
+    }
+    try {
+      const optEntries = getOptionEntries(q);
+      const usedKeys = optEntries.map(([k]) => k);
+      const missing = _AI_TOOLS_ALL_KEYS.filter(k => !usedKeys.includes(k)).slice(0, Math.max(0, 4 - optEntries.length));
+      if (!missing.length) continue;
+      const answerBefore = q.answer;
+      const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length, cancelToken, 'fillBulk');
+      if (!q.optionsOrder) q.optionsOrder = optEntries.map(([k, v]) => ({ key: k, value: v }));
+      missing.forEach((key, idx) => {
+        const val = newVals[idx] || '';
+        q.options[key] = val;
+        q.optionsOrder.push({ key, value: val });
+      });
+      q.answer = answerBefore; // never change which choice is correct
+      done++;
+    } catch (e) {
+      if (e._cancelled) {
+        // User clicked "pause now" instead of waiting for this question to
+        // finish — step back to the last completed checkpoint instead of
+        // losing the whole run. A plain Stop leaves cqPauseSkipRequested
+        // false, so it still just breaks as before.
+        if (typeof cqPauseSkipRequested !== 'undefined' && cqPauseSkipRequested) {
+          cqPauseSkipRequested = false;
+          cqCancelToken = { cancelled: false }; // old token is permanently cancelled — start fresh
+          cancelToken = cqCancelToken;
+          apiKey = (await _cqEnterPause(statusEl,
+            `⏸️ Paused — stepped back to before question ${n + 1} of ${idxs.length} so nothing already done is lost. Open 🔑 Manage APIs to switch keys, then press ▶️ Resume to continue.`)) || apiKey;
+          n--; // retry this same question once resumed
+          continue;
+        }
+        break; // user stopped — not an error, just stop here
+      }
+      if (e._rateLimitPauseFallback) {
+        apiKey = await cqFallbackPauseForRateLimit(statusEl, `question ${n + 1} of ${idxs.length}`);
+        n--; // retry this same question once resumed
+        continue;
+      }
+      errors.push(`Question ${qi + 1}: ${e.message || String(e)}`);
+    }
+    // No fixed sleep here anymore — _geminiRateGate() inside callGeminiWithRetry
+    // already paces every request centrally, shared across every bulk/single
+    // AI call in the app, not just this loop.
+  }
+  return { done, errors };
+}
+
+/* ── Post-extraction bulk pass: Refine Questions ──
+   Rewrites every extracted question's stem into clean exam-style phrasing
+   (same rules/prompt as the single-question "🪄 Refine Question" tool),
+   optionally guided by a shared custom-instructions box. Also strictly
+   one-at-a-time — see note above cqBulkFillChoices. */
+async function cqBulkRefineQuestions(questions, customInstructions, statusEl, cancelToken) {
+  const idxs = questions.map((q, i) => i).filter(i => questions[i] && questions[i].question && questions[i].question.trim());
+  if (!idxs.length) return { done: 0, errors: [] };
+
+  let apiKey = getActiveApiKey();
+  if (!apiKey) return { done: 0, errors: ['No active API key.'] };
+
+  const custom = (customInstructions || '').trim();
+  let done = 0;
+  const errors = [];
+  for (let n = 0; n < idxs.length; n++) {
+    if (cancelToken && cancelToken.cancelled) break;
+    apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    if (cancelToken && cancelToken.cancelled) break;
+    const qi = idxs[n];
+    const q = questions[qi];
+    if (statusEl) {
+      statusEl.innerHTML = _cqProgressStatusHTML(
+        `🪄 Refining question wording… (${n + 1} of ${idxs.length})`, (n / idxs.length) * 100);
+    }
+    try {
+      q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom, cancelToken, 'refineBulk');
+      done++;
+    } catch (e) {
+      if (e._cancelled) {
+        // User clicked "pause now" instead of waiting for this question to
+        // finish — step back to the last completed checkpoint instead of
+        // losing the whole run. A plain Stop leaves cqPauseSkipRequested
+        // false, so it still just breaks as before.
+        if (typeof cqPauseSkipRequested !== 'undefined' && cqPauseSkipRequested) {
+          cqPauseSkipRequested = false;
+          cqCancelToken = { cancelled: false }; // old token is permanently cancelled — start fresh
+          cancelToken = cqCancelToken;
+          apiKey = (await _cqEnterPause(statusEl,
+            `⏸️ Paused — stepped back to before question ${n + 1} of ${idxs.length} so nothing already done is lost. Open 🔑 Manage APIs to switch keys, then press ▶️ Resume to continue.`)) || apiKey;
+          n--; // retry this same question once resumed
+          continue;
+        }
+        break; // user stopped — not an error, just stop here
+      }
+      if (e._rateLimitPauseFallback) {
+        apiKey = await cqFallbackPauseForRateLimit(statusEl, `question ${n + 1} of ${idxs.length}`);
+        n--; // retry this same question once resumed
+        continue;
+      }
+      errors.push(`Question ${qi + 1}: ${e.message || String(e)}`);
+    }
+    // No fixed sleep here anymore — _geminiRateGate() inside callGeminiWithRetry
+    // already paces every request centrally, shared across every bulk/single
+    // AI call in the app, not just this loop.
+  }
+  return { done, errors };
+}
+
+/* ── Post-extraction bulk pass: Re-extract Missing Images (cq preview only) ──
+   Finds every question Gemini flagged as having an image (has_image) that
+   never actually got one cropped — the same "⚠️ AI detected an image…
+   couldn't extract it" case handled per-question by 🔁 Re-extract Image in
+   renderCQPreview (js/ai-solve.js) — and retries extraction for all of
+   them in one pass.
+
+   Grouped and requested per SOURCE FILE, one file at a time, reusing
+   extractImagesForQuestions exactly as the original extraction pass does
+   (js/ai-solve.js, _extractQuestionsFromFile) — which itself batches
+   GEMINI_BOUNDING_BOX_BATCH_SIZE image-bearing questions per request. This
+   is deliberately NOT an additive per-question loop making one Gemini
+   request per image; it's the same file-scoped batching used when the
+   quiz was first extracted, just re-run only for the questions still
+   missing an image.
+
+   Only questions with a traceable source file are eligible — same rule as
+   the single-question control (_canReextract: `q._sourceFile &&
+   !q._notExtractable`). Hand-typed questions, or ones merged in from
+   another quiz (see _mergeCloneQuestions in community-quizzes.js), have no
+   source to re-run extraction against and are counted in `skipped` rather
+   than silently ignored. */
+async function cqBulkReextractMissingImages(questions, statusEl, cancelToken) {
+  const idxs = questions.map((q, i) => i).filter(i => {
+    const q = questions[i];
+    return q && q.has_image && !q.image && q._sourceFile && !q._notExtractable;
+  });
+  const skipped = questions.filter(q =>
+    q && q.has_image && !q.image && (!q._sourceFile || q._notExtractable)).length;
+  if (!idxs.length) return { done: 0, errors: [], skipped };
+
+  let apiKey = getActiveApiKey();
+  if (!apiKey) return { done: 0, errors: ['No active API key.'], skipped };
+
+  // Group eligible questions by their originating source file — one
+  // extractImagesForQuestions call per file (which internally re-batches
+  // by GEMINI_BOUNDING_BOX_BATCH_SIZE), not one call per question.
+  const groups = []; // [{ file, questions: [...] }]
+  idxs.forEach(i => {
+    const q = questions[i];
+    let group = groups.find(g => g.file === q._sourceFile);
+    if (!group) { group = { file: q._sourceFile, questions: [] }; groups.push(group); }
+    group.questions.push(q);
+  });
+
+  let done = 0;
+  const errors = [];
+  for (let gi = 0; gi < groups.length; gi++) {
+    if (cancelToken && cancelToken.cancelled) break;
+    // Safe checkpoint between files — lets the user pause and switch keys
+    // without losing any file already finished.
+    apiKey = (await cqCheckPause(statusEl)) || apiKey;
+    if (cancelToken && cancelToken.cancelled) break;
+
+    const group = groups[gi];
+    const label = groups.length > 1
+      ? `🖼️ Re-extracting missing images… (file ${gi + 1} of ${groups.length}: "${escapeHtml(group.file.name)}")`
+      : `🖼️ Re-extracting ${group.questions.length} missing image${group.questions.length !== 1 ? 's' : ''} from "${escapeHtml(group.file.name)}"…`;
+    if (statusEl) statusEl.innerHTML = _cqProgressStatusHTML(label, (gi / groups.length) * 100);
+
+    const beforeCount = group.questions.filter(q => q.image).length;
+    try {
+      await extractImagesForQuestions(group.questions, group.file, apiKey, undefined, undefined,
+        cancelToken, () => cqPauseRequested);
+      const afterCount = group.questions.filter(q => q.image).length;
+      done += Math.max(0, afterCount - beforeCount);
+    } catch (e) {
+      if (e._cancelled) {
+        // User clicked "pause now" instead of waiting for this file to
+        // finish — step back to the last completed checkpoint instead of
+        // losing the whole run. A plain Stop leaves cqPauseSkipRequested
+        // false, so it still just breaks as before.
+        if (typeof cqPauseSkipRequested !== 'undefined' && cqPauseSkipRequested) {
+          cqPauseSkipRequested = false;
+          cqCancelToken = { cancelled: false }; // old token is permanently cancelled — start fresh
+          cancelToken = cqCancelToken;
+          apiKey = (await _cqEnterPause(statusEl,
+            `⏸️ Paused — stepped back to before file ${gi + 1} of ${groups.length} ("${escapeHtml(group.file.name)}") so nothing already done is lost. Open 🔑 Manage APIs to switch keys, then press ▶️ Resume to continue.`)) || apiKey;
+          gi--; // retry this same file once resumed
+          continue;
+        }
+        break; // user stopped — not an error, just stop here
+      }
+      if (e._rateLimitPauseFallback) {
+        apiKey = await cqFallbackPauseForRateLimit(statusEl, `file "${group.file.name}"`);
+        gi--; // retry this same file (not counted as an error) once resumed
+        continue;
+      }
+      errors.push(`"${group.file.name}": ${e.message || String(e)}`);
+    }
+  }
+  return { done, errors, skipped };
+}
