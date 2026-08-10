@@ -34,13 +34,16 @@
       --nav-marked:     #E0526E;
       --nav-current:    #16306E;
 
-      /* Brand badge — single source of truth for the logo, shared by the
-         browser-tab favicon (index.html <head>), the header wordmark icon,
-         and the loading-screen mark, so all three always render as the
-         exact same mark. Keep this pair in sync with the favicon's inline
-         SVG colors if either ever changes. */
-      --brand-badge-bg: #16306E;
-      --brand-badge-fg: #8FB6FF;
+      /* Brand badge — single source of truth for the logo mark, shared by
+         assets/brand/logo-mark.svg (favicon + PWA icons), the header
+         .brand-mark badge (index.html, x2), the loading-screen mark, and
+         js/pdf-export.js's PDX_LOGO_SVG, so every rendering of the logo
+         across the app and its PDF exports always matches. Colors are
+         sampled directly from the source artwork — keep this trio in sync
+         if the artwork ever changes. */
+      --brand-badge-bg:   #152B55;
+      --brand-badge-fg:   #1AD6E5;
+      --brand-badge-ring: #1AD6E5;
 
       --text-main:      #14203B;
       --text:           #14203B;
@@ -108,21 +111,30 @@
       position: absolute; inset: 0;
       background-image: var(--carved-pattern);
       background-repeat: repeat;
-      background-size: 64px 64px;
+      background-size: 24px 24px;
       pointer-events: none;
       z-index: 0;
     }
     .carved-surface::after {
       content: "";
       position: absolute; inset: 0;
-      background: linear-gradient(100deg, transparent 42%, var(--sigil-line) 50%, transparent 58%);
+      background: linear-gradient(100deg, transparent 42%, rgba(255,255,255,.9) 50%, transparent 58%);
       background-repeat: no-repeat;
       background-size: 260% 100%;
       background-position: 220% 0%;
       animation: carvedSheen 9s ease-in-out infinite;
-      mix-blend-mode: overlay;
+      mix-blend-mode: screen;
       pointer-events: none;
-      z-index: 2;
+      z-index: 0;
+      /* Clip the sheen to the same dot tile as ::before, so the travelling
+         light only ever catches the dots themselves — never the text or
+         the solid surface behind them. */
+      mask-image: var(--carved-pattern);
+      -webkit-mask-image: var(--carved-pattern);
+      mask-repeat: repeat;
+      -webkit-mask-repeat: repeat;
+      mask-size: 24px 24px;
+      -webkit-mask-size: 24px 24px;
     }
     .carved-surface > * { position: relative; z-index: 1; }
     @keyframes carvedSheen {
@@ -132,18 +144,41 @@
     @media (prefers-reduced-motion: reduce) {
       .carved-surface::after { animation: none; }
     }
+    /* Bars that carry the brand badge (top identity bar, quiz/results
+       header) get a radial fade so the dot texture — and the glint
+       riding on top of it — clears away smoothly around the logo instead
+       of dots sitting flush behind it. ::before already draws only dots
+       (its background-image), so one radial mask is enough to fade it.
+       ::after already draws only within dot shapes (masked to the tile),
+       so its radial fade is intersected with that tile mask. */
+    .topbar.carved-surface::before, .header.carved-surface::before {
+      mask-image: radial-gradient(circle at 38px 50%, transparent 0, transparent 20px, #000 40px, #000 100%);
+      -webkit-mask-image: radial-gradient(circle at 38px 50%, transparent 0, transparent 20px, #000 40px, #000 100%);
+    }
+    .topbar.carved-surface::after, .header.carved-surface::after {
+      mask-image: var(--carved-pattern), radial-gradient(circle at 38px 50%, transparent 0, transparent 20px, #000 40px, #000 100%);
+      -webkit-mask-image: var(--carved-pattern), radial-gradient(circle at 38px 50%, transparent 0, transparent 20px, #000 40px, #000 100%);
+      mask-repeat: repeat, no-repeat;
+      -webkit-mask-repeat: repeat, no-repeat;
+      mask-size: 24px 24px, 100% 100%;
+      -webkit-mask-size: 24px 24px, 100% 100%;
+      mask-composite: intersect;
+      -webkit-mask-composite: source-in;
+    }
 
     /* ── INTRO LOADING SEQUENCE (fake, aesthetic-only, page-load once) ──
-       Choreography: a ring of loose particles drifts inward and dissolves
-       ("scattered questions" being gathered up) → the rounded badge plate
-       irises open behind them with a spring overshoot → the magnifying-
-       glass/"B" mark draws itself on top, stroke by stroke → a glow pulse
-       + the wordmark settle in → the whole screen contracts away from the
-       badge's position, handing off visually to the identical badge that's
-       already waiting in the header. The badge markup/colors here are the
-       exact same shape as the tab favicon and the header .brand-mark (see
-       --brand-badge-bg / --brand-badge-fg), so the loading screen visibly
-       "resolves into" the same logo used everywhere else in the app. */
+       Choreography: the rounded badge plate irises open with a spring
+       overshoot → the cyan ring blooms into place around it → the
+       magnifying glass sweeps in from off-badge at an angle and settles
+       onto the "D" mark as if it just found what it was searching for,
+       its lens flashing a glint right as it lands → a glow pulse on the
+       assembled badge + the wordmark settle in → the whole screen
+       contracts away from the badge's position, handing off visually to
+       the identical badge already waiting in the header. The badge
+       markup/colors here are the exact same mark as the tab favicon and
+       the header .brand-mark (see --brand-badge-bg / --brand-badge-fg /
+       --brand-badge-ring), so the loading screen visibly "resolves into"
+       the same logo used everywhere else in the app. */
     #introScreen {
       position: fixed; inset: 0; z-index: 100000;
       display: flex; align-items: center; justify-content: center;
@@ -172,12 +207,55 @@
     #introBadgeSvg { width: 100%; height: 100%; overflow: visible; }
     .intro-particles { display: none; }
 
-    .intro-plate { fill: rgba(255,255,255,.14); stroke: rgba(255,255,255,.4); stroke-width: 1.5; }
-    .intro-icon { fill: none; stroke: #fff; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; }
-    .sigil-path { opacity: .95; }
+    .intro-plate { fill: rgba(255,255,255,.14); stroke: rgba(255,255,255,.4); stroke-width: 7.8; }
+    .intro-ring  { fill: var(--brand-badge-ring); }
+    .sigil-d, .sigil-glass { fill: #fff; }
+    .sigil-glint { fill: #D8F4FF; }
+
+    /* Ring blooms into place just after the plate irises open. */
+    .intro-ring-group {
+      transform-box: fill-box; transform-origin: 50% 50%;
+      animation: introRingBloom .6s cubic-bezier(.25,.9,.35,1.2) .16s both;
+    }
+    @keyframes introRingBloom {
+      0%   { opacity: 0; transform: scale(.6); }
+      65%  { opacity: 1; transform: scale(1.06); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    /* The magnifying glass sweeps in at an angle and settles onto the "D"
+       mark, as though it just located it — the glint flashes right as it
+       lands, echoing a moment of discovery. The "D" simply fades/scales
+       in underneath, already "found". */
+    .sigil-d {
+      transform-box: fill-box; transform-origin: 50% 50%;
+      animation: sigilDReveal .5s ease-out .3s both;
+    }
+    @keyframes sigilDReveal {
+      0%   { opacity: 0; transform: scale(.8); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .intro-glass-group {
+      transform-box: fill-box; transform-origin: 50% 50%;
+      animation: introGlassSweepIn .62s cubic-bezier(.2,.7,.25,1) .42s both;
+    }
+    @keyframes introGlassSweepIn {
+      0%   { opacity: 0; transform: translate(34%, -30%) rotate(26deg) scale(.72); }
+      65%  { opacity: 1; transform: translate(-3%, 2%) rotate(-5deg) scale(1.05); }
+      100% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+    }
+    .sigil-glint {
+      opacity: 0;
+      animation: sigilGlintFlash .7s ease-out .78s both;
+    }
+    @keyframes sigilGlintFlash {
+      0%   { opacity: 0; }
+      35%  { opacity: 1; }
+      60%  { opacity: .55; }
+      100% { opacity: .85; }
+    }
 
     #introBadgeSvg.sigil-glow {
-      filter: drop-shadow(0 0 10px rgba(255,255,255,.55)) drop-shadow(0 0 28px rgba(143,182,255,.5));
+      filter: drop-shadow(0 0 10px rgba(255,255,255,.55)) drop-shadow(0 0 28px rgba(26,214,229,.55));
       animation: sigilPulse 1s ease-in-out;
     }
     @keyframes sigilPulse {
@@ -200,6 +278,7 @@
       #introScreen { transition: opacity .3s ease; clip-path: none !important; }
       .intro-inner { transition: opacity .3s ease; transform: none !important; }
       .intro-badge-wrap { animation: none !important; opacity: 1; transform: none; }
+      .intro-ring-group, .sigil-d, .intro-glass-group, .sigil-glint { animation: none !important; opacity: 1; transform: none; }
       #introBadgeSvg.sigil-glow { animation: none !important; filter: none; }
       .intro-wordmark { transition: opacity .3s ease; }
     }
@@ -257,14 +336,42 @@
       display: flex; align-items: center; gap: 10px;
       font-family: var(--font-display);
     }
-    /* Brand mark — identical badge shape (rounded-square plate + "qb"
-       mark) as the tab favicon and the loading screen; see
-       --brand-badge-bg / --brand-badge-fg. */
-    .brand-mark { width: clamp(26px, 6vw, 30px); height: clamp(26px, 6vw, 30px); flex-shrink: 0; filter: drop-shadow(0 0 5px rgba(143,182,255,.4)); }
+    /* Brand mark — identical badge (rounded-square plate + cyan ring +
+       magnifying-glass/"D" mark) as the tab favicon, the loading screen,
+       and the PDF export header/cover; see --brand-badge-bg /
+       --brand-badge-fg / --brand-badge-ring. The mark is a pixel-accurate
+       vector trace of the source artwork (assets/brand/logo-mark.svg),
+       so it's built from filled silhouette paths rather than strokes. */
+    .brand-mark { width: clamp(26px, 6vw, 30px); height: clamp(26px, 6vw, 30px); flex-shrink: 0; overflow: visible; filter: drop-shadow(0 0 5px rgba(26,214,229,.45)); }
     .brand-mark .badge-plate { fill: var(--brand-badge-bg); }
-    .brand-mark .badge-icon { fill: none; stroke: var(--brand-badge-fg); stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; }
+    .brand-mark .badge-ring  { fill: var(--brand-badge-ring); }
+    .brand-mark .badge-d,
+    .brand-mark .badge-glass,
+    .brand-mark .badge-glint { fill: var(--brand-badge-fg); }
+
+    /* Tailored idle motion — the magnifying glass gives a slow, deliberate
+       "sweep", as if actively scanning for the next question, and its lens
+       catches a soft shimmer of light. The "D" mark stays still, anchoring
+       the badge as a fixed identity while the glass does the searching. */
+    .brand-mark .badge-glass-group { transform-box: fill-box; transform-origin: 50% 50%; animation: badgeScan 3.6s ease-in-out infinite; }
+    .brand-mark .badge-glint       { transform-box: fill-box; transform-origin: 50% 50%; animation: badgeGlint 2.6s ease-in-out infinite; }
+    .brand-mark .badge-ring        { animation: badgeRingGlow 3.6s ease-in-out infinite; }
+    @keyframes badgeScan {
+      0%, 100% { transform: rotate(0deg) translate(0, 0); }
+      50%      { transform: rotate(-7deg) translate(-3%, 2%); }
+    }
+    @keyframes badgeGlint {
+      0%, 100% { opacity: .45; }
+      50%      { opacity: 1; }
+    }
+    @keyframes badgeRingGlow {
+      0%, 100% { opacity: .88; }
+      50%      { opacity: 1; }
+    }
     @media (prefers-reduced-motion: reduce) {
-      .brand-mark, .brand-mark .badge-icon circle { animation: none; }
+      .brand-mark .badge-glass-group,
+      .brand-mark .badge-glint,
+      .brand-mark .badge-ring { animation: none; }
     }
     .timer {
       font-size: 1.28rem; font-weight: 800;
@@ -293,9 +400,9 @@
     }
     .topbar-brand { display: flex; align-items: center; gap: 11px; }
     .topbar-brand .brand-mark { width: 32px; height: 32px; }
-    .topbar-word { display: flex; flex-direction: column; line-height: 1.15; }
-    .topbar-title { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; letter-spacing: .2px; }
-    .topbar-sub { font-size: .72rem; opacity: .72; letter-spacing: .3px; }
+    .topbar-word { display: flex; flex-direction: row; align-items: baseline; line-height: 1.15; }
+    .topbar-title { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; letter-spacing: .2px; color: #fff; }
+    .topbar-sub { margin-left: .38em; }
     .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
     .topbar-right .stats-open-btn { margin-top: 0; }
 

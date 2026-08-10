@@ -882,16 +882,20 @@ function _pdxLoadJsPDF() {
   });
 }
 
-/* Same badge markup/colours as the favicon, header .brand-mark and the
-   intro-screen sigil (index.html) — rasterized once to a PNG data URL so
-   jsPDF can draw it, then cached for the rest of this export. */
-const PDX_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="22" fill="#0A3F52"/>
-  <circle cx="36" cy="54" r="16" fill="none" stroke="#6FE3F0" stroke-width="11"/>
-  <path d="M46 65 L58 78" fill="none" stroke="#6FE3F0" stroke-width="11" stroke-linecap="round"/>
-  <path d="M66 30 L66 74" fill="none" stroke="#6FE3F0" stroke-width="11" stroke-linecap="round"/>
-  <path d="M66 30 L78 30 A11 10 0 0 1 78 50 L66 50" fill="none" stroke="#6FE3F0" stroke-width="11"/>
-  <path d="M66 50 L80 50 A12 12 0 0 1 80 74 L66 74" fill="none" stroke="#6FE3F0" stroke-width="11"/>
+/* Same badge markup/colours as the favicon (assets/brand/logo-mark.svg),
+   the header .brand-mark and the intro-screen sigil (index.html) —
+   rasterized once to a PNG data URL so jsPDF can draw it, then cached for
+   the rest of this export. Built from the same pixel-accurate vector
+   trace of the source logo artwork; a PDF page is static, so it's just
+   the plain badge with no animation. */
+const PDX_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 523 523">
+  <rect x="0" y="0" width="523" height="523" rx="115" fill="#152B55"/>
+  <g transform="translate(0,523) scale(0.1,-0.1)" fill="#1AD6E5">
+    <path d="M1248 5139 c-506 -59 -940 -415 -1099 -902 -67 -205 -64 -130 -64 -1627 0 -1256 1 -1362 18 -1449 96 -509 471 -914 967 -1047 157 -42 208 -44 1543 -44 846 0 1310 4 1374 11 578 64 1040 499 1151 1083 16 83 17 204 17 1451 0 1266 -1 1366 -18 1448 -96 470 -404 839 -837 1000 -53 20 -141 46 -195 58 l-100 23 -1340 2 c-737 1 -1374 -2 -1417 -7z m2698 -189 c258 -23 499 -135 684 -319 159 -158 252 -325 311 -561 l24 -95 0 -1350 c0 -1104 -3 -1363 -14 -1420 -52 -267 -190 -508 -383 -670 -184 -155 -377 -238 -613 -265 -120 -13 -2536 -13 -2665 0 -239 25 -434 109 -619 265 -192 162 -319 379 -378 647 -17 78 -18 163 -18 1428 0 1272 1 1350 19 1430 70 322 251 583 520 750 141 88 312 146 471 160 126 11 2534 11 2661 0z"/>
+    <path d="M3382 2722 c-17 -37 -43 -87 -58 -111 -15 -24 -22 -41 -16 -37 6 3 12 3 14 -1 1 -5 38 -26 82 -47 195 -97 326 -316 326 -546 0 -234 -131 -450 -332 -550 -134 -65 -170 -70 -610 -70 l-388 0 -1 373 c-1 204 -1 375 0 380 0 4 -17 7 -38 7 -22 0 -72 7 -111 15 -40 8 -76 13 -81 9 -5 -3 -9 -198 -9 -463 l0 -458 23 -34 c48 -72 33 -70 592 -66 552 4 542 3 692 72 171 79 305 203 398 369 137 246 141 562 9 816 -92 175 -238 312 -415 388 l-47 20 -30 -66z"/>
+    <path d="M2258 4084 c-298 -54 -568 -271 -689 -554 -54 -128 -73 -220 -72 -365 0 -238 61 -409 212 -599 l49 -62 -35 -52 c-21 -32 -47 -58 -68 -66 -19 -8 -50 -37 -72 -68 -191 -257 -422 -577 -432 -595 -6 -12 -11 -38 -11 -58 0 -100 101 -172 196 -139 22 8 40 14 41 14 4 0 462 628 472 647 6 12 11 31 11 43 0 24 69 120 86 120 7 0 50 -18 96 -40 138 -65 229 -85 398 -84 119 0 160 4 229 23 197 53 380 174 507 334 226 286 263 671 97 1002 -98 197 -285 368 -494 452 -146 59 -353 78 -521 47z m377 -254 c119 -37 202 -87 290 -175 213 -211 268 -523 141 -790 -198 -416 -731 -529 -1087 -230 -219 184 -300 482 -205 754 36 102 89 185 171 266 100 100 233 170 368 195 83 15 242 5 322 -20z"/>
+    <path d="M2393 3708 c-33 -16 -48 -61 -33 -97 14 -34 44 -47 123 -55 170 -15 325 -165 343 -332 9 -86 21 -120 50 -133 38 -17 62 -13 89 14 20 19 25 34 25 77 0 240 -194 472 -437 523 -79 17 -129 18 -160 3z"/>
+  </g>
 </svg>`;
 
 function _pdxRasterizeSvg(svgText, px) {
