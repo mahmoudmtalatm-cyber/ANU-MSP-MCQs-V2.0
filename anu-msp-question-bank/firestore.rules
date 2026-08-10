@@ -1,0 +1,285 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Shared permission helpers ──
+    // Mirrors the client-side ADMIN_PERMISSIONS model (roster doc shape:
+    // appConfig/adminRoster { admins: { [emailLower]: { permissions:[...],
+    // curriculumScope:{...}, addedBy, addedAt } } }). The super admin
+    // always has every permission implicitly (same as getAdminPermissions()
+    // does client-side); everyone else's permissions come from the roster
+    // doc itself. Keep in sync with js/admin-curriculum-scope.js.
+    function isSuperAdmin() {
+      return request.auth != null
+             && request.auth.token.email == "mahmoudmtalatm@gmail.com";
+    }
+    function hasRosterPermission(perm) {
+      return request.auth != null
+             && exists(/databases/$(database)/documents/appConfig/adminRoster)
+             && request.auth.token.email.lower() in
+                  get(/databases/$(database)/documents/appConfig/adminRoster).data.admins
+             && perm in
+                  get(/databases/$(database)/documents/appConfig/adminRoster)
+                    .data.admins[request.auth.token.email.lower()].permissions;
+    }
+    function isCurriculumAdmin() { return isSuperAdmin() || hasRosterPermission('curriculum'); }
+    function isCommunityAdmin()  { return isSuperAdmin() || hasRosterPermission('community'); }
+    function isAdminsAdmin()     { return isSuperAdmin() || hasRosterPermission('admins'); }
+
+    // ── Scoped curriculum permission helpers ──
+    // A 'curriculum' admin can be granted either the WHOLE curriculum
+    // (curriculumScope.type == 'all') or a specific slice of it
+    // (curriculumScope.type == 'scoped', .years is a tree keyed by year):
+    //   { "Year A": true }                                  → whole year
+    //   { "Year B": { "Module 1": true } }                   → whole module
+    //   { "Year B": { "Module 2": ["subjKeyA","subjKeyB"] } } → specific subjects
+    // Mirrors getCurriculumScope() / scopeSubjectAccess() in
+    // js/admin-curriculum-scope.js — keep both in sync if this ever changes.
+    // Admins created before this feature existed have no curriculumScope
+    // field at all; they're treated as 'all' so nothing breaks for them.
+    function _curriculumScope() {
+      return isSuperAdmin()
+        ? {'type': 'all'}
+        : get(/databases/$(database)/documents/appConfig/adminRoster)
+            .data.admins[request.auth.token.email.lower()].get('curriculumScope', {'type': 'all'});
+    }
+    function _curriculumScopeIsAll() {
+      return _curriculumScope().type == 'all';
+    }
+    // True if this admin's curriculum scope covers `subject` — looked up
+    // via that subject's Year/Module placement, recorded in
+    // appConfig/curriculumExtensions.subjects[subject] = {year, module, ...}.
+    function curriculumScopeAllowsSubject(subject) {
+      return _curriculumScopeIsAll() ||
+        (
+          exists(/databases/$(database)/documents/appConfig/curriculumExtensions) &&
+          subject in get(/databases/$(database)/documents/appConfig/curriculumExtensions).data.get('subjects', {}) &&
+          _subjectAllowedByScope(
+            get(/databases/$(database)/documents/appConfig/curriculumExtensions).data.subjects[subject].get('year', ''),
+            get(/databases/$(database)/documents/appConfig/curriculumExtensions).data.subjects[subject].get('module', ''),
+            subject
+          )
+        );
+    }
+    function _subjectAllowedByScope(year, module, subject) {
+      let scopeYears = _curriculumScope().get('years', {});
+      return (year in scopeYears) &&
+        (
+          scopeYears[year] == true ||
+          (
+            (module in scopeYears[year]) &&
+            (
+              scopeYears[year][module] == true ||
+              subject in scopeYears[year][module]
+            )
+          )
+        );
+    }
+
+    // Personal stats — only the owner can read/write
+    match /stats/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // OLD (pre-#56) per-quiz history documents, nested directly under
+    // stats/{userId} rather than users/{userId} — kept ONLY so
+    // js/migration.js (runOneTimeMigrationIfNeeded) can read and then
+    // delete these once each entry is safely copied to local storage.
+    // Not written by any current-architecture code; safe to remove this
+    // rule (and delete any leftover documents here) once the migration
+    // has been confirmed complete for all users.
+    match /stats/{userId}/statsHistory/{historyId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /stats/{userId}/statsHistory/{historyId}/images/{imgIdx} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /stats/{userId}/statsHistory/{historyId}/fullImages/{imgIdx} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // One document per finished quiz (see saveHistoryEntryToStorage in
+    // js/firebase-storage.js) — owner-only, same as their other data.
+    match /users/{userId}/statsHistory/{historyId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Wrong-question images for a stats history entry (see
+    // uploadHistoryImagesToStorage in js/firebase-storage.js) — owner-only,
+    // same as their other data.
+    match /users/{userId}/statsHistory/{historyId}/images/{imgIdx} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Full quiz snapshot (every question as taken, right + wrong) — a
+    // permanent archival copy kept in case it's needed later, independent
+    // of the live quiz (see uploadHistoryFullSnapshotToStorage). Owner-only.
+    match /users/{userId}/statsHistory/{historyId}/full/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /users/{userId}/statsHistory/{historyId}/fullImages/{imgIdx} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Personal custom quizzes — only the owner can read/write
+    match /users/{userId}/customQuizzes/{quizId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Quiz images subcollection — only the owner can read/write
+    match /users/{userId}/customQuizzes/{quizId}/images/{imgIdx} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Per-user cache-version doc for the custom-quizzes local cache
+    // (users/{userId}/meta/cacheVersion). Owner-only, same as their other data.
+    match /users/{userId}/meta/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Display names — each user can only read/write their own profile
+    match /userProfiles/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Community shared quizzes — any signed-in user can read,
+    // only the author can create, and the author or anyone holding the
+    // 'community' roster permission (or the super admin) can delete.
+    match /sharedQuizzes/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.authorUid == request.auth.uid;
+      allow delete: if request.auth != null
+                    && (resource.data.authorUid == request.auth.uid
+                        || isCommunityAdmin());
+      // No update allowed — share is immutable (delete & re-share to replace)
+    }
+    // Shared-quiz images subcollection — same read/write access as the parent quiz.
+    match /sharedQuizzes/{docId}/images/{imgIdx} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    // Published question bank — readable by everyone (even logged out).
+    // Writable (including delete, e.g. from the cascading Year/Module/Subject
+    // delete) by the super admin, OR by anyone holding the 'curriculum'
+    // roster permission whose curriculum SCOPE covers this particular
+    // subject — whole curriculum, whole Year, whole Module, or this exact
+    // subject specifically (see the scoped-curriculum helpers above). This
+    // is the main enforcement point for "give an admin permission to a
+    // specific year/module/subject only": it's checked per write, per
+    // subject, directly against Firestore — not just trusted client-side.
+    match /publishedQuestions/{subject}/lectures/{lectureId} {
+      allow read: if true;
+      allow write: if isCurriculumAdmin() && curriculumScopeAllowsSubject(subject);
+    }
+    // Published lecture images subcollection — same rules as the parent lecture
+    match /publishedQuestions/{subject}/lectures/{lectureId}/images/{imgIdx} {
+      allow read: if true;
+      allow write: if isCurriculumAdmin() && curriculumScopeAllowsSubject(subject);
+    }
+    // App-wide config (curriculum/published cache-version doc,
+    // publishedManifest, etc.) — writable by the super admin OR anyone
+    // holding the 'curriculum' roster permission, REGARDLESS of their
+    // curriculum scope, since these are global bookkeeping documents, not
+    // curriculum content or structure. appConfig/curriculumExtensions is
+    // explicitly excluded here (docId != 'curriculumExtensions') and gets
+    // its own, stricter rule right below it — a scoped curriculum admin
+    // must NOT be able to reach it through this more permissive generic
+    // rule, since Firestore grants access if ANY matching rule allows it.
+    // adminRoster further below adds its own *additional* permissive rule
+    // on top of this one (which is fine, since that's meant to grant more
+    // access, not less).
+    match /appConfig/{docId} {
+      allow read: if true;
+      allow write: if docId != 'curriculumExtensions' && isCurriculumAdmin();
+    }
+    // Curriculum STRUCTURE doc (appConfig/curriculumExtensions — the Years,
+    // Modules and Subjects that exist, plus their icons). Restructuring the
+    // curriculum itself (adding/renaming/deleting a Year, Module, or
+    // Subject) is treated as a whole-curriculum operation and is
+    // deliberately NOT unlocked by a scoped ("specific Year/Module/
+    // Subject") curriculum grant — only the super admin, or an admin whose
+    // curriculumScope.type == 'all', may write this doc.
+    //
+    // A scoped admin can still fully publish, edit, reorder and delete
+    // quizzes inside whatever subjects their scope covers (see the
+    // publishedQuestions rule above) — they just can't reshape the tree
+    // itself (that would let them grant themselves access to arbitrary new
+    // subjects by inventing them under a module they already hold). This
+    // mirrors the boundary drawn in the Manage Curriculum tab client-side:
+    // Add/Rename/Delete Year/Module/Subject controls are hidden entirely
+    // for scoped admins there too. See README.md → "Scoped Curriculum
+    // Permissions" for the full picture.
+    match /appConfig/curriculumExtensions {
+      allow read: if true;
+      allow write: if isCurriculumAdmin() && _curriculumScopeIsAll();
+    }
+    // Admin roster doc (appConfig/adminRoster). Writable by the super admin
+    // (via the generic appConfig rule above, since isCurriculumAdmin()
+    // includes isSuperAdmin()) or by anyone currently holding the 'admins'
+    // roster permission — so an assigned (non-super) admin with the
+    // 'admins' permission can actually persist the admins they grant/revoke,
+    // instead of it being accepted locally and then rejected by the server.
+    //
+    // Note: this only gates *who* may write the doc at all — it does not
+    // re-validate on the server that the acting admin only grants
+    // permissions (or curriculum scopes) they hold themselves, or respects
+    // the assigner-chain rules; those checks currently live client-side
+    // only (in assignAdmin/removeAdmin/isCurriculumScopeSubset). Fine as
+    // long as 'admins' permission is only ever handed to people you trust,
+    // since anyone with it could in principle write this doc directly
+    // (e.g. via the SDK) and bypass those client-side checks. What IS
+    // enforced server-side regardless is that a curriculum admin — however
+    // they ended up with whatever scope is recorded here — can only
+    // actually publish/edit/delete quiz content within that recorded
+    // scope (publishedQuestions rule above) and can only restructure the
+    // curriculum at all if that scope is 'all' (curriculumExtensions rule
+    // above). So even a maliciously-edited roster doc can't grant broader
+    // *content* access than what the scope-check functions above allow.
+    match /appConfig/adminRoster {
+      allow read: if true;
+      allow write: if isAdminsAdmin();
+    }
+    // Community-quiz cache-version doc (appConfig/sharedQuizzesVersion) —
+    // REMOVED in build 65. It was superseded by appConfig/sharedQuizzesManifest
+    // (per-quiz granular, Worker-written only) back in build 56; this rule
+    // (and the matching client-side read/write code in js/data-sync.js) was
+    // kept around only as a transition safety net and has now been confirmed
+    // unused and removed outright.
+    // Shared AI explanation pool (match /explanations/{questionHash}) —
+    // REMOVED in build 78. Explanations are now generated fresh per
+    // user/session only (Gemini call + in-memory session cache) and are
+    // never written to or read from Firestore, so this collection's rules
+    // are no longer needed. Deploy this file to drop the old rules from
+    // the live project.
+
+    // --- New, added for the R2/local-storage architecture ---
+
+    // Curriculum's existing per-lecture manifest doc (appConfig/publishedManifest)
+    // is now ALSO bumped by the Cloudflare Worker (using its own Firebase
+    // Admin credentials, which bypass these rules entirely) every time it
+    // authorizes a curriculum content write/delete — on top of whatever
+    // admin-side writes already happen elsewhere in this file. No rule
+    // change needed here beyond what already exists above for appConfig/{docId}.
+
+    // Community quizzes' version tracking moves from a single global
+    // timestamp (the real bug this fixes — any one quiz changing forced a
+    // full re-fetch of every cached community quiz) to this new, per-quiz
+    // granular manifest doc. Written ONLY by the Worker (Admin SDK bypasses
+    // rules) — never directly by a client, so a version can never be
+    // bumped except as a side effect of a write the Worker already
+    // authorized against the real quiz's author/admin check.
+    match /appConfig/sharedQuizzesManifest {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Image reference counters (see plan §4). Entirely internal bookkeeping
+    // for the Worker's safe delete-on-replace logic — no client ever needs
+    // to read or write these directly.
+    match /imageRefcounts/{hash} {
+      allow read, write: if false;
+    }
+
+    // p2pSignaling — REMOVED in build 77 along with the P2P direct-device
+    // transfer feature (js/p2p-transfer.js deleted; Backup & Transfer now
+    // only offers file-based Export/Import). This collection is no longer
+    // written to by anything client-side; if it still has leftover
+    // documents from before this removal, they're harmless and will age
+    // out on their own, but there's no rule granting access to them
+    // anymore, so they're effectively orphaned. Safe to delete the
+    // collection outright in the Firebase Console if you'd rather clean
+    // it up than wait.
+  }
+}

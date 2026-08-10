@@ -16,10 +16,10 @@
        curriculumScope: {
          type: 'scoped',
          years: {
-           "Year 2": true,                          // whole year
+           "Year 2": true, // whole year
            "Year 3": {
-             "Module 4": true,                       // whole module
-             "Module 5": ["subjKeyA", "subjKeyB"]    // specific subjects only
+             "Module 4": true, // whole module
+             "Module 5": ["subjKeyA", "subjKeyB"] // specific subjects only
            }
          }
        },
@@ -199,9 +199,9 @@ function curriculumScopeSummary(scope) {
    Curriculum tab's adminCurrNavLevel/adminTargetYear — navigating here
    never affects, and is never affected by, wherever the admin was last
    browsing there. Stops at Subject level (no quiz-level granularity). */
-let adminNewAdminScope   = { type: 'all' };
-let adminScopePickLevel  = 'years';   // 'years' | 'modules' | 'subjects'
-let adminScopePickYear   = '';
+let adminNewAdminScope = { type: 'all' };
+let adminScopePickLevel = 'years'; // 'years' | 'modules' | 'subjects'
+let adminScopePickYear = '';
 let adminScopePickModule = '';
 
 // Which of the 3 "Add New Admin" permission checkboxes are currently
@@ -217,13 +217,13 @@ let adminScopePickModule = '';
 // Whole/Specific mode. Every render now reads from here instead of
 // re-deriving "checked" state from a DOM node that's about to be replaced.
 let adminNewPermsChecked = { curriculum: false, community: false, admins: false };
-let adminNewEmailDraft   = '';
+let adminNewEmailDraft = '';
 
 function resetAdminNewAdminScopeState() {
   const actingScope = getCurriculumScope(window._currentUser);
-  adminNewAdminScope   = actingScope.type === 'all' ? { type: 'all' } : { type: 'scoped', years: {} };
-  adminScopePickLevel  = 'years';
-  adminScopePickYear   = '';
+  adminNewAdminScope = actingScope.type === 'all' ? { type: 'all' } : { type: 'scoped', years: {} };
+  adminScopePickLevel = 'years';
+  adminScopePickYear = '';
   adminScopePickModule = '';
 }
 
@@ -233,7 +233,7 @@ function resetAdminNewAdminScopeState() {
    opening the admin panel, or after successfully adding an admin. */
 function resetAdminNewAdminFormState() {
   adminNewPermsChecked = { curriculum: false, community: false, admins: false };
-  adminNewEmailDraft   = '';
+  adminNewEmailDraft = '';
   resetAdminNewAdminScopeState();
 }
 
@@ -301,14 +301,14 @@ function adminScopeToggleSubject(year, mod, key) {
   renderAdminManagePanel();
 }
 
-function adminScopeGoYears()      { adminScopePickYear = ''; adminScopePickModule = ''; adminScopePickLevel = 'years'; renderAdminManagePanel(); }
-function adminScopeGoModules()    { adminScopePickModule = ''; adminScopePickLevel = 'modules'; renderAdminManagePanel(); }
-function adminScopeOpenYear(y)    { adminScopePickYear = y; adminScopePickModule = ''; adminScopePickLevel = 'modules'; renderAdminManagePanel(); }
-function adminScopeOpenModule(m)  { adminScopePickModule = m; adminScopePickLevel = 'subjects'; renderAdminManagePanel(); }
+function adminScopeGoYears() { adminScopePickYear = ''; adminScopePickModule = ''; adminScopePickLevel = 'years'; renderAdminManagePanel(); }
+function adminScopeGoModules() { adminScopePickModule = ''; adminScopePickLevel = 'modules'; renderAdminManagePanel(); }
+function adminScopeOpenYear(y) { adminScopePickYear = y; adminScopePickModule = ''; adminScopePickLevel = 'modules'; renderAdminManagePanel(); }
+function adminScopeOpenModule(m) { adminScopePickModule = m; adminScopePickLevel = 'subjects'; renderAdminManagePanel(); }
 
 function adminScopeBreadcrumbHtml() {
   let html = `<div class="curr-breadcrumb" style="margin:8px 0 4px;">`;
- html += `<span class="curr-crumb ${adminScopePickLevel === 'years' ? 'active' : ''}" onclick="adminScopeGoYears()">Years</span>`;
+  html += `<span class="curr-crumb ${adminScopePickLevel === 'years' ? 'active' : ''}" onclick="adminScopeGoYears()"> Years</span>`;
   if (adminScopePickYear) {
     html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${adminScopePickLevel === 'modules' ? 'active' : ''}" onclick="adminScopeGoModules()">${escapeHtml(adminScopePickYear)}</span>`;
   }
@@ -325,7 +325,7 @@ function adminScopeTreeHtml() {
   // (and can drill into) their own granted Years/Modules/Subjects.
   const actingScope = getCurriculumScope(window._currentUser);
   let html = adminScopeBreadcrumbHtml();
-  if (adminScopePickLevel === 'modules')  html += `<button class="curr-back-btn" type="button" onclick="adminScopeGoYears()">← Back to Years</button>`;
+  if (adminScopePickLevel === 'modules') html += `<button class="curr-back-btn" type="button" onclick="adminScopeGoYears()">← Back to Years</button>`;
   if (adminScopePickLevel === 'subjects') html += `<button class="curr-back-btn" type="button" onclick="adminScopeGoModules()">← Back to Modules</button>`;
 
   html += `<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;">`;
@@ -341,7 +341,7 @@ function adminScopeTreeHtml() {
             <input type="checkbox" ${access === 'all' ? 'checked' : ''} onchange="adminScopeToggleYear('${escapeHtml(y)}')" />
           </label>
           <div style="flex:1;min-width:0;cursor:pointer;" onclick="adminScopeOpenYear('${escapeHtml(y)}')">
- <div class="curr-item-name">${escapeHtml(y)} ${access === 'partial' ? '<span class="scope-partial-badge">partial</span>' : ''}</div>
+            <div class="curr-item-name"> ${escapeHtml(y)} ${access === 'partial' ? '<span class="scope-partial-badge">partial</span>' : ''}</div>
             <div class="curr-item-sub">${modCount} module(s)</div>
           </div>
           <span class="curr-item-arrow" onclick="adminScopeOpenYear('${escapeHtml(y)}')">▶</span>
@@ -381,7 +381,7 @@ function adminScopeTreeHtml() {
             <input type="checkbox" ${access === 'all' ? 'checked' : ''} onchange="adminScopeToggleSubject('${escapeHtml(year)}','${escapeHtml(mod)}','${escapeHtml(k)}')" />
           </label>
           <div style="flex:1;min-width:0;">
-            <div class="curr-item-name">${escapeHtml(s.icon || '📘')} ${escapeHtml(s.label || k)}</div>
+            <div class="curr-item-name">${escapeHtml(s.icon || '')} ${escapeHtml(s.label || k)}</div>
           </div>
         </div>`;
     }).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No subjects within your own curriculum access in ${escapeHtml(mod)}.</div>`;
@@ -391,7 +391,7 @@ function adminScopeTreeHtml() {
   return html;
 }
 
-/* Full "Curriculum Access" section rendered inside the Add New Admin
+/* Full " Curriculum Access" section rendered inside the Add New Admin
    form — hidden by default; shown when the 'curriculum' checkbox is
    checked (adminNewPermsChecked.curriculum, kept in sync by
    adminOnPermCheckboxChange). */
@@ -402,15 +402,15 @@ function adminCurrScopePickerSectionHtml() {
 
   return `
     <div class="curr-section" id="adminCurrScopeSection" style="display:${adminNewPermsChecked.curriculum ? '' : 'none'};margin-top:4px;">
- <div class="curr-section-title">Curriculum Access</div>
+      <div class="curr-section-title"> Curriculum Access</div>
       <div class="scope-mode-row">
         <label class="scope-mode-opt">
           <input type="radio" name="adminScopeMode" ${mode === 'all' ? 'checked' : ''} ${!actingIsAll ? 'disabled' : ''}
- onchange="adminScopeSetMode('all')" /> Whole Curriculum
+                 onchange="adminScopeSetMode('all')" /> Whole Curriculum
         </label>
         <label class="scope-mode-opt">
           <input type="radio" name="adminScopeMode" ${mode === 'scoped' ? 'checked' : ''}
- onchange="adminScopeSetMode('scoped')" /> Specific Year / Module / Subject
+                 onchange="adminScopeSetMode('scoped')" /> Specific Year / Module / Subject
         </label>
       </div>
       ${!actingIsAll ? `<div class="scope-hint">You can only grant curriculum access within what you hold: ${escapeHtml(curriculumScopeSummary(actingScope))}</div>` : ''}

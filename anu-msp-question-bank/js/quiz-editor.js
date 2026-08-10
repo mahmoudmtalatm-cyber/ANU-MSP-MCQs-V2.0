@@ -17,10 +17,10 @@ function renderAdminQuestionEditor(containerId) {
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 0 10px;">
     <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;">
- Editing — ${adminEditQuestions.length} question${adminEditQuestions.length !== 1 ? 's' : ''}
+       Editing — ${adminEditQuestions.length} question${adminEditQuestions.length !== 1 ? 's' : ''}
     </div>
     <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
- = correct answer &nbsp;·&nbsp; = linked case questions
+       = correct answer &nbsp;·&nbsp; = linked case questions
     </div>
   </div>`;
   html += _renderBulkAiToolsPanel('admin', adminEditQuestions);
@@ -29,8 +29,8 @@ function renderAdminQuestionEditor(containerId) {
 
   adminEditQuestions.forEach((q, i) => {
     const optEntries = getOptionEntries(q);
-    const usedKeys   = optEntries.map(([k]) => k);
-    const nextKey    = ALL_KEYS.find(k => !usedKeys.includes(k));
+    const usedKeys = optEntries.map(([k]) => k);
+    const nextKey = ALL_KEYS.find(k => !usedKeys.includes(k));
 
     html += `<div class="cq-preview-q cq-editable-q" id="adminEditQ_${i}">`;
 
@@ -42,7 +42,7 @@ function renderAdminQuestionEditor(containerId) {
       ${_renderReorderButtons('admin', i, adminEditQuestions.length)}
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="adminEditDeleteQuestion(${i})"
- style="background:var(--wrong-bg);color:var(--wrong-fg);border-color:var(--red-soft-border);">Delete</button>
+        style="background:var(--wrong-bg);color:var(--wrong-fg);border-color:var(--red-soft-border);"> Delete</button>
     </div>`;
 
     html += `<textarea class="cq-edit-textarea" rows="2"
@@ -62,17 +62,17 @@ function renderAdminQuestionEditor(containerId) {
             style="max-width:200px;max-height:130px;object-fit:contain;display:block;" />
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;justify-content:center;">
- <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Question Image</div>
+          <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;"> Question Image</div>
           <label class="cq-img-action-btn" title="Upload a different image">
- Change Image
+             Change Image
             <input type="file" accept="image/*" style="display:none;" onchange="adminEditReplaceImage(${i}, event)" />
           </label>
- <button class="cq-img-action-btn cq-img-remove-btn" onclick="adminEditRemoveImage(${i})" type="button">Remove Image</button>
+          <button class="cq-img-action-btn cq-img-remove-btn" onclick="adminEditRemoveImage(${i})" type="button"> Remove Image</button>
         </div>
       </div>`;
     } else {
       html += `<label class="cq-img-upload-label" title="Attach an image to this question">
- Add Image (optional)
+         Add Image (optional)
         <input type="file" accept="image/*" style="display:none;" onchange="adminEditReplaceImage(${i}, event)" />
       </label>`;
     }
@@ -83,7 +83,7 @@ function renderAdminQuestionEditor(containerId) {
 
     html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-muted);
       text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">
- Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with</span>
+      Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with </span>
     </div>`;
 
     html += `<div style="display:flex;flex-direction:column;gap:5px;" id="adminEditOpts_${i}">`;
@@ -129,13 +129,13 @@ function renderAdminQuestionEditor(containerId) {
 
   html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="cq-btn cq-btn-secondary" onclick="adminEditAddBlankQuestion()" style="background:var(--green-mid);">＋ Add Question</button>
- <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('admin')" style="background:var(--violet);color:#fff;">Merge Quizzes In</button>
+    <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('admin')" style="background:var(--violet);color:#fff;"> Merge Quizzes In</button>
     ${adminEditMode === 'published' ? `
       <button class="cq-btn cq-btn-secondary" onclick="openAdminSplitPanel('${adminEditingPublishedId}')"
- style="background:var(--violet);color:#fff;" title="Split into multiple quizzes">Split into Multiple</button>
- <button class="cq-btn" onclick="adminSavePublishedEdits()" title="Implement these edits on the curriculum lecture">Save Changes</button>
+        style="background:var(--violet);color:#fff;" title="Split into multiple quizzes"> Split into Multiple</button>
+      <button class="cq-btn" onclick="adminSavePublishedEdits()" title="Implement these edits on the curriculum lecture"> Save Changes</button>
       <button class="cq-btn cq-btn-secondary" onclick="adminSaveEditsAsCustomQuiz()"
- style="background:var(--violet);color:#fff;" title="Save these edits as a new custom quiz — the curriculum lecture stays untouched">Save as Custom Quiz</button>
+        style="background:var(--violet);color:#fff;" title="Save these edits as a new custom quiz — the curriculum lecture stays untouched"> Save as Custom Quiz</button>
       <button class="cq-btn cq-btn-secondary" onclick="adminCancelEditPublished()">✖ Cancel</button>
     ` : `
       <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;">Edits will be used when you publish below.</div>
@@ -387,10 +387,10 @@ function renderCustomQuizEditor() {
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 0 10px;">
     <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;">
- ${cqCreatingNew ? 'Writing a new quiz' : 'Editing'} — ${cqEditQuestions.length} question${cqEditQuestions.length !== 1 ? 's' : ''}
+       ${cqCreatingNew ? 'Writing a new quiz' : 'Editing'} — ${cqEditQuestions.length} question${cqEditQuestions.length !== 1 ? 's' : ''}
     </div>
     <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
- = correct answer &nbsp;·&nbsp; = linked case questions
+       = correct answer &nbsp;·&nbsp; = linked case questions
     </div>
   </div>`;
   html += _renderBulkAiToolsPanel('customQuiz', cqEditQuestions);
@@ -399,8 +399,8 @@ function renderCustomQuizEditor() {
 
   cqEditQuestions.forEach((q, i) => {
     const optEntries = getOptionEntries(q);
-    const usedKeys   = optEntries.map(([k]) => k);
-    const nextKey    = ALL_KEYS.find(k => !usedKeys.includes(k));
+    const usedKeys = optEntries.map(([k]) => k);
+    const nextKey = ALL_KEYS.find(k => !usedKeys.includes(k));
 
     html += `<div class="cq-preview-q cq-editable-q" id="cqCustomEditQ_${i}">`;
 
@@ -412,7 +412,7 @@ function renderCustomQuizEditor() {
       ${_renderReorderButtons('customQuiz', i, cqEditQuestions.length)}
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="cqEditDeleteQuestion(${i})"
- style="background:var(--wrong-bg);color:var(--wrong-fg);border-color:var(--red-soft-border);">Delete</button>
+        style="background:var(--wrong-bg);color:var(--wrong-fg);border-color:var(--red-soft-border);"> Delete</button>
     </div>`;
 
     html += `<textarea class="cq-edit-textarea" rows="2"
@@ -432,17 +432,17 @@ function renderCustomQuizEditor() {
             style="max-width:200px;max-height:130px;object-fit:contain;display:block;" />
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;justify-content:center;">
- <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Question Image</div>
+          <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;"> Question Image</div>
           <label class="cq-img-action-btn" title="Upload a different image">
- Change Image
+             Change Image
             <input type="file" accept="image/*" style="display:none;" onchange="cqEditReplaceImage(${i}, event)" />
           </label>
- <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqEditRemoveImage(${i})" type="button">Remove Image</button>
+          <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqEditRemoveImage(${i})" type="button"> Remove Image</button>
         </div>
       </div>`;
     } else {
       html += `<label class="cq-img-upload-label" title="Attach an image to this question">
- Add Image (optional)
+         Add Image (optional)
         <input type="file" accept="image/*" style="display:none;" onchange="cqEditReplaceImage(${i}, event)" />
       </label>`;
     }
@@ -453,7 +453,7 @@ function renderCustomQuizEditor() {
 
     html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-muted);
       text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">
- Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with</span>
+      Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with </span>
     </div>`;
 
     html += `<div style="display:flex;flex-direction:column;gap:5px;" id="cqCustomEditOpts_${i}">`;
@@ -499,12 +499,12 @@ function renderCustomQuizEditor() {
 
   html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="cq-btn cq-btn-secondary" onclick="cqEditAddBlankQuestion()" style="background:var(--green-mid);">＋ Add Question</button>
- <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('customQuiz')" style="background:var(--violet);color:#fff;">Merge Quizzes In</button>
+    <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('customQuiz')" style="background:var(--violet);color:#fff;"> Merge Quizzes In</button>
     ${!cqCreatingNew ? `
       <button class="cq-btn cq-btn-secondary" onclick="openSplitPanel('saved', '${cqEditingQuizId}')"
- style="background:var(--violet);color:#fff;" title="Split into multiple quizzes">Split into Multiple</button>
+        style="background:var(--violet);color:#fff;" title="Split into multiple quizzes"> Split into Multiple</button>
     ` : ''}
- <button class="cq-btn" onclick="saveCustomQuizEdits()">Save Changes</button>
+    <button class="cq-btn" onclick="saveCustomQuizEdits()"> Save Changes</button>
     <button class="cq-btn cq-btn-secondary" onclick="closeCustomQuizEditor()">✖ Cancel</button>
   </div>
   ${!cqCreatingNew ? renderSplitPanel('saved', cqEditingQuizId, cqEditQuestions.length) : ''}
@@ -679,7 +679,7 @@ async function saveCustomQuizEdits() {
   _stripEditorTransientFields(cqEditQuestions);
 
   const statusEl = document.getElementById('cqCustomEditStatus_' + _cqEditorKey());
- if (statusEl) statusEl.innerHTML = `<div class="cq-status info">Saving…</div>`;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info"> Saving…</div>`;
 
   const quizzes = loadCustomQuizzes();
 
@@ -708,7 +708,7 @@ async function saveCustomQuizEdits() {
     _questionEditDirty = false;
     if (wasAdmin) { renderAdminPanel(); } else { renderCustomQuizModal(); }
   } catch (e) {
- if (statusEl) statusEl.innerHTML = `<div class="cq-status warning">Save failed: ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status warning"> Save failed: ${escapeHtml(e.message || String(e))}</div>`;
   }
 }
 
@@ -806,13 +806,13 @@ function _renderAdminAssignedListHTML() {
   // The "Publish Quizzes" tab only needs a quick read-only glance at what's
   // already there (so the admin doesn't duplicate a lecture by accident) —
   // reordering, editing, copy/move, and delete all live one place now:
- // the "Manage Curriculum" tab. Showing them here too was redundant
+  // the " Manage Curriculum" tab. Showing them here too was redundant
   // and easy to trigger by mistake mid-publish. It does let the admin pick
   // where the new quiz will land relative to these, via before/after markers.
   const simple = adminActiveTab !== 'curriculum';
 
   sec.innerHTML = simple
- ? `<div class="admin-assigned-title">Publish Here — "${escapeHtml(subjects[subj].label || subj)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— tap Publish Here to choose where the new quiz lands in the list below</span></div>`
+    ? `<div class="admin-assigned-title">Publish Here — "${escapeHtml(subjects[subj].label || subj)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— tap Publish Here to choose where the new quiz lands in the list below</span></div>`
     : `<div class="admin-assigned-title">Published lectures in "${escapeHtml(subjects[subj].label || subj)}" <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-muted);">— use ⬆️⬇️ to set the order students see</span></div>`;
 
   if (!entries.length) {
@@ -827,7 +827,7 @@ function _renderAdminAssignedListHTML() {
   }
 
   if (simple) {
- // Renders as ONE column: a "Publish Here" gap marker before each
+    // Renders as ONE column: a " Publish Here" gap marker before each
     // quiz, the quiz itself (read-only, same card style as the quiz-picker
     // list above), then a final gap marker after the last quiz for the
     // default "append at the end" spot — so there's exactly one way to pick
@@ -838,7 +838,7 @@ function _renderAdminAssignedListHTML() {
       return `
         <div class="admin-publish-here-gap ${active ? 'admin-publish-here-active' : ''}" onclick="${onclick}" title="Publish the new quiz here">
           <span class="admin-publish-here-line"></span>
- <span class="admin-publish-here-btn">${active ? 'Publishing Here ✓' : 'Publish Here'}</span>
+          <span class="admin-publish-here-btn">${active ? ' Publishing Here ✓' : ' Publish Here'}</span>
           <span class="admin-publish-here-line"></span>
         </div>`;
     };
@@ -858,7 +858,7 @@ function _renderAdminAssignedListHTML() {
     sec.innerHTML += `
       <div style="font-size:.76rem;color:var(--text-muted);font-weight:600;margin-top:8px;">
         Need to edit, reorder, copy/move, or delete one of these? Head to
- <span style="color:var(--accent);cursor:pointer;font-weight:800;" onclick="adminJumpToCurriculumQuizzes()">Manage Curriculum</span>.
+        <span style="color:var(--accent);cursor:pointer;font-weight:800;" onclick="adminJumpToCurriculumQuizzes()"> Manage Curriculum</span>.
       </div>`;
     return;
   }
@@ -877,12 +877,12 @@ function _renderAdminAssignedListHTML() {
           <div class="admin-assigned-path">${(e.questions || []).length} question${(e.questions||[]).length !== 1 ? 's' : ''} · ${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)} → ${escapeHtml(subjects[subj].label || subj)}</div>
         </div>
         <button class="admin-remove-btn" style="background:var(--violet-pale);color:var(--violet-dark);border:1.5px solid var(--violet-mid-border);"
- onclick="adminEditPublished('${e.id}')">Edit</button>
+          onclick="adminEditPublished('${e.id}')"> Edit</button>
         <button class="admin-remove-btn" style="background:var(--unanswered-bg);color:var(--unanswered-fg);border:1.5px solid var(--amber-strong);"
- onclick="adminRenamePublished('${e.id}')">Rename</button>
+          onclick="adminRenamePublished('${e.id}')"> Rename</button>
         <button class="admin-remove-btn" style="background:var(--chip-blue-bg);color:var(--nav-current);border:1.5px solid var(--nav-default);"
- onclick="adminOpenMoveQuiz('${e.id}', '${(e.lectureName||e.id).replace(/'/g,"\'")}')">Copy/Move</button>
- <button class="admin-remove-btn" onclick="adminRemovePublished('${e.id}')">Delete</button>
+          onclick="adminOpenMoveQuiz('${e.id}', '${(e.lectureName||e.id).replace(/'/g,"\'")}')"> Copy/Move</button>
+        <button class="admin-remove-btn" onclick="adminRemovePublished('${e.id}')"> Delete</button>
       </div>
       <div id="adminPublishedEditorArea_${e.id}"></div>`;
   });
@@ -910,13 +910,13 @@ function adminClearPublishInsertPosition() {
 }
 
 // Shortcut from the simplified "Publish Quizzes" list straight to the same
-// subject's full quiz-management view in "Manage Curriculum". This is a
+// subject's full quiz-management view in " Manage Curriculum". This is a
 // deliberate one-time hand-off — it copies the Publish tab's destination
 // into the Curriculum tab's own (otherwise entirely separate) navigation
 // state, rather than the two tabs sharing state all the time.
 function adminJumpToCurriculumQuizzes() {
-  adminTargetYear    = adminPubTargetYear;
-  adminTargetModule  = adminPubTargetModule;
+  adminTargetYear = adminPubTargetYear;
+  adminTargetModule = adminPubTargetModule;
   adminTargetSubject = adminPubTargetSubject;
   adminCurrNavLevel = 'quizzes';
   adminSwitchTab('curriculum');
@@ -944,7 +944,7 @@ async function adminEditPublished(lectureId) {
     const data = await resp.json();
 
     adminEditMode = 'published';
-    adminEditingPublishedId   = lectureId;
+    adminEditingPublishedId = lectureId;
     adminEditingPublishedName = data.lectureName || lectureId;
     adminEditQuestions = JSON.parse(JSON.stringify(data.questions || []));
     // Images are already inline (data: URLs) right on each question —
@@ -965,7 +965,7 @@ async function adminEditPublished(lectureId) {
 /* Quick standalone rename for an already-published quiz — updates just its
    display name (Firestore's `lectureName` field) without opening the full
    question editor or touching any question/image data. Mirrors the
- "Icon" / "Rename" split used for Years/Modules/Subjects in
+   " Icon" / " Rename" split used for Years/Modules/Subjects in
    js/curriculum-admin.js: changing what something is called shouldn't
    require going through its full edit flow. `subjects[subj].lectures` is
    keyed by lecture NAME (see adminSavePublishedEdits/adminRemovePublished
@@ -999,7 +999,7 @@ async function adminRenamePublished(lectureId) {
     }
     if (entry) entry.lectureName = trimmed;
     // If this same lecture is (or was just) open in the full editor, keep
- // its editor title in sync too, so Edit → Save Changes below
+    // its editor title in sync too, so Edit → Save Changes below
     // doesn't silently revert the rename.
     if (adminEditingPublishedId === lectureId) adminEditingPublishedName = trimmed;
     // Manifest bump happens server-side in the Worker automatically, as
@@ -1030,7 +1030,7 @@ function adminCancelEditPublished() {
 /* Lets an admin spin off their in-editor changes to a published curriculum
    lecture (e.g. after merging in extra questions) as a brand-new custom
    quiz, WITHOUT touching the published lecture at all. The normal
- "Save Changes" pathway (adminSavePublishedEdits, below) remains the
+   " Save Changes" pathway (adminSavePublishedEdits, below) remains the
    way to actually implement the edits on the curriculum. */
 async function adminSaveEditsAsCustomQuiz() {
   if (!adminEditQuestions || !adminEditQuestions.length) return;
@@ -1058,9 +1058,9 @@ async function adminSaveEditsAsCustomQuiz() {
     });
     await saveCustomQuizzesList(quizzes);
 
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Saved as custom quiz "${escapeHtml(finalTitle)}" — the curriculum lecture was not changed.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> Saved as custom quiz "${escapeHtml(finalTitle)}" — the curriculum lecture was not changed.</div>`;
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ Failed to save: ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> Failed to save: ${escapeHtml(e.message || String(e))}</div>`;
   }
 }
 
@@ -1114,7 +1114,7 @@ async function adminSavePublishedEdits() {
     if (!subjects[adminTargetSubject].lectures) subjects[adminTargetSubject].lectures = {};
     subjects[adminTargetSubject].lectures[adminEditingPublishedName] = cleanQuestions;
 
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Changes saved!</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> Changes saved!</div>`;
 
     if (selectedSubject === adminTargetSubject) selectSubject(adminTargetSubject);
 
@@ -1128,7 +1128,7 @@ async function adminSavePublishedEdits() {
       renderAdminAssignedList();
     }, 900);
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ Failed: ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> Failed: ${escapeHtml(e.message || String(e))}</div>`;
   }
 }
 
@@ -1314,7 +1314,7 @@ async function adminPublishQuiz() {
         const questionsOverride = (adminEditMode === 'publish' && adminEditQuestions) ? adminEditQuestions : null;
         await _adminPublishOneQuiz(quizObj, targetSubject, lectureName, questionsOverride);
 
-        if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Published "${escapeHtml(lectureName)}" to ${escapeHtml(subjects[targetSubject].label || targetSubject)}!</div>`;
+        if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> Published "${escapeHtml(lectureName)}" to ${escapeHtml(subjects[targetSubject].label || targetSubject)}!</div>`;
         if (nameInput) nameInput.value = '';
 
         // Close the editor after a successful publish
@@ -1329,7 +1329,7 @@ async function adminPublishQuiz() {
         if (selectedSubject === targetSubject) selectSubject(targetSubject);
         renderAdminAssignedList();
       } catch (e) {
-        if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ Failed: ${escapeHtml(e.message || String(e))}</div>`;
+        if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> Failed: ${escapeHtml(e.message || String(e))}</div>`;
       }
       return;
     }
@@ -1374,8 +1374,8 @@ async function adminPublishQuiz() {
     renderAdminAssignedList();
 
     const resultHtml = failures.length
- ? `<div class="cq-status ${publishedCount ? '' : 'error'}">${publishedCount ? '' : '❌'} Published ${publishedCount}/${total}. Failed: ${failures.map(f => `"${escapeHtml(f.title)}" — ${escapeHtml(f.message)}`).join('; ')}</div>`
-      : `<div class="cq-status success">✅ Published all ${publishedCount} quizzes to ${escapeHtml(subjects[targetSubject].label || targetSubject)}!</div>`;
+      ? `<div class="cq-status ${publishedCount ? '' : 'error'}">${publishedCount ? '' : ''} Published ${publishedCount}/${total}. Failed: ${failures.map(f => `"${escapeHtml(f.title)}" — ${escapeHtml(f.message)}`).join('; ')}</div>`
+      : `<div class="cq-status success"> Published all ${publishedCount} quizzes to ${escapeHtml(subjects[targetSubject].label || targetSubject)}!</div>`;
 
     adminLastPublishResult = resultHtml;
     renderAdminAssignForm();

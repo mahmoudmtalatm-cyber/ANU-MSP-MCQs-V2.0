@@ -59,7 +59,7 @@ async function hydrateQuizImages(questions) {
       try {
         const parts = q.imageUrl.replace('firestore://', '').split('/');
         const storedQuizId = parts[0];
-        const imgIdx       = parts[1];
+        const imgIdx = parts[1];
         const imgRef = window._doc(
           window._db,
           'users', window._currentUser.uid,
@@ -96,21 +96,21 @@ async function _urlToDataUrl(url) {
 }
 
 /** The single canonical "make sure every image is inline" step. Pulls
- *  every still-remote `q.image` (an http(s) URL) down into a real local
- *  data: URL, in place. There are two reasons a question could still have
- *  a remote URL at this point:
- *   1. It's a genuinely old community/curriculum item from before this
- *      app moved to inline-only image storage — its JSON still has a URL
- *      pointing at a separately-hosted image object.
- *   2. It's mid-flow — e.g. a community quiz just fetched for "Save to
- *      Mine", still carrying the URL it was fetched with.
- *  Call this before ANY write that includes questions (save, merge,
- *  share, publish, swap/rename/split, migration) — putContentItem()
- *  (content-client.js) does no image handling of its own anymore; images
- *  are just an ordinary field on the question, written and deleted along
- *  with everything else in the JSON. Failures are left as the original
- *  URL (best-effort: an image that fails to download here is no worse
- *  off than before this fix, just not yet inlined). */
+ * every still-remote `q.image` (an http(s) URL) down into a real local
+ * data: URL, in place. There are two reasons a question could still have
+ * a remote URL at this point:
+ * 1. It's a genuinely old community/curriculum item from before this
+ * app moved to inline-only image storage — its JSON still has a URL
+ * pointing at a separately-hosted image object.
+ * 2. It's mid-flow — e.g. a community quiz just fetched for "Save to
+ * Mine", still carrying the URL it was fetched with.
+ * Call this before ANY write that includes questions (save, merge,
+ * share, publish, swap/rename/split, migration) — putContentItem()
+ * (content-client.js) does no image handling of its own anymore; images
+ * are just an ordinary field on the question, written and deleted along
+ * with everything else in the JSON. Failures are left as the original
+ * URL (best-effort: an image that fails to download here is no worse
+ * off than before this fix, just not yet inlined). */
 async function ensureInlineImages(questions) {
   await Promise.all((questions || []).map(async (q) => {
     if (!q.image || !/^https?:\/\//i.test(q.image)) return; // not a remote URL — nothing to pull down
@@ -180,7 +180,7 @@ async function hydrateHistoryImages(wrongQuestions) {
     try {
       const parts = q.imageUrl.replace('firestore-history://', '').split('/');
       const historyId = parts[0];
-      const imgIdx     = parts[1];
+      const imgIdx = parts[1];
       const imgRef = window._doc(
         window._db,
         'users', window._currentUser.uid,
@@ -288,7 +288,7 @@ async function uploadHistoryFullSnapshotToStorage(historyId, allQuestions) {
 async function hydrateHistoryFullSnapshot(historyId) {
   if (!window._db || !window._currentUser || !historyId) return null;
   try {
-    const ref  = window._doc(
+    const ref = window._doc(
       window._db,
       'users', window._currentUser.uid,
       'statsHistory', historyId,
@@ -300,7 +300,7 @@ async function hydrateHistoryFullSnapshot(historyId) {
     await Promise.all(questions.map(async (q) => {
       if (!q || q.image || !q.imageUrl || !q.imageUrl.startsWith('firestore-full://')) return;
       try {
-        const parts  = q.imageUrl.replace('firestore-full://', '').split('/');
+        const parts = q.imageUrl.replace('firestore-full://', '').split('/');
         const imgRef = window._doc(
           window._db,
           'users', window._currentUser.uid,
@@ -360,8 +360,8 @@ async function deleteHistoryFullSnapshotFromStorage(historyId) {
    last time, mirroring the published-quiz manifest system in
    js/data-sync.js:
      • unchanged entry → read straight from the local IndexedDB cache, 0 reads
-     • new entry       → fetch just that one document
-     • removed entry   → dropped from memory + local cache
+     • new entry → fetch just that one document
+     • removed entry → dropped from memory + local cache
    This means taking one more quiz never re-downloads any of the
    others, no matter how large history grows — and vice versa, an
    already-cached quiz never gets re-fetched just because a new one
@@ -392,7 +392,7 @@ async function loadHistoryEntries(uid, manifest) {
   const entries = [];
 
   await Promise.all(ids.map(async (historyId) => {
-    const ts     = manifest[historyId];
+    const ts = manifest[historyId];
     const idbKey = _historyIdbKey(uid, historyId);
     const cached = await _idbGet(idbKey);
 
@@ -402,7 +402,7 @@ async function loadHistoryEntries(uid, manifest) {
     }
 
     try {
-      const ref  = window._doc(window._db, 'users', uid, 'statsHistory', historyId);
+      const ref = window._doc(window._db, 'users', uid, 'statsHistory', historyId);
       const snap = await window._getDoc(ref);
       if (!snap.exists()) return;
       const data = snap.data();
@@ -415,9 +415,9 @@ async function loadHistoryEntries(uid, manifest) {
   }));
 
   try {
-    const prefix   = 'history:' + uid + ':';
+    const prefix = 'history:' + uid + ':';
     const knownIds = new Set(ids);
-    const allKeys  = await _idbKeys();
+    const allKeys = await _idbKeys();
     await Promise.all(allKeys
       .filter(k => typeof k === 'string' && k.startsWith(prefix) && !knownIds.has(k.slice(prefix.length)))
       .map(k => _idbDelete(k)));
@@ -491,7 +491,7 @@ async function _migrateInlineHistoryToDocs(uid, aggregate) {
    re-downloading it entirely when it hasn't. The `history` array itself
    is never part of this: it's cached per-quiz instead (see above).
 
-     Server doc : users/{uid}/meta/cacheVersion  { ..., stats: <ms> }
+     Server doc : users/{uid}/meta/cacheVersion { ..., stats: <ms> }
                   (same doc custom quizzes already use, just a
                   different field, so login still costs one small
                   read for both instead of two)
@@ -502,7 +502,7 @@ async function _migrateInlineHistoryToDocs(uid, aggregate) {
    bumps the version on every save, so the very next load — this
    device or a fresh session — is already warm.
 ══════════════════════════════════════════════════════════ */
-function _statsCacheKey(uid)    { return 'anu_msp_stats_cache_' + uid; }
+function _statsCacheKey(uid) { return 'anu_msp_stats_cache_' + uid; }
 function _statsCacheVerKey(uid) { return 'anu_msp_stats_cache_ver_' + uid; }
 
 function _readStatsCache(uid) {
@@ -555,8 +555,8 @@ async function loadCustomQuizzesFromFirestore() {
   try {
     // Cache check: one tiny doc read tells us if anything changed since last time
     const serverVer = await _fetchCqServerVersion(uid);
-    const localVer  = _readCqCacheVer(uid);
-    const cached    = _readCqCache(uid);
+    const localVer = _readCqCacheVer(uid);
+    const cached = _readCqCache(uid);
 
     if (serverVer && localVer === serverVer && cached) {
       console.log('[cache] custom quizzes hit, skipping Firestore fetch');
@@ -638,11 +638,11 @@ function closeCustomQuizzes() {
    position, open editors, etc). */
 function renderCqApiKeyBadge() {
   const entry = getActiveApiKeyEntry();
-  const keys  = loadApiKeys();
+  const keys = loadApiKeys();
   if (!entry) {
     return `<div class="apikey-empty" style="padding:14px;">
- <span class="ns-icon"></span>No API key configured yet.
- <div style="margin-top:8px;"><button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">Add an API Key</button></div>
+      <span class="ns-icon"></span>No API key configured yet.
+      <div style="margin-top:8px;"><button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())"> Add an API Key</button></div>
     </div>`;
   }
   const idx = Math.max(0, keys.findIndex(k => k.id === entry.id));
@@ -653,14 +653,14 @@ function renderCqApiKeyBadge() {
       Using API ${idx + 1}: ${escapeHtml(entry.label)}
       ${allRL ? `<span class="apikey-status-chip apikey-status-limited" style="margin-left:4px;" title="Rotating automatically until a key frees up">⏳ All rate-limited</span>` : ''}
     </div>
- <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">Manage API Keys</button>
+    <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())"> Manage API Keys</button>
   </div>`;
 }
 
 function renderCustomQuizModal() {
   cqCollectionsHost = 'custom'; // this modal owns the shared collections tree/breadcrumb UI while it's open
-  const body       = document.getElementById('customQuizBody');
-  const quizzes    = loadCustomQuizzes();
+  const body = document.getElementById('customQuizBody');
+  const quizzes = loadCustomQuizzes();
   const collections = loadQuizCollections();
 
   // Remember the folder-tree sidebar's scroll position — it's torn down
@@ -675,14 +675,14 @@ function renderCustomQuizModal() {
 
   /* ── Saved custom quizzes ── */
   html += `<div class="cq-section">
- <div class="cq-section-title">Your Custom Quizzes</div>
+    <div class="cq-section-title"> Your Custom Quizzes</div>
 
     <!-- API Key -->
     <div class="cq-api-badge-slot">${renderCqApiKeyBadge()}</div>
     `;
   if (!quizzes.length) {
     html += `<div class="empty-state" style="padding:12px;">
- <div class="empty-icon"></div>
+      <div class="empty-icon"></div>
       No custom quizzes yet — create one below using AI.
     </div>`;
   } else {
@@ -697,16 +697,16 @@ function renderCustomQuizModal() {
       const defMins = Math.max(5, totalQs);
       html += `<div class="cq-quiz-item" style="background:var(--surface-2);border:1.5px solid var(--accent);">
         <div class="cq-quiz-info">
- <div class="cq-quiz-name">${cqMultiSelected.size} quiz${cqMultiSelected.size !== 1 ? 'zes' : ''} selected — ${totalQs} question${totalQs !== 1 ? 's' : ''} total</div>
+          <div class="cq-quiz-name"> ${cqMultiSelected.size} quiz${cqMultiSelected.size !== 1 ? 'zes' : ''} selected — ${totalQs} question${totalQs !== 1 ? 's' : ''} total</div>
           <div class="cq-quiz-meta">Start them together in one sitting, in the order checked below.</div>
         </div>
         <div class="cq-quiz-actions">
           <input type="number" id="cqMultiMins" value="${defMins}" min="1" max="480" title="Duration (minutes)" />
           <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Shuffle questions">
- <input type="checkbox" id="cqMultiShuffle" style="width:14px;height:14px;accent-color:var(--accent);" />
+            <input type="checkbox" id="cqMultiShuffle" style="width:14px;height:14px;accent-color:var(--accent);" /> 
           </label>
           <div class="cq-move-wrap">
- <button class="cq-btn cq-btn-secondary" id="cqBulkMoveBtn" style="background:var(--violet-strong);" onclick="event.stopPropagation(); cqToggleBulkMoveMenu()">Move to…</button>
+            <button class="cq-btn cq-btn-secondary" id="cqBulkMoveBtn" style="background:var(--violet-strong);" onclick="event.stopPropagation(); cqToggleBulkMoveMenu()"> Move to…</button>
             ${cqBulkMoveMenuOpen ? _renderBulkMoveMenuHTML() : ''}
           </div>
           <button class="cq-btn" onclick="startCustomQuizzesMulti()">&#9654; Start Selected</button>
@@ -725,8 +725,8 @@ function renderCustomQuizModal() {
 
     if (!visibleQuizzes.length) {
       html += `<div class="empty-state" style="padding:16px 12px;">
- <div class="empty-icon"></div>
- No quizzes in this folder yet — drag a quiz here, or use its Move button.
+        <div class="empty-icon"></div>
+        No quizzes in this folder yet — drag a quiz here, or use its Move button.
       </div>`;
     }
 
@@ -750,15 +750,15 @@ function renderCustomQuizModal() {
         <div class="cq-quiz-actions">
           <input type="number" id="cqMins_${q.id}" value="${defMins}" min="1" max="180" title="Duration (minutes)" />
           <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Shuffle questions">
- <input type="checkbox" id="cqShuffle_${q.id}" style="width:14px;height:14px;accent-color:var(--accent);" />
+            <input type="checkbox" id="cqShuffle_${q.id}" style="width:14px;height:14px;accent-color:var(--accent);" /> 
           </label>
           <button class="cq-btn" onclick="startCustomQuiz('${q.id}')">&#9654; Start</button>
           <div class="cq-move-wrap">
- <button class="cq-btn cq-btn-secondary" data-move-btn="${q.id}" style="background:var(--violet-strong);" onclick="event.stopPropagation(); cqToggleQuizMoveMenu('${q.id}')" title="Move to a folder">Move</button>
+            <button class="cq-btn cq-btn-secondary" data-move-btn="${q.id}" style="background:var(--violet-strong);" onclick="event.stopPropagation(); cqToggleQuizMoveMenu('${q.id}')" title="Move to a folder"> Move</button>
             ${moveOpen ? _renderQuizMoveMenuHTML(q) : ''}
           </div>
           <button class="cq-btn cq-btn-secondary" onclick="renameCustomQuiz('${q.id}')" style="background:var(--unanswered-bg);color:var(--unanswered-fg);border:1.5px solid var(--amber-strong);" title="Rename this quiz">&#127991;&#65039; Rename</button>
- <button class="cq-btn cq-btn-secondary" onclick="${isEditing ? 'closeCustomQuizEditor()' : `openCustomQuizEditor('${q.id}')`}" style="background:var(--accent);color:#fff;">${isEditing ? '✖ Close Editor' : 'Edit'}</button>
+          <button class="cq-btn cq-btn-secondary" onclick="${isEditing ? 'closeCustomQuizEditor()' : `openCustomQuizEditor('${q.id}')`}" style="background:var(--accent);color:#fff;">${isEditing ? '✖ Close Editor' : ' Edit'}</button>
           <button class="cq-share-btn" onclick="shareCustomQuiz('${q.id}')" title="Share with community">&#128279; Share</button>
           <button class="cq-btn cq-btn-danger" onclick="deleteCustomQuiz('${q.id}')">&#128465;</button>
         </div>
@@ -792,25 +792,25 @@ function renderCustomQuizModal() {
 
   /* ── Create new quiz with AI ── */
   html += `<div class="cq-section">
-    <div class="cq-section-title">✨ Create a New Quiz with AI (Gemini)</div>
+    <div class="cq-section-title"> Create a New Quiz with AI (Gemini)</div>
 
     <!-- API Key -->
     <div class="cq-api-badge-slot">${renderCqApiKeyBadge()}</div>
 
     <!-- Mode tabs -->
     <div class="cq-tabs">
- <button class="cq-tab-btn ${cqMode === 'extract' ? 'active' : ''}" onclick="setCQMode('extract')">Extract from MCQs</button>
- <button class="cq-tab-btn ${cqMode === 'generate' ? 'active' : ''}" onclick="setCQMode('generate')">Generate from Lecture</button>
+      <button class="cq-tab-btn ${cqMode === 'extract' ? 'active' : ''}" onclick="setCQMode('extract')"> Extract from MCQs</button>
+      <button class="cq-tab-btn ${cqMode === 'generate' ? 'active' : ''}" onclick="setCQMode('generate')"> Generate from Lecture</button>
     </div>
 
     <!-- TAB: Extract from MCQs (original flow) -->
     <div id="cqTabExtract" ${cqMode !== 'extract' ? 'style="display:none"' : ''}>
       <div class="cq-field-hint">Upload one or more images or PDFs that already contain MCQ questions — the AI will extract them exactly as written. Add multiple files if your quiz is split across several pages or documents.</div>
       <div class="cq-dropzone" id="cqDropzone" onclick="document.getElementById('cqFileInput').click()">
- <div class="cq-dz-icon"></div>
+        <div class="cq-dz-icon"></div>
         <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more images or PDFs of your quiz questions</div>
         ${cqSelectedFiles.length ? _cqFileListHTML(cqSelectedFiles, 'cqRemoveSelectedFile') : ''}
-        ${cqSelectedFiles.length ? `<div class="cq-dz-add-more">➕ Click again to add more files</div>` : ''}
+        ${cqSelectedFiles.length ? `<div class="cq-dz-add-more"> Click again to add more files</div>` : ''}
       </div>
       <input type="file" id="cqFileInput" accept="image/*,application/pdf" multiple style="display:none;" onchange="handleCQFileSelect(event)" />
 
@@ -829,7 +829,7 @@ function renderCustomQuizModal() {
           </div>
           <div>
             <div style="font-size:.82rem;font-weight:800;color:${cqAiAnsweringEnabled ? 'var(--violet-dark)' : 'var(--text)'};letter-spacing:.2px;">
- AI Answering
+               AI Answering
             </div>
             <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
               Let Gemini AI determine correct answers during extraction
@@ -844,7 +844,7 @@ function renderCustomQuizModal() {
               onchange="cqAiAnswerSubmode = 'missing'; renderCustomQuizModal()"
               style="margin-top:3px;width:16px;height:16px;accent-color:var(--violet-strong);flex-shrink:0;" />
             <div>
- <div style="font-size:.78rem;font-weight:700;color:var(--violet-dark);">Only answer questions missing a key</div>
+              <div style="font-size:.78rem;font-weight:700;color:var(--violet-dark);"> Only answer questions missing a key</div>
               <div style="font-size:.71rem;color:var(--text-muted);margin-top:1px;">Fills in an answer only for questions that have no answer key in the source document</div>
             </div>
           </label>
@@ -853,7 +853,7 @@ function renderCustomQuizModal() {
               onchange="cqAiAnswerSubmode = 'all'; renderCustomQuizModal()"
               style="margin-top:3px;width:16px;height:16px;accent-color:var(--violet-strong);flex-shrink:0;" />
             <div>
-              <div style="font-size:.78rem;font-weight:700;color:var(--violet-dark);">✅ Solve / verify all questions</div>
+              <div style="font-size:.78rem;font-weight:700;color:var(--violet-dark);"> Solve / verify all questions</div>
               <div style="font-size:.71rem;color:var(--text-muted);margin-top:1px;">Re-solves every question, including ones that already have an answer key in the source</div>
             </div>
           </label>
@@ -867,13 +867,13 @@ function renderCustomQuizModal() {
       ${cqAiAnsweringEnabled ? `
       <div style="margin:8px 0 4px;padding:12px 14px;background:var(--violet-pale);border:1.5px solid var(--violet-border);border-radius:10px;">
         <div style="font-size:.75rem;font-weight:700;color:var(--violet-dark);margin-bottom:5px;">
- Reference Source (optional) — upload images/PDFs the AI should use to answer
+           Reference Source (optional) — upload images/PDFs the AI should use to answer
         </div>
         <div class="cq-dropzone cq-dz-purple" id="cqSourceDropzone" onclick="document.getElementById('cqSourceFileInput').click()">
- <div class="cq-dz-icon"></div>
+          <div class="cq-dz-icon"></div>
           <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more reference images or PDFs</div>
           ${cqAiSourceFiles.length ? _cqFileListHTML(cqAiSourceFiles, 'cqRemoveSourceFile', sf => sf.file) : ''}
-          ${cqAiSourceFiles.length ? `<div class="cq-dz-add-more">➕ Click again to add more files</div>` : ''}
+          ${cqAiSourceFiles.length ? `<div class="cq-dz-add-more"> Click again to add more files</div>` : ''}
         </div>
         <input type="file" id="cqSourceFileInput" accept="image/*,application/pdf" multiple style="display:none;"
           onchange="handleCqSourceFileSelect(event)" />
@@ -892,7 +892,7 @@ function renderCustomQuizModal() {
           </div>
           <div>
             <div style="font-size:.82rem;font-weight:800;color:${cqFillChoicesToggle ? 'var(--unanswered-fg)' : 'var(--text)'};letter-spacing:.2px;">
- Fill Choices (AI)
+               Fill Choices (AI)
             </div>
             <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
               AI tops every question up to 4 answer choices — only adds missing distractors, never touches the correct answer
@@ -914,7 +914,7 @@ function renderCustomQuizModal() {
           </div>
           <div>
             <div style="font-size:.82rem;font-weight:800;color:${cqRefineToggle ? 'var(--violet-dark)' : 'var(--text)'};letter-spacing:.2px;">
- Refine Questions (AI)
+               Refine Questions (AI)
             </div>
             <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px;">
               AI polishes grammar &amp; exam-style phrasing on every question's wording — doesn't change what's being asked or touch the choices
@@ -925,7 +925,7 @@ function renderCustomQuizModal() {
         ${cqRefineToggle ? `
         <div style="margin:9px 0 0;">
           <div style="font-size:.73rem;font-weight:700;color:var(--violet-dark);margin-bottom:5px;">
- Custom Instructions (optional) — applied to every question's refine
+             Custom Instructions (optional) — applied to every question's refine
           </div>
           <textarea class="cq-textarea" id="cqRefineCustomInput" rows="2"
             placeholder="Optional — anything extra you want applied to every question (e.g. &quot;keep each question to one sentence&quot;). Only overrides the default refine behavior where it truly conflicts — grammar and exam phrasing still apply otherwise."
@@ -945,10 +945,10 @@ function renderCustomQuizModal() {
           cqRefineToggle ? 'Refine Questions' : null
         ].filter(Boolean);
         if (steps.length < 2) return '';
-        const stepsText = steps.map((s, idx) => `${idx + 1}) ${s}`).join('  →  ');
+        const stepsText = steps.map((s, idx) => `${idx + 1}) ${s}`).join(' → ');
         return `
       <div style="margin:8px 0 4px;padding:10px 14px;background:#FFFDE7;border:1.5px solid #FBC02D;border-radius:10px;font-size:.75rem;color:#7A5C00;">
- <strong>Multiple AI steps selected</strong> — to avoid conflicting edits on the same question, they'll run one at a time (not simultaneously), in this order:<br>
+         <strong>Multiple AI steps selected</strong> — to avoid conflicting edits on the same question, they'll run one at a time (not simultaneously), in this order:<br>
         ${stepsText}.
       </div>`;
       })()}
@@ -958,7 +958,7 @@ function renderCustomQuizModal() {
         <input type="text" id="cqTitleInput" placeholder="Quiz title (e.g. 'Cardio Lecture 3')"
                value="${escapeHtml(cqGeneratedTitle)}" oninput="cqGeneratedTitle = this.value" />
         <button class="cq-btn" id="cqGenerateBtn" onclick="generateQuizFromAI()" ${cqBusy ? 'disabled' : ''}>
-          ${cqBusy ? '⏳ Generating…' : '✨ Extract Questions'}
+          ${cqBusy ? '⏳ Generating…' : ' Extract Questions'}
         </button>
       </div>
     </div>
@@ -966,16 +966,16 @@ function renderCustomQuizModal() {
     <!-- TAB: Generate from Lecture -->
     <div id="cqTabGenerate" ${cqMode !== 'generate' ? 'style="display:none"' : ''}>
       <div class="cq-badge-row">
- <span class="cq-badge">Clinical scenarios included</span>
- <span class="cq-badge">Hard difficulty</span>
- <span class="cq-badge">AI-written questions</span>
+        <span class="cq-badge"> Clinical scenarios included</span>
+        <span class="cq-badge"> Hard difficulty</span>
+        <span class="cq-badge"> AI-written questions</span>
       </div>
       <div class="cq-field-hint">Upload your lecture material (PDF, image, or .txt file) — the AI will generate brand-new original questions from the content. Add multiple files to combine several sources into one quiz.</div>
       <div class="cq-dropzone" id="cqLectureDropzone" onclick="document.getElementById('cqLectureFileInput').click()">
- <div class="cq-dz-icon"></div>
+        <div class="cq-dz-icon"></div>
         <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more PDF, image, or .txt lecture files</div>
         ${cqLectureFiles.length ? _cqFileListHTML(cqLectureFiles, 'cqRemoveLectureFile') : ''}
-        ${cqLectureFiles.length ? `<div class="cq-dz-add-more">➕ Click again to add more files</div>` : ''}
+        ${cqLectureFiles.length ? `<div class="cq-dz-add-more"> Click again to add more files</div>` : ''}
       </div>
       <input type="file" id="cqLectureFileInput" accept="image/*,application/pdf,text/plain,.txt" multiple style="display:none;" onchange="handleLectureFileSelect(event)" />
 
@@ -995,7 +995,7 @@ function renderCustomQuizModal() {
         <input type="text" id="cqLectureTitleInput" placeholder="Quiz title (e.g. 'Respiratory Lecture 2')"
                value="${escapeHtml(cqGeneratedTitle)}" oninput="cqGeneratedTitle = this.value" />
         <button class="cq-btn" id="cqLectureGenBtn" onclick="generateQuizFromLecture()" ${cqBusy ? 'disabled' : ''}>
- ${cqBusy ? '⏳ Generating…' : 'Generate Questions'}
+          ${cqBusy ? '⏳ Generating…' : ' Generate Questions'}
         </button>
       </div>
     </div>
@@ -1004,17 +1004,17 @@ function renderCustomQuizModal() {
          (cqBusy/cqIsPaused/cqPauseRequested/cqStopRequested), and the
          status box is pre-filled from the cached status HTML — this is
          what makes returning to this modal mid-run (e.g. after switching
- API keys via Manage APIs, which re-renders this modal while
+         API keys via Manage APIs, which re-renders this modal while
          a background extraction/generation is still going) show the run
          exactly as it was, instead of a frozen, blank-looking modal. See
          js/dom-utils.js for the cache these values come from. -->
     ${(() => {
-      const showRow      = cqBusy;
-      const pausingNow    = cqBusy && cqPauseRequested && !cqIsPaused;
-      const showPauseBtn  = cqBusy && !cqIsPaused;
+      const showRow = cqBusy;
+      const pausingNow = cqBusy && cqPauseRequested && !cqIsPaused;
+      const showPauseBtn = cqBusy && !cqIsPaused;
       const showResumeBtn = cqBusy && cqIsPaused;
-      const stoppingNow   = cqBusy && cqStopRequested;
-      const cachedStatus  = cqBusy ? getCachedStatusHTML('cqStatus') : '';
+      const stoppingNow = cqBusy && cqStopRequested;
+      const cachedStatus = cqBusy ? getCachedStatusHTML('cqStatus') : '';
       return `
     <div id="cqPauseRow" style="display:${showRow ? 'flex' : 'none'};gap:8px;margin:8px 0;align-items:center;flex-wrap:wrap;">
       <button class="cq-btn" id="cqPauseBtn" type="button" onclick="cqRequestPause()" ${pausingNow ? 'disabled' : ''}
@@ -1097,17 +1097,17 @@ function cqRemoveLectureFile(idx) {
 }
 
 function acceptLectureFile(file) {
-  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   const isImage = file.type.startsWith('image/');
-  const isTxt   = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
+  const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
   const statusEl = document.getElementById('cqStatus');
 
   if (!isPdf && !isImage && !isTxt) {
- if (statusEl) statusEl.innerHTML = `<div class="cq-status error">Please upload a PDF, image (JPG/PNG/WEBP), or .txt file.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> Please upload a PDF, image (JPG/PNG/WEBP), or .txt file.</div>`;
     return;
   }
   if (file.size > GEMINI_MAX_FILE_BYTES) {
- if (statusEl) statusEl.innerHTML = `<div class="cq-status error">"${escapeHtml(file.name)}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> "${escapeHtml(file.name)}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API.</div>`;
     return;
   }
   cqLectureFiles.push(file);
@@ -1116,16 +1116,16 @@ function acceptLectureFile(file) {
 }
 
 function acceptCQFile(file) {
-  const isPdf   = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   const isImage = file.type.startsWith('image/');
   const statusEl = document.getElementById('cqStatus');
 
   if (!isPdf && !isImage) {
- if (statusEl) statusEl.innerHTML = `<div class="cq-status error">Please upload an image (JPG/PNG/WEBP) or a PDF file.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> Please upload an image (JPG/PNG/WEBP) or a PDF file.</div>`;
     return;
   }
   if (file.size > GEMINI_MAX_FILE_BYTES) {
- if (statusEl) statusEl.innerHTML = `<div class="cq-status error">"${escapeHtml(file.name)}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> "${escapeHtml(file.name)}" is ${formatBytes(file.size)} — that's over Google's ${formatBytes(GEMINI_MAX_FILE_BYTES)} per-file limit for the Gemini API.</div>`;
     return;
   }
 
@@ -1137,7 +1137,7 @@ function acceptCQFile(file) {
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload  = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
     reader.onerror = () => reject(new Error('Failed to read the file.'));
     reader.readAsDataURL(file);
   });

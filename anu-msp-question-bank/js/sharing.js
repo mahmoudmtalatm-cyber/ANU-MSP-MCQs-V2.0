@@ -70,7 +70,7 @@ function openShareQuizModal(quizTitle) {
 
     // Populate Year dropdown from live curriculum object
     const yearSel = document.getElementById('sqYear');
-    const modSel  = document.getElementById('sqModule');
+    const modSel = document.getElementById('sqModule');
     const subjSel = document.getElementById('sqSubject');
 
     const years = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
@@ -88,7 +88,7 @@ function openShareQuizModal(quizTitle) {
 }
 
 function sqOnYearChange(year) {
-  const modSel  = document.getElementById('sqModule');
+  const modSel = document.getElementById('sqModule');
   const subjSel = document.getElementById('sqSubject');
   modSel.innerHTML = '<option value="">— Select a module —</option>';
   subjSel.innerHTML = '<option value="">— Select a subject —</option>';
@@ -101,14 +101,14 @@ function sqOnYearChange(year) {
 }
 
 function sqOnModuleChange(mod) {
-  const year    = document.getElementById('sqYear').value;
+  const year = document.getElementById('sqYear').value;
   const subjSel = document.getElementById('sqSubject');
   subjSel.innerHTML = '<option value="">— Select a subject —</option>';
   if (!year || !mod) { subjSel.disabled = true; return; }
   const keys = (curriculum[year][mod] || []).filter(k => subjects[k]);
   subjSel.innerHTML += keys.map(k => {
     const label = subjects[k].label || k;
-    const icon  = subjects[k].icon  || '';
+    const icon = subjects[k].icon || '';
     return `<option value="${escapeHtml(k)}">${icon} ${escapeHtml(label)}</option>`;
   }).join('');
   subjSel.disabled = false;
@@ -116,10 +116,10 @@ function sqOnModuleChange(mod) {
 }
 
 function confirmShareQuiz() {
-  const year     = document.getElementById('sqYear').value.trim();
-  const mod      = document.getElementById('sqModule').value.trim();
-  const subjKey  = document.getElementById('sqSubject').value.trim();
-  const rawTags  = document.getElementById('sqTags').value;
+  const year = document.getElementById('sqYear').value.trim();
+  const mod = document.getElementById('sqModule').value.trim();
+  const subjKey = document.getElementById('sqSubject').value.trim();
+  const rawTags = document.getElementById('sqTags').value;
   const tags = rawTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
 
   if (!year || !mod || !subjKey) {
@@ -161,8 +161,8 @@ function restoreOptionsOrder(questions) {
 ══════════════════════════════════════════════════════════ */
 let communityTab = 'browse'; // 'browse' | 'mine'
 let communitySearchQuery = '';
-let communityYearFilter    = '';
-let communityModuleFilter  = '';
+let communityYearFilter = '';
+let communityModuleFilter = '';
 let communitySubjectFilter = '';
 let communitySort = 'newest';
 let _allSharedQuizzes = []; // cache for client-side filtering
@@ -174,8 +174,8 @@ function openCommunityQuizzes() {
   }
   communityTab = 'browse';
   communitySearchQuery = '';
-  communityYearFilter    = '';
-  communityModuleFilter  = '';
+  communityYearFilter = '';
+  communityModuleFilter = '';
   communitySubjectFilter = '';
   communitySort = 'newest';
   document.getElementById('communityQuizOverlay').classList.remove('hidden');
@@ -197,8 +197,8 @@ function communityOnSearchInput(val) {
 }
 
 /* Pure filter + sort + derived-filter-options computation, shared between
- the main "Community Quizzes" screen (renderCommunityQuizzes, right
- below) and the Export to PDF picker's Community tab
+   the main " Community Quizzes" screen (renderCommunityQuizzes, right
+   below) and the Export to PDF picker's Community tab
    (js/pdf-export.js) — both browse the exact same underlying
    _allSharedQuizzes cache with the exact same search/year/module/subject/
    sort behavior; only the per-item action buttons differ (Start/Save/
@@ -215,15 +215,15 @@ function _communityComputeView({ scope, search, yearFilter, moduleFilter, subjec
   const q = (search || '').toLowerCase().trim();
   if (q) {
     pool = pool.filter(item => {
-      const inTitle  = (item.title || '').toLowerCase().includes(q);
+      const inTitle = (item.title || '').toLowerCase().includes(q);
       const inAuthor = (item.authorName || '').toLowerCase().includes(q);
-      const inCat    = (item.category || '').toLowerCase().includes(q);
-      const inTags   = (item.tags || []).some(t => t.includes(q));
+      const inCat = (item.category || '').toLowerCase().includes(q);
+      const inTags = (item.tags || []).some(t => t.includes(q));
       return inTitle || inAuthor || inCat || inTags;
     });
   }
-  if (yearFilter)    pool = pool.filter(item => (item.year || '') === yearFilter);
-  if (moduleFilter)  pool = pool.filter(item => (item.module || '') === moduleFilter);
+  if (yearFilter) pool = pool.filter(item => (item.year || '') === yearFilter);
+  if (moduleFilter) pool = pool.filter(item => (item.module || '') === moduleFilter);
   if (subjectFilter) pool = pool.filter(item => (item.subjectKey || '') === subjectFilter);
 
   if (sort === 'newest') pool = [...pool].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
@@ -281,7 +281,7 @@ async function renderCommunityQuizzes(forceReload) {
 
     <div class="comm-filter-bar">
       <div class="comm-search-wrap">
- <span class="comm-search-icon"></span>
+        <span class="comm-search-icon"></span>
         <input class="comm-search-input" id="commSearchInput" type="text"
                placeholder="Search by title, author, category or tag…"
                value="${searchVal}"
@@ -313,10 +313,10 @@ async function renderCommunityQuizzes(forceReload) {
         </select>
         <select class="comm-filter-select" id="commSortSelect"
                 onchange="communitySort=this.value;renderCommunityQuizzes()">
- <option value="newest" ${communitySort==='newest'?'selected':''}>Newest</option>
- <option value="oldest" ${communitySort==='oldest'?'selected':''}>Oldest</option>
- <option value="az" ${communitySort==='az'?'selected':''}>A → Z</option>
- <option value="questions" ${communitySort==='questions'?'selected':''}>Most Questions</option>
+          <option value="newest" ${communitySort==='newest'?'selected':''}> Newest</option>
+          <option value="oldest" ${communitySort==='oldest'?'selected':''}> Oldest</option>
+          <option value="az" ${communitySort==='az'?'selected':''}> A → Z</option>
+          <option value="questions" ${communitySort==='questions'?'selected':''}> Most Questions</option>
         </select>
       </div>
       <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
@@ -324,7 +324,7 @@ async function renderCommunityQuizzes(forceReload) {
 
   if (!pool.length) {
     html += `<div class="community-empty">
- <div class="ce-icon">${communitySearchQuery || communityYearFilter || communityModuleFilter || communitySubjectFilter ? '' : (communityTab === 'mine' ? '&#128100;' : '&#127758;')}</div>
+      <div class="ce-icon">${communitySearchQuery || communityYearFilter || communityModuleFilter || communitySubjectFilter ? '' : (communityTab === 'mine' ? '&#128100;' : '&#127758;')}</div>
       ${communitySearchQuery || communityYearFilter || communityModuleFilter || communitySubjectFilter
         ? 'No quizzes match your search. Try different keywords or clear the filters.'
         : communityTab === 'mine'
@@ -337,7 +337,7 @@ async function renderCommunityQuizzes(forceReload) {
     pool.forEach((item, idx) => {
       _communityQuizzesCache[idx] = item;
       const isOwn = item.authorUid === myUid;
-      const date  = new Date(item.sharedAt).toLocaleDateString();
+      const date = new Date(item.sharedAt).toLocaleDateString();
       // Legacy/migrated items may be missing questionCount; fall back to
       // the actual questions array, then to 0, so Math.max() below can
       // never receive NaN (which the browser rejects on a number input's
@@ -398,7 +398,7 @@ async function startCommunityQuizByIdx(idx) {
   const quiz = (window._commQuizCache || [])[idx];
   if (!quiz || !quiz.questions || !quiz.questions.length) return;
 
-  const minsInput    = document.getElementById('cqCommMins_' + idx);
+  const minsInput = document.getElementById('cqCommMins_' + idx);
   const shuffleInput = document.getElementById('cqCommShuffle_' + idx);
   let mins = minsInput ? parseInt(minsInput.value, 10) : NaN;
   if (!mins || mins <= 0) mins = Math.max(5, quiz.questions.length);
@@ -413,8 +413,8 @@ async function startCommunityQuizByIdx(idx) {
   // in app-core.js's startQuiz() for why this runs even when shuffle is off.
   combined = _cqGroupAwareOrder(combined, shuffle);
 
-  selectedSubject  = 'Community Quizzes';
-  currentLecture   = quiz.title + ' (by ' + quiz.authorName + ')';
+  selectedSubject = 'Community Quizzes';
+  currentLecture = quiz.title + ' (by ' + quiz.authorName + ')';
   currentQuestions = combined;
   currentIndex = 0; userAnswers = {}; markedSet = new Set();
   questionTimes = {}; correctToWrong = 0; wrongToCorrect = 0; changeLog = [];

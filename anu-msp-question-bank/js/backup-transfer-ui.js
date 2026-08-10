@@ -32,7 +32,7 @@
      nothing until someone actually sends/scans.
 
    Build 71 fix:
- - P2P send/receive (including "Scan QR", which immediately calls
+   - P2P send/receive (including " Scan QR", which immediately calls
      startReceive() once a code is found) failed for every signed-OUT user
      with Firestore's raw "Missing or insufficient permissions" — the
      p2pSignaling collection required `request.auth != null` in
@@ -83,7 +83,7 @@
      purely a visual pass.
 
    Drop #100 — "Export to PDF" card added:
- - A third `.backup-card` ("Export to PDF") sits below Export/Import,
+   - A third `.backup-card` (" Export to PDF") sits below Export/Import,
      opening the new `pdfExportOverlay` modal (see js/pdf-export.js) — a
      full source picker (curriculum lectures, community quizzes, custom
      quizzes) plus text/image size + colour theme controls, a live decoy
@@ -133,7 +133,7 @@ async function renderBackupTransferModal() {
 
     <div class="backup-card">
       <div class="backup-card-header">
- <span class="backup-card-icon"></span>
+        <span class="backup-card-icon"></span>
         <div>
           <div class="backup-card-title">Export / Import</div>
           <div class="backup-card-subtitle">A file you keep — works everywhere, no connection needed</div>
@@ -144,8 +144,8 @@ async function renderBackupTransferModal() {
         <div class="backup-field-group">
           <div class="backup-field-label">What to include</div>
           <div class="backup-toggle-group">
- <label class="backup-toggle-chip"><input type="checkbox" id="backupIncludeQuizzes" checked><span>Custom quizzes</span></label>
- <label class="backup-toggle-chip"><input type="checkbox" id="backupIncludeStats" checked><span>Stats / history</span></label>
+            <label class="backup-toggle-chip"><input type="checkbox" id="backupIncludeQuizzes" checked><span> Custom quizzes</span></label>
+            <label class="backup-toggle-chip"><input type="checkbox" id="backupIncludeStats" checked><span> Stats / history</span></label>
           </div>
           <div id="backupQuizPicker" class="backup-quiz-picker" ${quizzes.length ? '' : 'style="display:none;"'}>
             <div class="backup-quiz-picker-header">
@@ -174,7 +174,7 @@ async function renderBackupTransferModal() {
 
     <div class="backup-card">
       <div class="backup-card-header">
- <span class="backup-card-icon"></span>
+        <span class="backup-card-icon"></span>
         <div>
           <div class="backup-card-title">Export to PDF</div>
           <div class="backup-card-subtitle">A stylish printable booklet — pick any curriculum lectures, community quizzes, or custom quizzes</div>
@@ -188,7 +188,7 @@ async function renderBackupTransferModal() {
           next to the questions.
         </div>
         <div class="backup-actions">
- <button class="stats-open-btn" onclick="openPdfExport()">Build a PDF Export</button>
+          <button class="stats-open-btn" onclick="openPdfExport()"> Build a PDF Export</button>
         </div>
       </div>
     </div>
@@ -235,7 +235,7 @@ function _backupProgressHTML(message) {
 }
 function _backupResultHTML(ok, message) {
   return `<div class="backup-result-bar ${ok ? 'ok' : 'fail'}">
-    <span class="backup-result-icon">${ok ? '✅' : '❌'}</span>
+    <span class="backup-result-icon">${ok ? '' : ''}</span>
     <span class="backup-result-msg">${message}</span>
   </div>`;
 }
@@ -321,9 +321,9 @@ async function _backupHealSelectedQuizImages(statusEl) {
 }
 
 /** Import-time wrapper: heals across ALL on-device quizzes (not just the
- *  ones from this import) — an inexpensive no-op scan for anyone whose
- *  images are already local, and the only way to also catch quizzes that
- *  were already broken on this device before this repair pass existed. */
+ * ones from this import) — an inexpensive no-op scan for anyone whose
+ * images are already local, and the only way to also catch quizzes that
+ * were already broken on this device before this repair pass existed. */
 async function _backupHealAllQuizImagesAfterImport() {
   try {
     const { listCustomQuizzes } = await import('./local-store.js');
@@ -335,7 +335,7 @@ async function _backupHealAllQuizImagesAfterImport() {
 }
 
 /** Reads the optional custom name field and turns it into a safe, unique
- *  filename — falling back to the usual dated default when left blank. */
+ * filename — falling back to the usual dated default when left blank. */
 function _backupResolveExportFilename() {
   const input = document.getElementById('backupExportName');
   const raw = input ? input.value.trim() : '';
@@ -352,10 +352,10 @@ function _backupResolveExportFilename() {
  * Confirmation step for file import: inspects
  * the payload without writing anything, then renders an inline panel
  * (into the same status element the caller is already using) asking:
- *   - which data type(s) to load, only shown when the backup actually has
- *     both custom quizzes and stats and thus a real choice exists;
- *   - whether to merge with this device's existing data (default, safest)
- *     or delete it first and replace it with the incoming set.
+ * - which data type(s) to load, only shown when the backup actually has
+ * both custom quizzes and stats and thus a real choice exists;
+ * - whether to merge with this device's existing data (default, safest)
+ * or delete it first and replace it with the incoming set.
  * Resolves with either { proceed: false } (user cancelled) or
  * { proceed: true, mode, includeQuizzes, includeStats } ready to hand
  * straight to applyImportPayload().
@@ -387,15 +387,15 @@ async function _backupConfirmImportFlow(payload, statusEl) {
         <div class="backup-mode-row">
           <label class="backup-mode-opt">
             <input type="radio" name="backupImportMode" value="merge" checked>
- <span>Merge with what's already on this device <em>(recommended)</em></span>
+            <span> Merge with what's already on this device <em>(recommended)</em></span>
           </label>
           <label class="backup-mode-opt">
             <input type="radio" name="backupImportMode" value="replace">
- <span>Delete this device's existing data first, then load this backup</span>
+            <span> Delete this device's existing data first, then load this backup</span>
           </label>
         </div>
         <div class="backup-confirm-actions">
-          <button class="stats-open-btn" id="backupImportApplyBtn" type="button">✅ Apply</button>
+          <button class="stats-open-btn" id="backupImportApplyBtn" type="button"> Apply</button>
           <button class="stats-open-btn backup-cancel-btn" id="backupImportCancelBtn" type="button">✖️ Cancel</button>
         </div>
       </div>`;
@@ -461,7 +461,7 @@ async function _backupRenderReminderNote() {
   const body = document.getElementById('backupBody');
   const note = document.createElement('div');
   note.className = 'backup-reminder-note';
- note.innerHTML = `It's been a while since your last backup — worth taking a minute to export or transfer a copy.`;
+  note.innerHTML = ` It's been a while since your last backup — worth taking a minute to export or transfer a copy.`;
   body.prepend(note);
 }
 
@@ -471,7 +471,7 @@ async function checkBackupReminderBadge() {
     const { shouldShowBackupReminder } = await import('./local-store.js');
     const btn = document.querySelector('[onclick="openBackupTransfer()"]');
     if (btn && (await shouldShowBackupReminder())) {
- btn.innerHTML = '&nbsp; Backup &amp; Transfer <span style="opacity:.7;font-size:.8em;">●</span>';
+      btn.innerHTML = '&nbsp; Backup &amp; Transfer <span style="opacity:.7;font-size:.8em;">●</span>';
     }
   } catch (e) { /* non-critical, fail silently */ }
 }

@@ -130,7 +130,7 @@ function _buildVisualSplitHTML(questions) {
 
   // Hint
   html += `<div style="font-size:.75rem;color:var(--violet-dark);font-weight:700;margin-bottom:8px;line-height:1.5;">
- Click between questions to mark a split point. Click again to remove it.
+    Click between questions to mark a split point. Click again to remove it.
     ${cuts.size === 0 ? '<span style="color:var(--unanswered-fg);"> — No cuts yet.</span>' : `<span style="color:var(--correct-fg);"> — ${cuts.size} cut${cuts.size !== 1 ? 's' : ''} = ${chunks.length} quizzes.</span>`}
   </div>`;
 
@@ -153,7 +153,7 @@ function _buildVisualSplitHTML(questions) {
       const partColor = SPLIT_PART_COLORS[partIdx % SPLIT_PART_COLORS.length];
       html += `<div class="cq-split-part-header" style="background:${partColor.bg};border:1.5px solid ${partColor.border};">
         <span style="font-size:.72rem;font-weight:800;color:${partColor.text};">
- Quiz ${partIdx + 1}
+           Quiz ${partIdx + 1}
         </span>
         <input type="text" class="cq-split-part-title-input" placeholder="Optional title for Quiz ${partIdx + 1}…"
           value="${escapeHtml(labelVal)}"
@@ -175,7 +175,7 @@ function _buildVisualSplitHTML(questions) {
       const isCut = cuts.has(i);
       html += `<div class="cq-scissors-row${isCut ? ' cut' : ''}" onclick="toggleVisualCut(${i})" title="${isCut ? 'Remove cut here' : 'Cut here — split into separate quiz'}">
         <div class="cq-scissors-line"></div>
- <button class="cq-scissors-btn" type="button"></button>
+        <button class="cq-scissors-btn" type="button"></button>
         <div class="cq-scissors-line"></div>
         ${isCut ? `<span style="position:absolute;left:50%;transform:translateX(-50%) translateX(22px);font-size:.68rem;font-weight:800;color:var(--violet-darkest);white-space:nowrap;pointer-events:none;">— split here —</span>` : ''}
       </div>`;
@@ -287,7 +287,7 @@ function _buildSplitSummaryHTML(total) {
   } else {
     chunks = _computeCustomChunks();
   }
- if (!chunks.length) return `<span style="color:var(--unanswered-fg);font-size:.78rem;font-weight:700;">No valid ranges defined yet.</span>`;
+  if (!chunks.length) return `<span style="color:var(--unanswered-fg);font-size:.78rem;font-weight:700;"> No valid ranges defined yet.</span>`;
   const coveredSet = new Set();
   chunks.forEach(c => { for (let i = c.start; i <= Math.min(c.end, total); i++) coveredSet.add(i); });
   const uncovered = total - coveredSet.size;
@@ -299,7 +299,7 @@ function _buildSplitSummaryHTML(total) {
     </span>`;
   });
   if (uncovered > 0 && cqSplitState.mode === 'custom') {
- html += `<span class="cq-split-chip warn">${uncovered} question${uncovered !== 1 ? 's' : ''} not covered</span>`;
+    html += `<span class="cq-split-chip warn"> ${uncovered} question${uncovered !== 1 ? 's' : ''} not covered</span>`;
   }
   return html;
 }
@@ -319,13 +319,13 @@ function renderSplitPanel(context, quizId, totalQuestions) {
 
   let html = `<div class="cq-split-panel" id="${panelId}">
     <div class="cq-split-panel-title">
- <span>Split into Multiple Quizzes</span>
+      <span> Split into Multiple Quizzes</span>
       <button class="cq-btn cq-btn-secondary" onclick="closeSplitPanel()" style="padding:4px 10px;font-size:.75rem;">✕ Cancel</button>
     </div>
     <div class="cq-split-mode-tabs">
- <button class="cq-split-mode-btn${isEqual ? ' active' : ''}" onclick="setSplitMode('equal')">Equal Chunks</button>
- <button class="cq-split-mode-btn${isCustom ? ' active' : ''}" onclick="setSplitMode('custom')">Custom Ranges</button>
- <button class="cq-split-mode-btn${isVisual ? ' active' : ''}" onclick="setSplitMode('visual')">Visual Split</button>
+      <button class="cq-split-mode-btn${isEqual ? ' active' : ''}" onclick="setSplitMode('equal')"> Equal Chunks</button>
+      <button class="cq-split-mode-btn${isCustom ? ' active' : ''}" onclick="setSplitMode('custom')"> Custom Ranges</button>
+      <button class="cq-split-mode-btn${isVisual ? ' active' : ''}" onclick="setSplitMode('visual')"> Visual Split</button>
     </div>`;
 
   if (isEqual) {
@@ -366,12 +366,12 @@ function renderSplitPanel(context, quizId, totalQuestions) {
   if (context === 'adminPublished') {
     html += `<button class="cq-btn" id="cqSplitExecPublishBtn_${panelKey}" onclick="executeSplitQuiz('publish')"
         title="Publish the split parts as new curriculum lectures and remove the original lecture">
- Split &amp; Publish to Curriculum</button>
+         Split &amp; Publish to Curriculum</button>
       <button class="cq-btn cq-btn-secondary" id="cqSplitExecCustomBtn_${panelKey}" onclick="executeSplitQuiz('custom')"
         style="background:var(--violet);color:#fff;" title="Save the split parts as custom quizzes — the curriculum lecture stays untouched">
- Split to Custom Quizzes</button>`;
+         Split to Custom Quizzes</button>`;
   } else {
- html += `<button class="cq-btn" id="cqSplitExecBtn_${panelKey}" onclick="executeSplitQuiz()">Create Split Quizzes</button>`;
+    html += `<button class="cq-btn" id="cqSplitExecBtn_${panelKey}" onclick="executeSplitQuiz()"> Create Split Quizzes</button>`;
   }
   html += `<button class="cq-btn cq-btn-secondary" id="cqSplitCancelBtn_${panelKey}" onclick="closeSplitPanel()">Cancel</button>
   </div>`;
@@ -411,7 +411,7 @@ async function executeSplitQuiz(targetMode) {
     chunks = _computeEqualChunks(total, cqSplitState.chunkSize);
   } else if (cqSplitState.mode === 'visual') {
     const rawChunks = _getVisualChunksFromCuts(total); // 0-based inclusive
- if (!rawChunks.length) { alert('No cuts defined yet. Click the scissors between questions to split.'); return; }
+    if (!rawChunks.length) { alert('No cuts defined yet. Click the scissors between questions to split.'); return; }
     const labels = cqSplitState.visualPartLabels || {};
     chunks = rawChunks.map(c => ({
       start: c.start + 1,
@@ -458,12 +458,12 @@ async function executeSplitQuiz(targetMode) {
   _setSplitPanelBusy(panelKey, true, isCurriculumPublish ? 'Splitting & publishing…' : 'Splitting…');
 
   // ── Admin-published curriculum lectures: the admin chooses between two
-  //    pathways —
-  //    'publish' (normal pathway): the split parts REPLACE the original
-  //    lecture as new published curriculum lectures — live for all users.
-  //    'custom': the split parts go into the admin's own Custom Quizzes
-  //    instead, leaving the original curriculum lecture untouched, so the
-  //    admin can review/edit each part before publishing it themselves. ──
+  // pathways —
+  // 'publish' (normal pathway): the split parts REPLACE the original
+  // lecture as new published curriculum lectures — live for all users.
+  // 'custom': the split parts go into the admin's own Custom Quizzes
+  // instead, leaving the original curriculum lecture untouched, so the
+  // admin can review/edit each part before publishing it themselves. ──
   if (isCurriculumPublish) {
     const origLectureId = cqSplitState.quizId;
     const subject = adminTargetSubject;
@@ -529,7 +529,7 @@ async function executeSplitQuiz(targetMode) {
       cqSplitState = null;
       renderAdminAssignedList();
       if (selectedSubject === subject) selectSubject(subject);
-      alert(`✅ Published ${newLectures.length} new lecture${newLectures.length !== 1 ? 's' : ''} from "${baseTitle}" to ${subjects[subject].label || subject}, replacing the original lecture.`);
+      alert(` Published ${newLectures.length} new lecture${newLectures.length !== 1 ? 's' : ''} from "${baseTitle}" to ${subjects[subject].label || subject}, replacing the original lecture.`);
     } catch (e) {
       _setSplitPanelBusy(panelKey, false);
       alert('Failed to split & publish: ' + (e.message || e));
@@ -566,7 +566,7 @@ async function executeSplitQuiz(targetMode) {
 
     cqSplitState = null;
     _renderAdminAssignedListHTML();
-    alert(`✅ Created ${newCustomQuizzes.length} split quiz${newCustomQuizzes.length !== 1 ? 'zes' : ''} from "${baseTitle}".\n\nThese were NOT published directly to students — they've been added to your Custom Quizzes, where you can review and publish each one individually when ready.`);
+    alert(` Created ${newCustomQuizzes.length} split quiz${newCustomQuizzes.length !== 1 ? 'zes' : ''} from "${baseTitle}".\n\nThese were NOT published directly to students — they've been added to your Custom Quizzes, where you can review and publish each one individually when ready.`);
     return;
   }
 
@@ -604,7 +604,7 @@ async function executeSplitQuiz(targetMode) {
   cqSplitState = null;
   renderCustomQuizModal();
   const statusEl = document.getElementById('cqStatus');
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Created ${newQuizzes.length} split quiz${newQuizzes.length !== 1 ? 'zes' : ''} from "${escapeHtml(baseTitle)}"!</div>`;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> Created ${newQuizzes.length} split quiz${newQuizzes.length !== 1 ? 'zes' : ''} from "${escapeHtml(baseTitle)}"!</div>`;
 }
 
 async function deleteCustomQuiz(id) {
@@ -642,8 +642,8 @@ function startCustomQuiz(id) {
   const quiz = quizzes.find(q => q.id === id);
   if (!quiz || !quiz.questions || !quiz.questions.length) return;
 
-  const minsInput     = document.getElementById('cqMins_' + id);
-  const shuffleInput  = document.getElementById('cqShuffle_' + id);
+  const minsInput = document.getElementById('cqMins_' + id);
+  const shuffleInput = document.getElementById('cqShuffle_' + id);
   let mins = minsInput ? parseInt(minsInput.value, 10) : NaN;
   if (!mins || mins <= 0) mins = Math.max(5, quiz.questions.length);
   const shuffle = shuffleInput ? shuffleInput.checked : false;
@@ -653,8 +653,8 @@ function startCustomQuiz(id) {
   // in app-core.js's startQuiz() for why this runs even when shuffle is off.
   combined = _cqGroupAwareOrder(combined, shuffle);
 
-  selectedSubject  = 'Custom Quizzes';
-  currentLecture   = quiz.title;
+  selectedSubject = 'Custom Quizzes';
+  currentLecture = quiz.title;
   currentQuestions = combined;
   currentIndex = 0; userAnswers = {}; markedSet = new Set();
   questionTimes = {}; correctToWrong = 0; wrongToCorrect = 0; changeLog = [];
@@ -684,11 +684,11 @@ function clearCqMultiSelect() {
 }
 
 function startCustomQuizzesMulti() {
-  const quizzes  = loadCustomQuizzes();
+  const quizzes = loadCustomQuizzes();
   const selected = quizzes.filter(q => cqMultiSelected.has(q.id));
   if (!selected.length) return;
 
-  const minsInput    = document.getElementById('cqMultiMins');
+  const minsInput = document.getElementById('cqMultiMins');
   const shuffleInput = document.getElementById('cqMultiShuffle');
   const totalQs = selected.reduce((sum, q) => sum + q.questions.length, 0);
   let mins = minsInput ? parseInt(minsInput.value, 10) : NaN;
@@ -723,8 +723,8 @@ function startCustomQuizzesMulti() {
   // in app-core.js's startQuiz() for why this runs even when shuffle is off.
   combined = _cqGroupAwareOrder(combined, shuffle);
 
-  selectedSubject  = 'Custom Quizzes';
-  currentLecture   = selected.length === 1
+  selectedSubject = 'Custom Quizzes';
+  currentLecture = selected.length === 1
     ? selected[0].title
     : `${selected.length} quizzes (${selected.map(q => q.title).join(', ')})`;
   currentQuestions = combined;

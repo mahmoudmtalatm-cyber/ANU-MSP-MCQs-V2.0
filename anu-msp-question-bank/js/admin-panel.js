@@ -2,7 +2,7 @@
    ADMIN PANEL — Publish quizzes (custom or community) into
    the official question bank under a chosen Module/Subject.
 ══════════════════════════════════════════════════════════ */
-let adminSourceTab   = 'custom';   // 'custom' | 'community'
+let adminSourceTab = 'custom'; // 'custom' | 'community'
 
 // Multiple quizzes can be queued for publishing at once. Keyed by
 // `${sourceType}:${sourceId}` (see _adminQuizKey) so a custom quiz and a
@@ -26,9 +26,9 @@ let adminLastPublishResult = null;
 
 function _adminQuizKey(sourceType, sourceId) { return sourceType + ':' + sourceId; }
 // NOTE: adminTargetYear/Module/Subject below are used EXCLUSIVELY by the
-// "Manage Curriculum" tab's own drill-down navigation (adminCurrNavLevel
+// " Manage Curriculum" tab's own drill-down navigation (adminCurrNavLevel
 // etc.) — they track where the admin is browsing *in that tab*.
-let adminTargetYear   = '';
+let adminTargetYear = '';
 let adminTargetModule = '';
 let adminTargetSubject= '';
 
@@ -36,7 +36,7 @@ let adminTargetSubject= '';
 // a fully separate set of Year/Module/Subject targets so that clicking
 // through it never changes — or gets clobbered by — whatever the admin was
 // last browsing in the Manage Curriculum tab, and vice versa.
-let adminPubTargetYear   = '';
+let adminPubTargetYear = '';
 let adminPubTargetModule = '';
 let adminPubTargetSubject= '';
 
@@ -48,19 +48,19 @@ let adminPublishInsertPosition = null;
 let adminCommunityCache = null;
 let adminBusy = false;
 
-// Search/filter state for the "Community Quizzes" source list in the
+// Search/filter state for the " Community Quizzes" source list in the
 // Publish tab — mirrors communitySearchQuery/Year/Module/SubjectFilter/Sort
 // from the student-facing Community Quizzes browse overlay, kept as its
 // own separate set of variables so browsing here never affects, and is
 // never affected by, whatever's currently set in that overlay.
-let adminCommTab           = 'browse'; // 'browse' | 'mine' — mirrors commManageTab, for the Publish tab's community source list
-let adminCommSearchQuery   = '';
-let adminCommYearFilter    = '';
-let adminCommModuleFilter  = '';
+let adminCommTab = 'browse'; // 'browse' | 'mine' — mirrors commManageTab, for the Publish tab's community source list
+let adminCommSearchQuery = '';
+let adminCommYearFilter = '';
+let adminCommModuleFilter = '';
 let adminCommSubjectFilter = '';
-let adminCommSort          = 'newest';
+let adminCommSort = 'newest';
 
-// "Manage Community Quiz" tab — a full admin-side duplicate of the
+// " Manage Community Quiz" tab — a full admin-side duplicate of the
 // student-facing Community Quizzes browse menu (Browse All / My Shared,
 // search, cascading Year/Module/Subject filters, sort, tag chips), with
 // an admin Delete button added to every card. This is now the ONLY place
@@ -69,18 +69,18 @@ let adminCommSort          = 'newest';
 // has no delete button anywhere anymore. Kept as its own separate set of
 // variables so this tab's browsing/filtering never interferes with the
 // student-facing overlay's or the Publish tab's.
-let commManageTab           = 'browse'; // 'browse' | 'mine'
-let commManageSearchQuery   = '';
-let commManageYearFilter    = '';
-let commManageModuleFilter  = '';
+let commManageTab = 'browse'; // 'browse' | 'mine'
+let commManageSearchQuery = '';
+let commManageYearFilter = '';
+let commManageModuleFilter = '';
 let commManageSubjectFilter = '';
-let commManageSort          = 'newest';
+let commManageSort = 'newest';
 
 // Inline quiz editor state (used both for "edit before publish" and "edit published lecture")
-let adminEditQuestions = null;   // working copy of questions array being edited, or null
-let adminEditMode      = null;   // 'publish' | 'published' | null
-let adminEditingPublishedId   = null; // lectureId when editing an already-published lecture
-let adminEditingPublishedName = '';   // its lecture name
+let adminEditQuestions = null; // working copy of questions array being edited, or null
+let adminEditMode = null; // 'publish' | 'published' | null
+let adminEditingPublishedId = null; // lectureId when editing an already-published lecture
+let adminEditingPublishedName = ''; // its lecture name
 
 // Cache of the currently-listed published lectures for whichever subject is
 // in focus (adminPubTargetSubject in the Publish tab, adminTargetSubject in
@@ -106,15 +106,15 @@ function _pubListSubject() {
 function renderAdminPanelTabs() {
   const user = window._currentUser;
   const canCurriculum = hasAdminPermission(user, 'curriculum');
-  const canCommunity  = hasAdminPermission(user, 'community');
-  const canAdmins     = hasAdminPermission(user, 'admins');
+  const canCommunity = hasAdminPermission(user, 'community');
+  const canAdmins = hasAdminPermission(user, 'admins');
 
   let html = '';
   // Publish Quizzes now requires 'curriculum' permission — it's the only
   // thing that tab does (pick a source quiz + assign it into the
   // curriculum), and deleting is no longer possible from here at all.
   if (canCurriculum) {
- html += `<button class="admin-panel-tab ${adminActiveTab === 'publish' ? 'active' : ''}" id="adminTabPublish" onclick="adminSwitchTab('publish')">Publish Quizzes</button>`;
+    html += `<button class="admin-panel-tab ${adminActiveTab === 'publish' ? 'active' : ''}" id="adminTabPublish" onclick="adminSwitchTab('publish')"> Publish Quizzes</button>`;
   }
   // Manage Community Quiz — a full duplicate of the student-facing
   // Community Quizzes browse menu (search, cascading filters, tags),
@@ -122,13 +122,13 @@ function renderAdminPanelTabs() {
   // ONLY place a community-shared quiz gets deleted from in the admin
   // panel. Requires 'community' permission, independent of 'curriculum'.
   if (canCommunity) {
- html += `<button class="admin-panel-tab ${adminActiveTab === 'commManage' ? 'active' : ''}" id="adminTabCommManage" onclick="adminSwitchTab('commManage')">Manage Community Quiz</button>`;
+    html += `<button class="admin-panel-tab ${adminActiveTab === 'commManage' ? 'active' : ''}" id="adminTabCommManage" onclick="adminSwitchTab('commManage')"> Manage Community Quiz</button>`;
   }
   if (canCurriculum) {
- html += `<button class="admin-panel-tab ${adminActiveTab === 'curriculum' ? 'active' : ''}" id="adminTabCurriculum" onclick="adminSwitchTab('curriculum')">Manage Curriculum</button>`;
+    html += `<button class="admin-panel-tab ${adminActiveTab === 'curriculum' ? 'active' : ''}" id="adminTabCurriculum" onclick="adminSwitchTab('curriculum')"> Manage Curriculum</button>`;
   }
   if (canAdmins) {
- html += `<button class="admin-panel-tab ${adminActiveTab === 'admins' ? 'active' : ''}" id="adminTabAdmins" onclick="adminSwitchTab('admins')">Manage Admins</button>`;
+    html += `<button class="admin-panel-tab ${adminActiveTab === 'admins' ? 'active' : ''}" id="adminTabAdmins" onclick="adminSwitchTab('admins')"> Manage Admins</button>`;
   }
   document.getElementById('adminPanelTabs').innerHTML = html;
 }
@@ -147,31 +147,31 @@ function openAdminPanel() {
     alert('You do not have admin access.');
     return;
   }
-  adminSourceTab    = 'custom'; // Publish tab is curriculum-only now, so this is always the sensible start
+  adminSourceTab = 'custom'; // Publish tab is curriculum-only now, so this is always the sensible start
   adminSelectedQuizzes = new Map();
   adminLastPublishResult = null;
   if (cqEditorContext === 'admin') { cqEditorContext = 'quiz'; cqEditingQuizId = null; cqEditQuestions = null; _questionEditDirty = false; }
-  adminTargetYear   = '';
+  adminTargetYear = '';
   adminTargetModule = '';
   adminTargetSubject= '';
-  adminPubTargetYear   = '';
+  adminPubTargetYear = '';
   adminPubTargetModule = '';
   adminPubTargetSubject= '';
   adminPublishInsertPosition = null;
   adminCommunityCache = null;
   adminCurrNavLevel = 'years';
-  adminCommTab           = 'browse';
-  adminCommSearchQuery   = '';
-  adminCommYearFilter    = '';
-  adminCommModuleFilter  = '';
+  adminCommTab = 'browse';
+  adminCommSearchQuery = '';
+  adminCommYearFilter = '';
+  adminCommModuleFilter = '';
   adminCommSubjectFilter = '';
-  adminCommSort          = 'newest';
-  commManageTab           = 'browse';
-  commManageSearchQuery   = '';
-  commManageYearFilter    = '';
-  commManageModuleFilter  = '';
+  adminCommSort = 'newest';
+  commManageTab = 'browse';
+  commManageSearchQuery = '';
+  commManageYearFilter = '';
+  commManageModuleFilter = '';
   commManageSubjectFilter = '';
-  commManageSort          = 'newest';
+  commManageSort = 'newest';
   resetAdminNewAdminFormState();
   const defaultTab = adminDefaultTab();
   if (!defaultTab) {
@@ -244,7 +244,7 @@ function renderAdminManagePanel() {
   let rows = `
     <div class="admin-quiz-item" style="cursor:default;">
       <div class="admin-quiz-item-info">
- <div class="admin-quiz-item-title">${escapeHtml(SUPER_ADMIN_EMAIL)}</div>
+        <div class="admin-quiz-item-title"> ${escapeHtml(SUPER_ADMIN_EMAIL)}</div>
         <div class="admin-quiz-item-meta">Super Admin — full access, permanent, cannot be removed</div>
       </div>
     </div>`;
@@ -255,11 +255,11 @@ function renderAdminManagePanel() {
     rows += `<div style="color:var(--text-muted);font-size:.85rem;padding:10px;">No other admins yet.</div>`;
   } else {
     emails.forEach(email => {
-      const info  = roster[email] || {};
+      const info = roster[email] || {};
       const perms = Array.isArray(info.permissions) ? info.permissions : [];
       const permLabel = perms.map(p => ADMIN_PERMISSION_LABELS[p] || p).join(' · ') || '—';
       const scopeChip = perms.includes('curriculum')
- ? ` · ${escapeHtml(curriculumScopeSummary(info.curriculumScope || { type: 'all' }))}`
+        ? ` · ${escapeHtml(curriculumScopeSummary(info.curriculumScope || { type: 'all' }))}`
         : '';
       const isAncestor = !isSuperAdmin(user) && isInAssignerChain(actingEmailLower, email);
       const exceedsPerms = !isSuperAdmin(user) && (
@@ -276,7 +276,7 @@ function renderAdminManagePanel() {
             <div class="admin-quiz-item-meta">${escapeHtml(permLabel)}${scopeChip}${info.addedBy ? ' · added by ' + escapeHtml(info.addedBy) : ''}</div>
           </div>
           ${canRemove
- ? `<button class="admin-remove-btn" onclick="adminRemoveAdminUI('${escapeHtml(email)}')">Remove</button>`
+            ? `<button class="admin-remove-btn" onclick="adminRemoveAdminUI('${escapeHtml(email)}')"> Remove</button>`
             : `<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap;">${escapeHtml(blockedReason)}</span>`}
         </div>`;
     });
@@ -305,11 +305,11 @@ function renderAdminManagePanel() {
       <div style="display:flex;flex-direction:column;margin-bottom:6px;">${permCheckboxesHtml}</div>
       <div style="font-size:.76rem;color:var(--text-muted);margin-bottom:12px;">You can only grant permissions (and curriculum access) you hold yourself.</div>
       ${adminCurrScopePickerSectionHtml()}
-      <button class="admin-assign-btn" id="adminAddAdminBtn" onclick="adminAssignAdminUI()" style="margin-top:14px;">➕ Add Admin</button>
+      <button class="admin-assign-btn" id="adminAddAdminBtn" onclick="adminAssignAdminUI()" style="margin-top:14px;"> Add Admin</button>
       <div class="admin-status" id="adminManageStatus"></div>
 
       ${isSuperAdmin(user) ? `
- <h3 style="margin:26px 0 10px;font-size:1rem;">Maintenance — inline image storage</h3>
+      <h3 style="margin:26px 0 10px;font-size:1rem;"> Maintenance — inline image storage</h3>
       <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px;line-height:1.4;">
         Images are now stored inline, right on each question, instead of as separate hosted files. Content shared or
         published before this change may still point at one of those old files. Run these one at a time, in order.
@@ -326,10 +326,10 @@ function renderAdminManagePanel() {
       <div style="border:1.5px solid #ccc;border-radius:10px;padding:12px;">
         <div style="font-weight:600;font-size:.9rem;margin-bottom:4px;">Step 2 — Clean up old storage</div>
         <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:10px;">
- Only run this after Step 1 shows nothing left to migrate. Permanently deletes every old separately-hosted
+           Only run this after Step 1 shows nothing left to migrate. Permanently deletes every old separately-hosted
           image file and its tracking record — there's no undo. Anything not yet migrated will lose its image.
         </div>
- <button class="admin-assign-btn" id="adminSweepImagesBtn" onclick="adminSweepLegacyImagesUI()" style="background:#b23b3b;">Delete old image storage</button>
+        <button class="admin-assign-btn" id="adminSweepImagesBtn" onclick="adminSweepLegacyImagesUI()" style="background:#b23b3b;"> Delete old image storage</button>
         <div class="admin-status" id="adminSweepImagesStatus"></div>
       </div>` : ''}
     </div>`;
@@ -397,11 +397,11 @@ async function adminMigrateLegacyImagesUI() {
 
     if (statusEl) {
       statusEl.innerHTML = migrated
- ? `<div class="cq-status success">✅ Done — ${scanned} scanned, ${migrated} migrated to inline storage${failed ? `, ${failed} failed (see browser console)` : ''}.</div>`
- : `<div class="cq-status success">✅ Done — ${scanned} scanned, nothing left to migrate${failed ? `, ${failed} failed (see browser console)` : ''}.</div>`;
+        ? `<div class="cq-status success"> Done — ${scanned} scanned, ${migrated} migrated to inline storage${failed ? `, ${failed} failed (see browser console)` : ''}.</div>`
+        : `<div class="cq-status success"> Done — ${scanned} scanned, nothing left to migrate${failed ? `, ${failed} failed (see browser console)` : ''}.</div>`;
     }
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> ${escapeHtml(e.message || String(e))}</div>`;
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -434,16 +434,16 @@ async function adminSweepLegacyImagesUI() {
     const ownerNote = result.docsWithNoKnownOwner
       ? ` (${result.docsWithNoKnownOwner} record${result.docsWithNoKnownOwner === 1 ? '' : 's'} had no recoverable file location and were only cleared)`
       : '';
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ Swept ${result.refcountDocsSwept} record${result.refcountDocsSwept === 1 ? '' : 's'} — deleted ${result.objectsDeleted} old image file${result.objectsDeleted === 1 ? '' : 's'}${ownerNote}.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> Swept ${result.refcountDocsSwept} record${result.refcountDocsSwept === 1 ? '' : 's'} — deleted ${result.objectsDeleted} old image file${result.objectsDeleted === 1 ? '' : 's'}${ownerNote}.</div>`;
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> ${escapeHtml(e.message || String(e))}</div>`;
   } finally {
     if (btn) btn.disabled = false;
   }
 }
 
 async function adminAssignAdminUI() {
-  const statusEl   = document.getElementById('adminManageStatus');
+  const statusEl = document.getElementById('adminManageStatus');
   const emailInput = document.getElementById('adminNewEmail');
   const email = (emailInput ? emailInput.value : '').trim();
   const perms = ADMIN_PERMISSIONS.filter(p => {
@@ -457,11 +457,11 @@ async function adminAssignAdminUI() {
 
   try {
     await assignAdmin(window._currentUser, email, perms, adminNewAdminScope);
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success">✅ ${escapeHtml(email.trim().toLowerCase())} added as admin.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> ${escapeHtml(email.trim().toLowerCase())} added as admin.</div>`;
     resetAdminNewAdminFormState();
     setTimeout(() => renderAdminManagePanel(), 600);
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> ${escapeHtml(e.message || String(e))}</div>`;
     if (btn) btn.disabled = false;
   }
 }
@@ -483,12 +483,12 @@ function adminSetSourceTab(tab) {
   // between tabs, so an admin can build one mixed batch out of both
   // sources before publishing.
   if (cqEditorContext === 'admin') { cqEditorContext = 'quiz'; cqEditingQuizId = null; cqEditQuestions = null; _questionEditDirty = false; }
-  adminCommTab           = 'browse';
-  adminCommSearchQuery   = '';
-  adminCommYearFilter    = '';
-  adminCommModuleFilter  = '';
+  adminCommTab = 'browse';
+  adminCommSearchQuery = '';
+  adminCommYearFilter = '';
+  adminCommModuleFilter = '';
   adminCommSubjectFilter = '';
-  adminCommSort          = 'newest';
+  adminCommSort = 'newest';
   renderAdminPanel();
 }
 
@@ -530,16 +530,16 @@ async function renderAdminPanel() {
   let listHtml = '';
   let listWrapClass = 'admin-quiz-list'; // scrollable flat list (community tab, or no custom quizzes yet)
   if (adminSourceTab === 'custom') {
-    const quizzes     = loadCustomQuizzes();
+    const quizzes = loadCustomQuizzes();
     const collections = loadQuizCollections();
     if (!quizzes.length) {
       listHtml = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">No custom quizzes found for your account.</div>`;
     } else {
- // Same folder tree + breadcrumb + filtered list as the "Custom
+      // Same folder tree + breadcrumb + filtered list as the " Custom
       // Quizzes" modal (see renderCustomQuizModal in firebase-storage.js),
       // just with admin-style quiz cards (click-to-select + ✓ check)
       // swapped in for the student-facing Start/Edit/Share/Delete ones.
- // Dragging a card onto a folder, or its own Move button, files it
+      // Dragging a card onto a folder, or its own Move button, files it
       // into a collection exactly like it does over there — it's the same
       // underlying data, just browsed from a different screen.
       listWrapClass = 'admin-quiz-list-collections'; // layout owns its own sizing; no extra scroll box needed
@@ -560,15 +560,15 @@ async function renderAdminPanel() {
             </div>
             <div class="cq-move-wrap">
               <button class="admin-quiz-move-btn" data-move-btn="${q.id}"
- onclick="event.stopPropagation(); cqToggleQuizMoveMenu('${q.id}')" title="Move to a folder"></button>
+                      onclick="event.stopPropagation(); cqToggleQuizMoveMenu('${q.id}')" title="Move to a folder"></button>
               ${moveOpen ? _renderQuizMoveMenuHTML(q) : ''}
             </div>
             <div class="admin-quiz-item-check">✓</div>
           </div>`;
       }).join('') : `
         <div class="empty-state" style="padding:16px 12px;">
- <div class="empty-icon"></div>
- No quizzes in this folder yet — drag a quiz here, or use its Move button.
+          <div class="empty-icon"></div>
+          No quizzes in this folder yet — drag a quiz here, or use its Move button.
         </div>`;
 
       listHtml = `<div class="cq-coll-layout ${cqSidebarCollapsed ? 'cq-coll-sidebar-collapsed' : ''}">
@@ -585,15 +585,15 @@ async function renderAdminPanel() {
 
   const sourceTabsHtml = `
     <div class="admin-quiz-source-tabs">
- ${canCurriculum ? `<button class="admin-source-tab ${adminSourceTab === 'custom' ? 'active' : ''}" onclick="adminSetSourceTab('custom')">My Custom Quizzes</button>` : ''}
- ${canCurriculum ? `<button class="admin-source-tab ${adminSourceTab === 'community' ? 'active' : ''}" onclick="adminSetSourceTab('community')">Community Quizzes</button>` : ''}
+      ${canCurriculum ? `<button class="admin-source-tab ${adminSourceTab === 'custom' ? 'active' : ''}" onclick="adminSetSourceTab('custom')"> My Custom Quizzes</button>` : ''}
+      ${canCurriculum ? `<button class="admin-source-tab ${adminSourceTab === 'community' ? 'active' : ''}" onclick="adminSetSourceTab('community')"> Community Quizzes</button>` : ''}
     </div>`;
 
   const selCount = adminSelectedQuizzes.size;
   const selectionBarHtml = selCount ? `
     <div class="admin-selection-bar">
       <span>✓ ${selCount} quiz${selCount !== 1 ? 'zes' : ''} selected to publish</span>
- <button class="admin-remove-btn" onclick="adminClearSelectedQuizzes()">Clear All</button>
+      <button class="admin-remove-btn" onclick="adminClearSelectedQuizzes()"> Clear All</button>
     </div>` : '';
 
   body.innerHTML = `
@@ -627,7 +627,7 @@ async function renderAdminPanel() {
         _allSharedQuizzes = shared; // keep the browse overlay's in-memory copy in sync too
       } catch (e) {
         document.getElementById('adminQuizList').innerHTML =
-          `<div style="text-align:center;padding:16px;color:var(--wrong-fg);">❌ Failed to load community quizzes.</div>`;
+          `<div style="text-align:center;padding:16px;color:var(--wrong-fg);"> Failed to load community quizzes.</div>`;
         return;
       }
     }
@@ -650,10 +650,10 @@ async function renderAdminPanel() {
     const q = adminCommSearchQuery.toLowerCase().trim();
     if (q) {
       shared = shared.filter(item => {
-        const inTitle  = (item.title || '').toLowerCase().includes(q);
+        const inTitle = (item.title || '').toLowerCase().includes(q);
         const inAuthor = (item.authorName || '').toLowerCase().includes(q);
-        const inCat    = (item.category || '').toLowerCase().includes(q);
-        const inTags   = (item.tags || []).some(t => t.includes(q));
+        const inCat = (item.category || '').toLowerCase().includes(q);
+        const inTags = (item.tags || []).some(t => t.includes(q));
         return inTitle || inAuthor || inCat || inTags;
       });
     }
@@ -678,7 +678,7 @@ async function renderAdminPanel() {
     }
 
     // Build cascading filter options from live curriculum + shared quiz metadata
-    const allYears   = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
+    const allYears = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
     const allModules = adminCommYearFilter
       ? Object.keys(curriculum[adminCommYearFilter] || {})
       : [...new Set(allShared.map(i => i.module).filter(Boolean))].sort();
@@ -686,7 +686,7 @@ async function renderAdminPanel() {
       ? (curriculum[adminCommYearFilter][adminCommModuleFilter] || []).filter(k => subjects[k])
       : [...new Set(allShared.map(i => i.subjectKey).filter(Boolean))];
 
-    const searchVal  = escapeHtml(adminCommSearchQuery);
+    const searchVal = escapeHtml(adminCommSearchQuery);
     const clearStyle = adminCommSearchQuery ? 'display:block' : 'display:none';
 
     const filterBar = document.getElementById('adminCommFilterBar');
@@ -694,7 +694,7 @@ async function renderAdminPanel() {
       filterBar.innerHTML = `
         <div class="comm-filter-bar">
           <div class="comm-search-wrap">
- <span class="comm-search-icon"></span>
+            <span class="comm-search-icon"></span>
             <input class="comm-search-input" id="adminCommSearchInput" type="text"
                    placeholder="Search by title, author, category or tag…"
                    value="${searchVal}"
@@ -726,10 +726,10 @@ async function renderAdminPanel() {
             </select>
             <select class="comm-filter-select" id="adminCommSortSelect"
                     onchange="adminCommSort=this.value;renderAdminPanel()">
- <option value="newest" ${adminCommSort==='newest'?'selected':''}>Newest</option>
- <option value="oldest" ${adminCommSort==='oldest'?'selected':''}>Oldest</option>
- <option value="az" ${adminCommSort==='az'?'selected':''}>A → Z</option>
- <option value="questions" ${adminCommSort==='questions'?'selected':''}>Most Questions</option>
+              <option value="newest" ${adminCommSort==='newest'?'selected':''}> Newest</option>
+              <option value="oldest" ${adminCommSort==='oldest'?'selected':''}> Oldest</option>
+              <option value="az" ${adminCommSort==='az'?'selected':''}> A → Z</option>
+              <option value="questions" ${adminCommSort==='questions'?'selected':''}> Most Questions</option>
             </select>
           </div>
           <div class="comm-results-count">${shared.length} quiz${shared.length !== 1 ? 'zes' : ''} shown</div>
@@ -901,10 +901,10 @@ async function renderAdminManageCommunityPanel(forceReload) {
   const q = commManageSearchQuery.toLowerCase().trim();
   if (q) {
     pool = pool.filter(item => {
-      const inTitle  = (item.title || '').toLowerCase().includes(q);
+      const inTitle = (item.title || '').toLowerCase().includes(q);
       const inAuthor = (item.authorName || '').toLowerCase().includes(q);
-      const inCat    = (item.category || '').toLowerCase().includes(q);
-      const inTags   = (item.tags || []).some(t => t.includes(q));
+      const inCat = (item.category || '').toLowerCase().includes(q);
+      const inTags = (item.tags || []).some(t => t.includes(q));
       return inTitle || inAuthor || inCat || inTags;
     });
   }
@@ -929,7 +929,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
   }
 
   // Build cascading filter options from live curriculum + shared quiz metadata
-  const allYears   = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
+  const allYears = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
   const allModules = commManageYearFilter
     ? Object.keys(curriculum[commManageYearFilter] || {})
     : [...new Set(shared.map(i => i.module).filter(Boolean))].sort();
@@ -937,7 +937,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
     ? (curriculum[commManageYearFilter][commManageModuleFilter] || []).filter(k => subjects[k])
     : [...new Set(shared.map(i => i.subjectKey).filter(Boolean))];
 
-  const searchVal  = escapeHtml(commManageSearchQuery);
+  const searchVal = escapeHtml(commManageSearchQuery);
   const clearStyle = commManageSearchQuery ? 'display:block' : 'display:none';
 
   let html = `
@@ -948,7 +948,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
 
     <div class="comm-filter-bar">
       <div class="comm-search-wrap">
- <span class="comm-search-icon"></span>
+        <span class="comm-search-icon"></span>
         <input class="comm-search-input" id="commManageSearchInput" type="text"
                placeholder="Search by title, author, category or tag…"
                value="${searchVal}"
@@ -980,10 +980,10 @@ async function renderAdminManageCommunityPanel(forceReload) {
         </select>
         <select class="comm-filter-select" id="commManageSortSelect"
                 onchange="commManageSort=this.value;renderAdminManageCommunityPanel()">
- <option value="newest" ${commManageSort==='newest'?'selected':''}>Newest</option>
- <option value="oldest" ${commManageSort==='oldest'?'selected':''}>Oldest</option>
- <option value="az" ${commManageSort==='az'?'selected':''}>A → Z</option>
- <option value="questions" ${commManageSort==='questions'?'selected':''}>Most Questions</option>
+          <option value="newest" ${commManageSort==='newest'?'selected':''}> Newest</option>
+          <option value="oldest" ${commManageSort==='oldest'?'selected':''}> Oldest</option>
+          <option value="az" ${commManageSort==='az'?'selected':''}> A → Z</option>
+          <option value="questions" ${commManageSort==='questions'?'selected':''}> Most Questions</option>
         </select>
       </div>
       <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
@@ -991,7 +991,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
 
   if (!pool.length) {
     html += `<div class="community-empty">
- <div class="ce-icon">${commManageSearchQuery || commManageYearFilter || commManageModuleFilter || commManageSubjectFilter ? '' : (commManageTab === 'mine' ? '&#128100;' : '&#127758;')}</div>
+      <div class="ce-icon">${commManageSearchQuery || commManageYearFilter || commManageModuleFilter || commManageSubjectFilter ? '' : (commManageTab === 'mine' ? '&#128100;' : '&#127758;')}</div>
       ${commManageSearchQuery || commManageYearFilter || commManageModuleFilter || commManageSubjectFilter
         ? 'No quizzes match your search. Try different keywords or clear the filters.'
         : commManageTab === 'mine'
@@ -1001,7 +1001,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
   } else {
     pool.forEach(item => {
       const isOwn = item.authorUid === myUid;
-      const date  = new Date(item.sharedAt).toLocaleDateString();
+      const date = new Date(item.sharedAt).toLocaleDateString();
       const catBadge = (item.year || item.subjectLabel)
         ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
         : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
@@ -1023,7 +1023,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
             </div>
             ${tagsHtml}
           </div>
- <button class="admin-remove-btn" onclick="adminDeleteSourceQuiz('${escapeHtml(item.id)}')">Delete</button>
+          <button class="admin-remove-btn" onclick="adminDeleteSourceQuiz('${escapeHtml(item.id)}')"> Delete</button>
         </div>
       </div>`;
     });
@@ -1042,17 +1042,17 @@ async function renderAdminManageCommunityPanel(forceReload) {
 }
 
 /* ── Visual publish-destination picker ──
- Same click-through card style used by the "Manage Curriculum" browser
+   Same click-through card style used by the " Manage Curriculum" browser
    (_moduleIcon, .curr-item-row, .curr-back-btn, etc.) so picking where a
    quiz goes is a direct, visual "tap the right box" action. Uses its own
    adminPubTargetYear/Module/Subject state — entirely separate from the
    Curriculum tab's adminTargetYear/Module/Subject — so browsing here never
    affects, and is never affected by, wherever the admin last was in
- Manage Curriculum. Picking a new subject always simply replaces
+    Manage Curriculum. Picking a new subject always simply replaces
    whatever was previously chosen. */
 function adminAssignBreadcrumbHtml() {
   let html = `<div class="curr-breadcrumb">`;
- html += `<span class="curr-crumb ${!adminPubTargetYear ? 'active' : ''}" onclick="adminOnYearChange('')">Years</span>`;
+  html += `<span class="curr-crumb ${!adminPubTargetYear ? 'active' : ''}" onclick="adminOnYearChange('')"> Years</span>`;
   if (adminPubTargetYear) {
     html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${!adminPubTargetModule ? 'active' : ''}" onclick="adminOnModuleChange('')">${escapeHtml(adminPubTargetYear)}</span>`;
   }
@@ -1068,7 +1068,7 @@ function adminAssignBreadcrumbHtml() {
 
 function adminPublishTargetPickerHtml() {
   let html = `<div class="curr-section admin-publish-picker">`;
- html += `<div class="curr-section-title" style="margin-bottom:8px;">Publish Destination</div>`;
+  html += `<div class="curr-section-title" style="margin-bottom:8px;"> Publish Destination</div>`;
   html += adminAssignBreadcrumbHtml();
 
   if (adminPubTargetSubject) {
@@ -1094,11 +1094,11 @@ function adminPublishTargetPickerHtml() {
     html += years.length ? years.map(y => `
       <div class="curr-item-row curr-item-open" onclick="adminOnYearChange('${escapeHtml(y)}')">
         <div style="flex:1;">
- <div class="curr-item-name">${escapeHtml(y)}</div>
+          <div class="curr-item-name"> ${escapeHtml(y)}</div>
           <div class="curr-item-sub">${Object.keys(curriculum[y] || {}).length} module(s)</div>
         </div>
         <span class="curr-item-arrow">▶</span>
- </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">${myScope.type === 'all' ? 'No years yet — add one in Manage Curriculum first.' : 'No years within your curriculum access.'}</div>`;
+      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">${myScope.type === 'all' ? 'No years yet — add one in Manage Curriculum first.' : 'No years within your curriculum access.'}</div>`;
 
   } else if (!adminPubTargetModule) {
     const mods = Object.keys(curriculum[adminPubTargetYear] || {}).filter(m => scopeModuleAccess(myScope, adminPubTargetYear, m) !== 'none');
@@ -1116,7 +1116,7 @@ function adminPublishTargetPickerHtml() {
     html += subs.length ? subs.map(s => `
       <div class="curr-item-row curr-item-open" onclick="adminOnSubjectChange('${escapeHtml(s)}')">
         <div style="flex:1;">
-          <div class="curr-item-name">${escapeHtml(subjects[s].icon || '📘')} ${escapeHtml(subjects[s].label || s)}</div>
+          <div class="curr-item-name">${escapeHtml(subjects[s].icon || '')} ${escapeHtml(subjects[s].label || s)}</div>
         </div>
         <span class="curr-item-arrow">▶</span>
       </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No subjects yet in ${escapeHtml(adminPubTargetModule)}.</div>`;
@@ -1125,7 +1125,7 @@ function adminPublishTargetPickerHtml() {
     html += `
       <div class="curr-item-row admin-publish-target-selected">
         <div style="flex:1;">
-          <div class="curr-item-name">✅ ${escapeHtml(subjects[adminPubTargetSubject].icon || '📘')} ${escapeHtml(subjects[adminPubTargetSubject].label || adminPubTargetSubject)}</div>
+          <div class="curr-item-name"> ${escapeHtml(subjects[adminPubTargetSubject].icon || '')} ${escapeHtml(subjects[adminPubTargetSubject].label || adminPubTargetSubject)}</div>
           <div class="curr-item-sub">${escapeHtml(adminPubTargetYear)} → ${escapeHtml(adminPubTargetModule)}</div>
         </div>
       </div>`;
@@ -1136,7 +1136,7 @@ function adminPublishTargetPickerHtml() {
 }
 
 function adminOnYearChange(val) {
-  adminPubTargetYear   = val;
+  adminPubTargetYear = val;
   adminPubTargetModule = '';
   adminPubTargetSubject = '';
   adminPublishInsertPosition = null;
@@ -1181,7 +1181,7 @@ function renderAdminAssignForm() {
         <span>Publish "${escapeHtml(single.title)}" (${qCount} q) to:</span>
         <button class="admin-remove-btn" style="background:var(--violet-pale);color:var(--violet-dark);border:1.5px solid var(--violet-mid-border);"
           onclick="adminToggleEditBeforePublish()">
- ${adminEditMode === 'publish' ? '✖ Close Editor' : 'Edit Before Publishing'}
+          ${adminEditMode === 'publish' ? '✖ Close Editor' : ' Edit Before Publishing'}
         </button>
       </div>
       <div id="adminEditorArea"></div>`;
@@ -1190,14 +1190,14 @@ function renderAdminAssignForm() {
     headerHtml = `
       <div class="admin-assign-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <span>Publish ${count} Quizzes (${totalQ} q total) to:</span>
- <button class="admin-remove-btn" onclick="adminClearSelectedQuizzes()">Clear All</button>
+        <button class="admin-remove-btn" onclick="adminClearSelectedQuizzes()"> Clear All</button>
       </div>
       <div class="admin-multi-quiz-list">
         ${selected.map(q => `
           <div class="admin-multi-quiz-row">
             <div class="admin-multi-quiz-info">
               <span class="admin-multi-quiz-title">${escapeHtml(q.title)}</span>
- <span class="admin-multi-quiz-meta">${(q.questions || []).length} q · ${q.sourceType === 'custom' ? 'custom' : 'community'}</span>
+              <span class="admin-multi-quiz-meta">${(q.questions || []).length} q · ${q.sourceType === 'custom' ? ' custom' : ' community'}</span>
             </div>
             <button class="admin-multi-quiz-remove" title="Remove from batch"
               onclick="adminRemoveSelectedQuiz('${_adminQuizKey(q.sourceType, q.sourceId)}')">✕</button>
@@ -1224,7 +1224,7 @@ function renderAdminAssignForm() {
 
       <button class="admin-assign-btn" id="adminPublishBtn" onclick="adminPublishQuiz()" style="margin-top:14px;"
         ${(!adminPubTargetYear || !adminPubTargetModule || !adminPubTargetSubject) ? 'disabled' : ''}>
- Publish ${count > 1 ? count + ' Quizzes' : ''} to Question Bank
+         Publish ${count > 1 ? count + ' Quizzes' : ''} to Question Bank
       </button>
       <div class="admin-status" id="adminStatus"></div>
     </div>

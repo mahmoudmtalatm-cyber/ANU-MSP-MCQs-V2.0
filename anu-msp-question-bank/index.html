@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ANU MSP Question Bank</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316306E'/%3E%3Ccircle cx='36' cy='54' r='16' fill='none' stroke='%238FB6FF' stroke-width='11'/%3E%3Cpath d='M46 65 L58 78' fill='none' stroke='%238FB6FF' stroke-width='11' stroke-linecap='round'/%3E%3Cpath d='M66 30 L66 74' fill='none' stroke='%238FB6FF' stroke-width='11' stroke-linecap='round'/%3E%3Cpath d='M66 30 L78 30 A11 10 0 0 1 78 50 L66 50' fill='none' stroke='%238FB6FF' stroke-width='11'/%3E%3Cpath d='M66 50 L80 50 A12 12 0 0 1 80 74 L66 74' fill='none' stroke='%238FB6FF' stroke-width='11'/%3E%3C/svg%3E" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<!-- ══════════════════════════════════════════════
+     INTRO SEQUENCE — purely aesthetic, fixed-timing,
+     not tied to real asset loading.
+══════════════════════════════════════════════ -->
+<div id="introScreen" aria-hidden="true">
+  <div class="intro-inner">
+    <div class="intro-badge-wrap">
+      <div class="intro-particles" id="introParticles" aria-hidden="true"></div>
+      <svg id="introBadgeSvg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect class="intro-plate" x="0" y="0" width="100" height="100" rx="22"></rect>
+        <g class="intro-icon">
+          <circle class="sigil-path sigil-q" cx="36" cy="54" r="16" pathLength="1"></circle>
+          <path class="sigil-path sigil-q-tail" d="M46 65 L58 78" pathLength="1"></path>
+          <path class="sigil-path sigil-b-stem" d="M66 30 L66 74" pathLength="1"></path>
+          <path class="sigil-path sigil-b-upper" d="M66 30 L78 30 A11 10 0 0 1 78 50 L66 50" pathLength="1"></path>
+          <path class="sigil-path sigil-b-lower" d="M66 50 L80 50 A12 12 0 0 1 80 74 L66 74" pathLength="1"></path>
+        </g>
+      </svg>
+    </div>
+    <div class="intro-wordmark" id="introWordmark">
+      <span class="intro-word-main">ANU MSP QUESTION BANK</span>
+    </div>
+  </div>
+</div>
+<script src="js/intro-animation.js"></script>
+
+<!-- FIRESTORE LOADING TOAST -->
+<div id="fsLoadingToast">
+  <div class="fs-toast-spinner"></div>
+  <span id="fsLoadingMsg">Loading…</span>
+</div>
+
+<div id="app">
+<canvas id="confettiCanvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;display:none;"></canvas>
+
+<!-- RETAKE SELECTOR MODAL -->
+<div id="retakeOverlay" class="stats-overlay hidden"
+     onclick="if(event.target===this)closeRetake()">
+  <div class="stats-modal">
+    <div class="stats-modal-header">
+      <h2><svg class="hicon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 1 3 6.7M3 12v6M3 12h6"/></svg> Retake Wrong Questions</h2>
+      <button class="stats-close-btn" onclick="closeRetake()" aria-label="Close">✕</button>
+    </div>
+    <div class="stats-body" id="retakeBody"></div>
+  </div>
+</div>
+
+<!-- STATS MODAL -->
+  <div id="statsOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeStats()">
+    <div class="stats-modal">
+      <div class="stats-modal-header">
+        <h2><svg class="hicon" viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg> My Statistics</h2>
+        <button class="stats-close-btn" onclick="closeStats()" aria-label="Close">✕</button>
+      </div>
+      <div class="stats-body" id="statsBody"></div>
+    </div>
+  </div>
+
+<!-- CUSTOM QUIZZES MODAL -->
+  <div id="customQuizOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeCustomQuizzes()">
+    <div class="stats-modal">
+      <div class="stats-modal-header">
+        <h2>🤖&nbsp; Custom Quizzes (AI)</h2>
+        <button class="stats-close-btn" onclick="closeCustomQuizzes()" aria-label="Close">✕</button>
+      </div>
+      <div class="stats-body" id="customQuizBody"></div>
+    </div>
+  </div>
+
+<!-- API KEY MANAGER MODAL -->
+  <div id="apiKeyOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeApiKeyManager()">
+    <div class="stats-modal">
+      <div class="stats-modal-header">
+        <h2><svg class="hicon" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Manage API Keys</h2>
+        <button class="stats-close-btn" onclick="closeApiKeyManager()" aria-label="Close">✕</button>
+      </div>
+      <div class="stats-body apikey-manager-body" id="apiKeyManagerBody"></div>
+    </div>
+  </div>
+
+<!-- COMMUNITY QUIZZES MODAL -->
+  <div id="communityQuizOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeCommunityQuizzes()">
+    <div class="stats-modal">
+      <div class="stats-modal-header">
+        <h2><svg class="hicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Community Quizzes</h2>
+        <button class="stats-close-btn" onclick="closeCommunityQuizzes()" aria-label="Close">✕</button>
+      </div>
+      <div class="stats-body" id="communityQuizBody"></div>
+    </div>
+  </div>
+
+<!-- BACKUP & TRANSFER MODAL -->
+  <div id="backupOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeBackupTransfer()">
+    <div class="stats-modal">
+      <div class="stats-modal-header">
+        <h2><svg class="hicon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Backup &amp; Transfer</h2>
+        <button class="stats-close-btn" onclick="closeBackupTransfer()" aria-label="Close">✕</button>
+      </div>
+      <div class="stats-body" id="backupBody"></div>
+    </div>
+  </div>
+
+<!-- PDF EXPORT MODAL -->
+  <div id="pdfExportOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closePdfExport()">
+    <div class="stats-modal pdx-modal">
+      <div class="stats-modal-header">
+        <h2><svg class="hicon" viewBox="0 0 24 24"><path d="M6 9V2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/><path d="M2 13h6M2 16h6M2 19h4"/></svg> Export to PDF</h2>
+        <button class="stats-close-btn" onclick="closePdfExport()" aria-label="Close">✕</button>
+      </div>
+      <div class="stats-body" id="pdfExportBody"></div>
+    </div>
+  </div>
+
+<!-- MERGE QUIZZES PICKER MODAL -->
+  <div id="mergeQuizOverlay" class="stats-overlay hidden" onclick="if(event.target===this)closeMergePicker()">
+    <div class="stats-modal" style="max-width:720px;">
+      <div class="stats-modal-header">
+        <h2><svg class="hicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M20 4L8.12 15.88M20 20L14 14"/></svg> Merge Quizzes In</h2>
+        <button class="stats-close-btn" onclick="closeMergePicker()" aria-label="Close">✕</button>
+      </div>
+      <div class="stats-body" id="mergeQuizBody"></div>
+    </div>
+  </div>
+
+<!-- SHARE QUIZ MODAL -->
+  <div id="shareQuizOverlay" class="sq-overlay hidden">
+    <div class="sq-modal">
+      <div class="sq-title">Share with Community</div>
+      <div class="sq-sub">Your quiz will be visible to all signed-in users. Your display name will be shown.</div>
+      <div class="sq-quiz-name" id="sqQuizName"></div>
+      <div class="sq-field-label">Year</div>
+      <select class="sq-select" id="sqYear" onchange="sqOnYearChange(this.value)">
+        <option value="">— Select a year —</option>
+      </select>
+      <div class="sq-field-label">Module</div>
+      <select class="sq-select" id="sqModule" onchange="sqOnModuleChange(this.value)" disabled>
+        <option value="">— Select a module —</option>
+      </select>
+      <div class="sq-field-label">Subject</div>
+      <select class="sq-select" id="sqSubject" disabled>
+        <option value="">— Select a subject —</option>
+      </select>
+      <div class="sq-field-label">Tags <span style="font-weight:400;text-transform:none;">(optional)</span></div>
+      <input class="sq-input" id="sqTags" type="text" maxlength="80" placeholder="e.g. renal, exam1, OSCE" />
+      <div class="sq-hint">Comma-separated keywords to help others find your quiz</div>
+      <div class="sq-actions">
+        <button class="sq-btn-cancel" onclick="cancelShareQuiz()">Cancel</button>
+        <button class="sq-btn-share" onclick="confirmShareQuiz()">Share Quiz</button>
+      </div>
+    </div>
+  </div>
+
+<!-- ADMIN PANEL MODAL -->
+  <div id="adminOverlay" class="admin-overlay hidden" onclick="if(event.target===this)closeAdminPanel()">
+    <div class="admin-modal">
+      <div class="admin-modal-header">
+        <h2><svg class="hicon" viewBox="0 0 24 24"><path d="M12 2l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 14.2l-4.8 2.56.92-5.34-3.88-3.78 5.36-.78z"/></svg> Admin Panel</h2>
+        <button onclick="closeAdminPanel()" aria-label="Close">✕</button>
+      </div>
+      <div class="admin-panel-tabs" id="adminPanelTabs"></div>
+      <div class="admin-body" id="adminBody"></div>
+    </div>
+  </div>
+
+<!-- DISPLAY NAME MODAL -->
+  <div id="displayNameOverlay" class="dn-overlay hidden">
+    <div class="dn-modal">
+      <div class="dn-title">Choose a Display Name</div>
+      <div class="dn-sub">This name will appear publicly when you share quizzes. Your email address will never be shown.</div>
+      <input class="dn-input" id="displayNameInput" type="text" maxlength="30"
+             placeholder="e.g. MedStudent2026" oninput="updateDnCounter()" />
+      <div class="dn-char-counter"><span id="dnCharCount">0</span>/30</div>
+      <div class="dn-actions">
+        <button class="dn-btn-cancel" onclick="cancelDisplayName()">Cancel</button>
+        <button class="dn-btn-confirm" onclick="confirmDisplayName()">Save &amp; Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       HOME SCREEN
+  ══════════════════════════════════════════════ -->
+  <div id="home">
+
+    <!-- Top identity bar -->
+    <div class="topbar carved-surface">
+      <div class="topbar-brand">
+        <svg class="brand-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect class="badge-plate" x="0" y="0" width="100" height="100" rx="22"/>
+          <g class="badge-icon">
+            <circle cx="36" cy="54" r="16"/>
+            <path d="M46 65 L58 78"/>
+            <path d="M66 30 L66 74"/>
+            <path d="M66 30 L78 30 A11 10 0 0 1 78 50 L66 50"/>
+            <path d="M66 50 L80 50 A12 12 0 0 1 80 74 L66 74"/>
+          </g>
+        </svg>
+        <div class="topbar-word">
+          <span class="topbar-title">ANU MSP</span>
+          <span class="topbar-sub">Question Bank</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div id="authAreaHome"></div>
+        <button class="stats-open-btn admin-btn hidden" id="adminOpenBtn" onclick="openAdminPanel()">
+          <svg class="bicon" viewBox="0 0 24 24"><path d="M12 2l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 14.2l-4.8 2.56.92-5.34-3.88-3.78 5.36-.78z"/></svg>
+          <span>Admin</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Hero introduction -->
+    <div class="home-hero">
+      <div class="hero-copy">
+        <span class="hero-eyebrow">Study smarter, not harder</span>
+        <h1>Every past‑paper question, one focused practice session</h1>
+        <p>Choose your subject, pick a lecture, and put your knowledge to the test.</p>
+      </div>
+    </div>
+
+    <!-- Quick-access toolbar -->
+    <nav class="toolbar" aria-label="Quick tools">
+      <button class="tool-btn" onclick="openStats()">
+        <svg class="ticon" viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+        <span>Statistics</span>
+      </button>
+      <button class="tool-btn" onclick="openRetake()">
+        <svg class="ticon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 1 3 6.7M3 12v6M3 12h6"/></svg>
+        <span>Retake Wrong</span>
+      </button>
+      <button class="tool-btn" onclick="openCustomQuizzes()">
+        <svg class="ticon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8M8 8h5M8 16h5"/></svg>
+        <span>Custom Quizzes</span>
+      </button>
+      <button class="tool-btn" onclick="openCommunityQuizzes()">
+        <svg class="ticon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>
+        <span>Community</span>
+      </button>
+      <button class="tool-btn" onclick="openBackupTransfer()">
+        <svg class="ticon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        <span>Backup</span>
+      </button>
+      <button class="tool-btn" onclick="openApiKeyManager()">
+        <svg class="ticon" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        <span>API Keys</span>
+      </button>
+    </nav>
+
+    <div class="home-body">
+      <div class="card builder-card">
+
+        <div class="builder-head">
+          <h2>Build your quiz</h2>
+          <p>Work through the steps below to assemble a practice set.</p>
+        </div>
+
+<!-- Step 1: Year -->
+        <div class="field-group step-group">
+          <div class="field-label"><span class="step-num">1</span>Select Year</div>
+          <div class="year-grid" id="yearGrid">
+            <div class="year-skeleton"></div>
+            <div class="year-skeleton"></div>
+            <div class="year-skeleton"></div>
+          </div>
+        </div>
+
+        <!-- Module section -->
+        <div id="moduleSection" class="hidden step-group">
+          <div class="card-divider"></div>
+          <div class="field-group">
+            <div class="field-label"><span class="step-num">2</span>Select Module</div>
+            <div class="module-grid" id="moduleGrid"></div>
+          </div>
+        </div>
+
+        <!-- Subject section -->
+        <div id="subjectSection" class="hidden step-group">
+          <div class="card-divider"></div>
+          <div class="field-group">
+            <div class="field-label"><span class="step-num">3</span>Select Subject</div>
+            <div class="subject-grid" id="subjectGrid"></div>
+          </div>
+        </div>
+
+        <div class="card-divider"></div>
+
+        <!-- Step 4: Lecture -->
+        <div class="field-group step-group" id="lectureGroup">
+          <div class="field-label"><span class="step-num">4</span>Select Lecture(s)</div>
+          <div id="lectureCheckList" class="lecture-list">
+            <div class="lecture-empty">— Choose a subject first —</div>
+          </div>
+          <div class="lecture-actions">
+            <button class="btn chip-btn chip-btn-ghost" onclick="selectAllLectures()">Select all</button>
+            <button class="btn chip-btn chip-btn-ghost" onclick="clearAllLectures()">Clear</button>
+            <div class="q-count-badge hidden" id="qCountBadge">
+              <span id="qCountText">0 questions</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-divider"></div>
+
+        <!-- Step 5: Options -->
+        <div class="field-group step-group">
+          <div class="field-label"><span class="step-num">5</span>Duration &amp; Options</div>
+          <div class="options-row">
+            <label class="option-field">
+              <span class="option-field-label">Minutes</span>
+              <input type="number" id="timeInput" value="10" min="1" max="120" />
+            </label>
+            <label class="shuffle-toggle">
+              <input type="checkbox" id="shuffleToggle" />
+              <span class="shuffle-track" aria-hidden="true"></span>
+              <span class="shuffle-label">Shuffle questions</span>
+            </label>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="startBtn" onclick="startQuiz()" disabled>Start Quiz</button>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--nav-answered)"></div> Answered</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--nav-marked)"></div> Marked</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--nav-current)"></div> Current</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--nav-default)"></div> Unanswered</div>
+      </div>
+    </div>
+
+    <div class="home-footer carved-surface">
+      <div class="home-footer-credit">Created by Mahmoud Talat</div>
+      <a class="home-footer-feedback" href="https://t.me/Mahmoud_M_Talat" target="_blank" rel="noopener noreferrer">
+        <svg class="ficon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Send Feedback
+      </a>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       QUIZ SCREEN
+  ══════════════════════════════════════════════ -->
+  <div id="quiz" class="hidden">
+    <div class="header carved-surface">
+      <div class="header-title">
+        <svg class="brand-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect class="badge-plate" x="0" y="0" width="100" height="100" rx="22"/>
+          <g class="badge-icon">
+            <circle cx="36" cy="54" r="16"/>
+            <path d="M46 65 L58 78"/>
+            <path d="M66 30 L66 74"/>
+            <path d="M66 30 L78 30 A11 10 0 0 1 78 50 L66 50"/>
+            <path d="M66 50 L80 50 A12 12 0 0 1 80 74 L66 74"/>
+          </g>
+        </svg>
+        ANU MSP Question Bank
+      </div>
+      <div id="authAreaQuiz"></div>
+      <div class="timer" id="timerDisplay">00:00</div>
+    </div>
+    <div class="quiz-body">
+      <div class="q-card">
+        <div class="q-number" id="qNumber">Q1 / 16</div>
+        <div class="q-text" id="qText"></div>
+        <div class="q-image-wrap hidden" id="qImageWrap">
+          <img id="qImage" src="" alt="Question image" />
+        </div>
+        <div class="options-list" id="optionsList"></div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn btn-nav btn-prev" onclick="prevQ()">
+          <svg class="nicon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Previous
+        </button>
+        <button class="btn btn-nav btn-mark" id="markBtn" onclick="toggleMark()">
+          <svg class="nicon" viewBox="0 0 24 24"><path d="M4 21V4a1 1 0 0 1 1-1h11l4 4v14l-6-3-6 3-4-3z"/></svg> Mark / Unmark
+        </button>
+        <button class="btn btn-nav btn-next" onclick="nextQ()">
+          Next <svg class="nicon" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <button class="btn btn-nav btn-submit" onclick="confirmSubmit()">
+          <svg class="nicon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Submit
+        </button>
+      </div>
+
+      <div class="navigator-wrap">
+        <div class="nav-label">Questions Navigator</div>
+        <div class="nav-grid" id="navGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       RESULTS SCREEN
+  ══════════════════════════════════════════════ -->
+  <div id="results" class="hidden">
+    <div class="results-header carved-surface">
+      <div class="results-title" id="resultsTitle">Quiz Results</div>
+      <div class="results-score-badge" id="scoreBadge"></div>
+    </div>
+    <div class="results-body" id="resultsBody"></div>
+    <div class="results-footer">
+      <button class="btn btn-home" onclick="goHome()">
+        <svg class="nicon" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg> Back to Home
+      </button>
+      <button class="ai-explain-all-btn" id="explainAllBtn" onclick="explainAllQuestions()">
+        <svg class="nicon" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2zM9 21h6"/></svg> Explain All Questions
+      </button>
+      <button class="btn btn-manage-api" onclick="openApiKeyManager()">
+        <svg class="nicon" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Manage APIs
+      </button>
+    </div>
+  </div>
+
+</div>
+<script src="js/dom-utils.js"></script>
+<script src="js/app-core.js"></script>
+<script src="js/admin-curriculum-scope.js"></script>
+<script src="js/api-rotation.js"></script>
+<script src="js/ai-features.js"></script>
+<script src="js/ai-question-tools.js"></script>
+<script src="js/firebase-storage.js"></script>
+<script src="js/quiz-collections.js"></script>
+<script src="js/gemini-uploads.js"></script>
+<script src="js/ai-solve.js"></script>
+<script src="js/split-quiz.js"></script>
+<script src="js/user-profile.js"></script>
+<script src="js/sharing.js"></script>
+<script src="js/community-quizzes.js"></script>
+<script src="js/admin-panel.js"></script>
+<script src="js/quiz-editor.js"></script>
+<script src="js/data-sync.js"></script>
+<script src="js/icon-picker.js"></script>
+<script src="js/curriculum-admin.js"></script>
+<script src="js/backup-transfer-ui.js"></script>
+<script src="js/pdf-export.js"></script>
+<script src="js/firebase-init.js" type="module"></script>
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f4142a9a44aa49c6a67437c3b8932b61"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>

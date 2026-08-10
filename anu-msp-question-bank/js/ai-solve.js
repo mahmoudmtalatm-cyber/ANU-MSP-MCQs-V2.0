@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════
    AI SOLVE — per-question source picker
- Every question card's AI Solve button now has a ▾ caret beside it
+   Every question card's AI Solve button now has a ▾ caret beside it
    that lets the admin choose, PER QUESTION, whether to solve using pure
    AI knowledge, the bulk source already configured for this editor (the
    text/files pasted into "AI Solve All" / MCQ-extraction settings), or
@@ -52,12 +52,12 @@ function _aiSolveGetChoice(editorKey, i) {
 
 function _aiSolveSourceShortLabel(editorKey, i) {
   const choice = _aiSolveGetChoice(editorKey, i);
- if (choice.type === 'bulk') return '' + _aiSolveBulkSourceLabel(editorKey);
+  if (choice.type === 'bulk') return ' ' + _aiSolveBulkSourceLabel(editorKey);
   if (choice.type === 'lib') {
     const src = _aiSourceLibrary.find(s => s.id === choice.id);
- if (src) return '' + src.label;
+    if (src) return ' ' + src.label;
   }
- return 'AI knowledge';
+  return ' AI knowledge';
 }
 
 // Shared open/close logic for every per-question "button + ▾ caret +
@@ -92,10 +92,10 @@ function _renderAiRefineInstrPickerHTML(editorKey, i) {
   const key = _aiToolsKey(editorKey, i);
   const draft = _aiToolsCustomPromptText[key] || '';
   return `<div class="ai-source-picker-inner" style="max-width:290px;">
- <div class="ai-source-picker-title">Custom Instructions — Refine Question only</div>
+    <div class="ai-source-picker-title"> Custom Instructions — Refine Question only</div>
     <div style="font-size:.71rem;color:var(--text-muted);padding:0 6px 6px;line-height:1.35;">
- Optional extra guidance used only when you click Refine Question on this question.
- It has no effect on AI Solve. Only overrides the default refine rules (grammar, exam phrasing) where it truly conflicts.
+      Optional extra guidance used only when you click Refine Question on this question.
+      It has no effect on AI Solve. Only overrides the default refine rules (grammar, exam phrasing) where it truly conflicts.
     </div>
     <textarea id="aiCustomPromptInput_${editorKey}_${i}" rows="3"
       oninput="_aiCustomPromptChanged('${editorKey}', ${i}, this.value)"
@@ -109,22 +109,22 @@ function _renderAiSourcePickerHTML(editorKey, i) {
   const choice = _aiSolveGetChoice(editorKey, i);
   const isSel = (t, id) => choice.type === t && (t !== 'lib' || choice.id === id);
   let html = `<div class="ai-source-picker-inner">`;
- html += `<div class="ai-source-picker-title">Solve using…</div>`;
- html += `<div class="ai-source-opt${isSel('ai') ? ' ai-source-opt-active' : ''}" onclick="_aiSolvePickSource('${editorKey}', ${i}, 'ai', null)">AI knowledge only${isSel('ai') ? ' ✓' : ''}</div>`;
+  html += `<div class="ai-source-picker-title"> Solve using…</div>`;
+  html += `<div class="ai-source-opt${isSel('ai') ? ' ai-source-opt-active' : ''}" onclick="_aiSolvePickSource('${editorKey}', ${i}, 'ai', null)"> AI knowledge only${isSel('ai') ? ' ✓' : ''}</div>`;
   if (_aiSolveBulkSourceHasContent(editorKey)) {
- html += `<div class="ai-source-opt${isSel('bulk') ? ' ai-source-opt-active' : ''}" onclick="_aiSolvePickSource('${editorKey}', ${i}, 'bulk', null)">${escapeHtml(_aiSolveBulkSourceLabel(editorKey))}${isSel('bulk') ? ' ✓' : ''}</div>`;
+    html += `<div class="ai-source-opt${isSel('bulk') ? ' ai-source-opt-active' : ''}" onclick="_aiSolvePickSource('${editorKey}', ${i}, 'bulk', null)"> ${escapeHtml(_aiSolveBulkSourceLabel(editorKey))}${isSel('bulk') ? ' ✓' : ''}</div>`;
   }
   if (_aiSourceLibrary.length) {
     html += `<div class="ai-source-picker-divider"></div>`;
     _aiSourceLibrary.forEach(src => {
       html += `<div class="ai-source-opt${isSel('lib', src.id) ? ' ai-source-opt-active' : ''}" onclick="_aiSolvePickSource('${editorKey}', ${i}, 'lib', '${src.id}')">
- <span style="flex:1;">${escapeHtml(src.label)}${isSel('lib', src.id) ? ' ✓' : ''}</span>
+        <span style="flex:1;"> ${escapeHtml(src.label)}${isSel('lib', src.id) ? ' ✓' : ''}</span>
         <span class="ai-source-opt-remove" title="Remove this source" onclick="event.stopPropagation();_aiSourceLibraryRemove('${src.id}', '${editorKey}', ${i})">✕</span>
       </div>`;
     });
   }
   html += `<div class="ai-source-picker-divider"></div>`;
-  html += `<div class="ai-source-add-toggle" onclick="event.stopPropagation();_aiSourceAddFormToggle('${editorKey}', ${i})">➕ Add new source</div>`;
+  html += `<div class="ai-source-add-toggle" onclick="event.stopPropagation();_aiSourceAddFormToggle('${editorKey}', ${i})"> Add new source</div>`;
   html += `<div id="aiSourceAddForm_${editorKey}_${i}" style="display:none;margin-top:6px;" onclick="event.stopPropagation();"></div>`;
   html += `</div>`;
   return html;
@@ -187,7 +187,7 @@ function _aiSourceAddDraftFileListHTML(editorKey, i, files) {
   if (!files || !files.length) return '';
   return `<div class="cq-dz-filelist">` + files.map((f, idx) => `
     <div class="cq-dz-file-item">
-      <span>✅ ${escapeHtml(f.name)}</span>
+      <span> ${escapeHtml(f.name)}</span>
       <button type="button" onclick="event.stopPropagation();_aiSourceAddRemoveFile('${editorKey}', ${i}, ${idx})" title="Remove this file">✕</button>
     </div>`).join('') + `</div>`;
 }
@@ -216,19 +216,19 @@ function _renderAiSourceAddFormHTML(editorKey, i) {
     <input type="text" placeholder="Source name (e.g. Lecture 4 slides)" value="${escapeHtml(draft.label)}"
       oninput="_aiSourceAddDraftChange('${editorKey}', ${i}, 'label', this.value)"
       style="width:100%;font-size:.75rem;padding:5px 7px;border:1.5px solid var(--border-soft);border-radius:5px;margin-bottom:8px;box-sizing:border-box;">
- <div style="font-size:.72rem;font-weight:700;color:var(--violet-dark);margin-bottom:4px;">Source images / PDFs</div>
+    <div style="font-size:.72rem;font-weight:700;color:var(--violet-dark);margin-bottom:4px;"> Source images / PDFs</div>
     <div class="cq-dropzone cq-dz-purple ai-source-dz" id="aiSourceDropzone_${editorKey}_${i}"
       onclick="document.getElementById('aiSourceFileInput_${editorKey}_${i}').click()">
- <div class="cq-dz-icon"></div>
+      <div class="cq-dz-icon"></div>
       <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more reference images or PDFs</div>
       ${_aiSourceAddDraftFileListHTML(editorKey, i, draft.files)}
-      ${draft.files.length ? `<div class="cq-dz-add-more">➕ Click again to add more files</div>` : ''}
+      ${draft.files.length ? `<div class="cq-dz-add-more"> Click again to add more files</div>` : ''}
     </div>
     <input type="file" id="aiSourceFileInput_${editorKey}_${i}" accept="image/*,application/pdf" multiple style="display:none;"
       onchange="_aiSourceAddFileSelect('${editorKey}', ${i}, this)">
     <div style="display:flex;gap:6px;margin-top:8px;">
       <button type="button" class="cq-edit-reask-btn" style="background:#1565C0;color:#fff;font-size:.72rem;"
-        onclick="_aiSourceAddSave('${editorKey}', ${i})">✅ Save Source</button>
+        onclick="_aiSourceAddSave('${editorKey}', ${i})"> Save Source</button>
       <button type="button" class="cq-edit-reask-btn" style="font-size:.72rem;"
         onclick="_aiSourceAddFormToggle('${editorKey}', ${i})">Cancel</button>
     </div>`;
@@ -301,7 +301,7 @@ async function aiSolveQuestion(editorKey, i) {
   _aiToolsCancelToken[_key] = token;
   _aiToolsSetBusy(editorKey, i, true, 'solve');
   const statusEl = _aiToolsStatusEl(editorKey, i);
- _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('AI is solving this question…'));
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(' AI is solving this question…'));
   try {
     await cqAiSolveQuestions(questions, [i], sourceText, sourceFiles, statusEl, token);
   } catch (e) {
@@ -366,7 +366,7 @@ async function _extractQuestionsFromFile(file, apiKey, onProgress) {
   // If a rate limit forced an automatic key rotation mid-call, pick up
   // whichever key/file-reference actually ended up succeeding, so the
   // image-cropping pass below (and anything else reusing these) keeps working.
-  if (data.__rotatedApiKey)   apiKey   = data.__rotatedApiKey;
+  if (data.__rotatedApiKey) apiKey = data.__rotatedApiKey;
   if (data.__rotatedFilePart) filePart = data.__rotatedFilePart;
 
   const candidate = data && data.candidates && data.candidates[0];
@@ -468,24 +468,24 @@ async function _extractQuestionsFromFile(file, apiKey, onProgress) {
 }
 
 async function generateQuizFromAI() {
-  const titleInput  = document.getElementById('cqTitleInput'); // read synchronously below only — safe as a one-time lookup
+  const titleInput = document.getElementById('cqTitleInput'); // read synchronously below only — safe as a one-time lookup
   // Self-healing references (see js/dom-utils.js) — this flow runs across
   // many `await`s, and the surrounding modal can be rebuilt mid-run (e.g.
- // switching keys via Manage APIs while paused), which would otherwise
+  // switching keys via Manage APIs while paused), which would otherwise
   // leave these pointing at detached, invisible DOM nodes for the rest of
   // the run.
-  const statusEl    = liveStatusRef('cqStatus', 'cqStatus');
-  const genBtn      = liveRef('cqGenerateBtn');
-  const pauseRow    = liveRef('cqPauseRow');
-  const pauseBtn    = liveRef('cqPauseBtn');
-  const resumeBtn   = liveRef('cqResumeBtn');
+  const statusEl = liveStatusRef('cqStatus', 'cqStatus');
+  const genBtn = liveRef('cqGenerateBtn');
+  const pauseRow = liveRef('cqPauseRow');
+  const pauseBtn = liveRef('cqPauseBtn');
+  const resumeBtn = liveRef('cqResumeBtn');
 
-  let apiKey  = getActiveApiKey();
+  let apiKey = getActiveApiKey();
   const title = (titleInput ? titleInput.value : cqGeneratedTitle).trim();
 
- if (!apiKey) { statusEl.innerHTML = `<div class="cq-status error">Please add a Gemini API key first. <button class="apikey-open-btn ghost" style="margin-top:6px;" onclick="openApiKeyManager(() => renderCustomQuizModal())">Add API Key</button></div>`; return; }
- if (!cqSelectedFiles.length){ statusEl.innerHTML = `<div class="cq-status error">Please upload at least one image or PDF of your quiz first.</div>`; return; }
- if (!title) { statusEl.innerHTML = `<div class="cq-status error">Please give this quiz a title.</div>`; return; }
+  if (!apiKey) { statusEl.innerHTML = `<div class="cq-status error"> Please add a Gemini API key first. <button class="apikey-open-btn ghost" style="margin-top:6px;" onclick="openApiKeyManager(() => renderCustomQuizModal())"> Add API Key</button></div>`; return; }
+  if (!cqSelectedFiles.length){ statusEl.innerHTML = `<div class="cq-status error"> Please upload at least one image or PDF of your quiz first.</div>`; return; }
+  if (!title) { statusEl.innerHTML = `<div class="cq-status error"> Please give this quiz a title.</div>`; return; }
 
   cqGeneratedTitle = title;
   cqBusy = true;
@@ -495,8 +495,8 @@ async function generateQuizFromAI() {
   cqStopRequested = false;
   cqCancelToken = { cancelled: false };
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
-  if (pauseRow)  pauseRow.style.display  = 'flex';
-  if (pauseBtn)  { pauseBtn.style.display = 'inline-flex'; pauseBtn.disabled = false; pauseBtn.textContent = '⏸️ Pause'; }
+  if (pauseRow) pauseRow.style.display = 'flex';
+  if (pauseBtn) { pauseBtn.style.display = 'inline-flex'; pauseBtn.disabled = false; pauseBtn.textContent = '⏸️ Pause'; }
   if (resumeBtn) resumeBtn.style.display = 'none';
   const stopBtn = document.getElementById('cqStopBtn');
   if (stopBtn) { stopBtn.style.display = 'inline-block'; stopBtn.disabled = false; stopBtn.textContent = '⏹ Stop'; }
@@ -513,7 +513,7 @@ async function generateQuizFromAI() {
       if (!apiKey) throw new Error('No active API key. Add or select one, then click Extract Questions again.');
 
       const file = cqSelectedFiles[fi];
-      const basePct  = (fi / totalFiles) * 100;
+      const basePct = (fi / totalFiles) * 100;
       const slicePct = 100 / totalFiles;
       const onProgress = (frac, label) => {
         const prefix = totalFiles > 1 ? `File ${fi + 1} of ${totalFiles} — ` : '';
@@ -535,7 +535,7 @@ async function generateQuizFromAI() {
             cqPauseSkipRequested = false;
             cqCancelToken = { cancelled: false }; // old token is permanently cancelled — start fresh
             apiKey = await _cqEnterPause(statusEl,
- `⏸️ Paused — stepped back to before "${escapeHtml(file.name)}" so nothing already done is lost. Open Manage APIs to switch keys, then press ▶️ Resume to continue.`);
+              `⏸️ Paused — stepped back to before "${escapeHtml(file.name)}" so nothing already done is lost. Open Manage APIs to switch keys, then press ▶️ Resume to continue.`);
             if (!apiKey) throw new Error('No active API key. Add or select one, then click Extract Questions again.');
             continue; // retry this same file
           }
@@ -561,11 +561,11 @@ async function generateQuizFromAI() {
     if (cqAiAnsweringEnabled && cqAiAnswerSubmode === 'all') {
       // Solve ALL questions (including those with existing keys)
       const allIdxs = cleaned.map((_, i) => i);
- statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> AI is solving all ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}… please wait.</div>`;
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> AI is solving all ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}… please wait.</div>`;
       await cqAiSolveQuestions(cleaned, allIdxs, cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl, cqCancelToken);
     } else if (cqAiAnsweringEnabled && cqAiAnswerSubmode === 'missing' && noKeyQs.length > 0) {
       // Solve only no-key questions
- statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> AI is answering ${noKeyQs.length} question${noKeyQs.length !== 1 ? 's' : ''} without an answer key… please wait.</div>`;
+      statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> AI is answering ${noKeyQs.length} question${noKeyQs.length !== 1 ? 's' : ''} without an answer key… please wait.</div>`;
       await cqAiAnswerMissingKeys(cleaned, cqAiAnswerSource.trim(), cqAiSourceFiles, statusEl, cqCancelToken);
     }
 
@@ -580,7 +580,7 @@ async function generateQuizFromAI() {
     // sense content-wise: nail down the correct answer first, then pad out
     // the remaining choices around it, and only polish the wording last,
     // once nothing about the question is still changing.
-    let fillResult   = null;
+    let fillResult = null;
     let refineResult = null;
     if (cqFillChoicesToggle) {
       fillResult = await cqBulkFillChoices(cleaned, statusEl, cqCancelToken);
@@ -592,32 +592,32 @@ async function generateQuizFromAI() {
     let warn = '';
     if (truncatedFiles.length) {
       const fileList = truncatedFiles.map(n => `"${escapeHtml(n)}"`).join(', ');
- warn = ` ${truncatedFiles.length > 1 ? 'These files\' responses were' : 'This file\'s response was'} cut off because the document is very large: ${fileList}. Every complete question up to that point was still recovered, but check below that nothing near the end is missing, and split very long documents into smaller files if needed.`;
+      warn = ` ${truncatedFiles.length > 1 ? 'These files\' responses were' : 'This file\'s response was'} cut off because the document is very large: ${fileList}. Every complete question up to that point was still recovered, but check below that nothing near the end is missing, and split very long documents into smaller files if needed.`;
     }
 
-    const imgCount    = cleaned.filter(q => q.image).length;
- const imgNote = imgCount > 0 ? ` · ${imgCount} image${imgCount !== 1 ? 's' : ''} embedded` : '';
-    const noKeyCount  = noKeyQs.length;
-    const aiCount     = cleaned.filter(q => q.ai_answered).length;
-    const guessCount  = cleaned.filter(q => q.ai_guessed).length;
-    const solveNote   = cqAiAnsweringEnabled && cqAiAnswerSubmode === 'all' && aiCount > 0
- ? ` · ${aiCount} AI-solved${guessCount > 0 ? ' (' + guessCount + ' from own knowledge)' : ''}`
+    const imgCount = cleaned.filter(q => q.image).length;
+    const imgNote = imgCount > 0 ? ` · ${imgCount} image${imgCount !== 1 ? 's' : ''} embedded` : '';
+    const noKeyCount = noKeyQs.length;
+    const aiCount = cleaned.filter(q => q.ai_answered).length;
+    const guessCount = cleaned.filter(q => q.ai_guessed).length;
+    const solveNote = cqAiAnsweringEnabled && cqAiAnswerSubmode === 'all' && aiCount > 0
+      ? ` · ${aiCount} AI-solved${guessCount > 0 ? ' ( ' + guessCount + ' from own knowledge)' : ''}`
       : noKeyCount > 0 && cqAiAnsweringEnabled && cqAiAnswerSubmode === 'missing' && aiCount > 0
- ? ` · ${aiCount} AI-answered${guessCount > 0 ? ' (' + guessCount + ' from own knowledge)' : ''}`
- : noKeyCount > 0 ? ` · ${noKeyCount} without key` : '';
-    const fileNote   = cqSelectedFiles.length > 1 ? ` from ${cqSelectedFiles.length} files` : '';
-    const fillNote   = fillResult && fillResult.done > 0
- ? ` · ${fillResult.done} question${fillResult.done !== 1 ? 's' : ''} filled to 4 choices` : '';
+      ? ` · ${aiCount} AI-answered${guessCount > 0 ? ' ( ' + guessCount + ' from own knowledge)' : ''}`
+      : noKeyCount > 0 ? ` · ${noKeyCount} without key` : '';
+    const fileNote = cqSelectedFiles.length > 1 ? ` from ${cqSelectedFiles.length} files` : '';
+    const fillNote = fillResult && fillResult.done > 0
+      ? ` · ${fillResult.done} question${fillResult.done !== 1 ? 's' : ''} filled to 4 choices` : '';
     const refineNote = refineResult && refineResult.done > 0
- ? ` · ${refineResult.done} question${refineResult.done !== 1 ? 's' : ''} refined` : '';
-    statusEl.innerHTML = `<div class="cq-status success">✅ Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${fileNote}${imgNote}${solveNote}${fillNote}${refineNote}. Review below, then save.${warn}</div>`;
+      ? ` · ${refineResult.done} question${refineResult.done !== 1 ? 's' : ''} refined` : '';
+    statusEl.innerHTML = `<div class="cq-status success"> Extracted ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${fileNote}${imgNote}${solveNote}${fillNote}${refineNote}. Review below, then save.${warn}</div>`;
 
     // Surface any per-question errors from the Fill Choices / Refine passes
     // without blocking the rest of the summary — extraction itself already
     // succeeded, these are just best-effort polish steps.
- [['Fill Choices', fillResult], ['Refine Questions', refineResult]].forEach(([label, res]) => {
+    [[' Fill Choices', fillResult], [' Refine Questions', refineResult]].forEach(([label, res]) => {
       if (res && res.errors.length > 0) {
- const errHtml = res.errors.map(err => `<div>${escapeHtml(err)}</div>`).join('');
+        const errHtml = res.errors.map(err => `<div> ${escapeHtml(err)}</div>`).join('');
         statusEl.insertAdjacentHTML('beforeend',
           `<div class="cq-status warning" style="margin-top:6px;">${label} ran into issues on some questions:<br>${errHtml}</div>`
         );
@@ -625,12 +625,12 @@ async function generateQuizFromAI() {
     });
     if (noKeyCount > 0 && !cqAiAnsweringEnabled) {
       statusEl.insertAdjacentHTML('beforeend',
- `<div class="cq-status warning" style="margin-top:6px;">${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong>No Key</strong> badge. You can set the correct answer manually, or enable <strong>AI Answering</strong> before extracting to let AI answer them automatically.</div>`
+        `<div class="cq-status warning" style="margin-top:6px;"> ${noKeyCount} question${noKeyCount !== 1 ? 's have' : ' has'} no answer key in the source document and ${noKeyCount !== 1 ? 'are' : 'is'} marked below with a <strong> No Key</strong> badge. You can set the correct answer manually, or enable <strong> AI Answering</strong> before extracting to let AI answer them automatically.</div>`
       );
     }
     if (guessCount > 0) {
       statusEl.insertAdjacentHTML('beforeend',
- `<div class="cq-status warning" style="margin-top:6px;">${guessCount} question${guessCount !== 1 ? 's were' : ' was'} answered from AI’s own knowledge (answer not found in the provided source). These are marked with a <strong>AI Guess</strong> badge — please verify them.</div>`
+        `<div class="cq-status warning" style="margin-top:6px;"> ${guessCount} question${guessCount !== 1 ? 's were' : ' was'} answered from AI’s own knowledge (answer not found in the provided source). These are marked with a <strong> AI Guess</strong> badge — please verify them.</div>`
       );
     }
     renderCQPreview();
@@ -641,11 +641,11 @@ async function generateQuizFromAI() {
     if (err._cqStopped || err._cancelled) {
       statusEl.innerHTML = '';
     } else if (isKeyErr) {
- statusEl.innerHTML = `<div class="cq-status error">Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
- <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">Choose or Add a Different Key</button>
+      statusEl.innerHTML = `<div class="cq-status error"> Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
+        <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())"> Choose or Add a Different Key</button>
       </div>`;
     } else {
-      statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
+      statusEl.innerHTML = `<div class="cq-status error"> ${escapeHtml(err.message || String(err))}</div>`;
     }
   } finally {
     cqBusy = false;
@@ -657,7 +657,7 @@ async function generateQuizFromAI() {
     cqResumeResolve = null;
     if (pauseRow) pauseRow.style.display = 'none';
     const btn = document.getElementById('cqGenerateBtn');
-    if (btn) { btn.disabled = false; btn.textContent = '✨ Generate Quiz'; }
+    if (btn) { btn.disabled = false; btn.textContent = ' Generate Quiz'; }
   }
 }
 
@@ -706,7 +706,7 @@ The "answer" value must be one of the keys present in that question's "options" 
 function fileToText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result || '');
+    reader.onload = () => resolve(reader.result || '');
     reader.onerror = () => reject(new Error('Failed to read the file.'));
     reader.readAsText(file);
   });
@@ -823,29 +823,29 @@ async function _generateQuestionsFromLectureFile(file, generationPrompt, apiKey,
 }
 
 async function generateQuizFromLecture() {
-  const titleInput    = document.getElementById('cqLectureTitleInput'); // read synchronously below only
-  const qCountInput   = document.getElementById('cqQCountInput');
-  const promptInput   = document.getElementById('cqCustomPromptInput');
+  const titleInput = document.getElementById('cqLectureTitleInput'); // read synchronously below only
+  const qCountInput = document.getElementById('cqQCountInput');
+  const promptInput = document.getElementById('cqCustomPromptInput');
   // Self-healing references (see js/dom-utils.js) — same reasoning as
   // generateQuizFromAI() above.
-  const statusEl      = liveStatusRef('cqStatus', 'cqStatus');
-  const genBtn        = liveRef('cqLectureGenBtn');
-  const pauseRow      = liveRef('cqPauseRow');
-  const pauseBtn      = liveRef('cqPauseBtn');
-  const resumeBtn     = liveRef('cqResumeBtn');
+  const statusEl = liveStatusRef('cqStatus', 'cqStatus');
+  const genBtn = liveRef('cqLectureGenBtn');
+  const pauseRow = liveRef('cqPauseRow');
+  const pauseBtn = liveRef('cqPauseBtn');
+  const resumeBtn = liveRef('cqResumeBtn');
 
-  let apiKey   = getActiveApiKey();
-  const title  = (titleInput  ? titleInput.value  : cqGeneratedTitle).trim();
+  let apiKey = getActiveApiKey();
+  const title = (titleInput ? titleInput.value : cqGeneratedTitle).trim();
   const qCount = (qCountInput ? qCountInput.value : cqQuestionCount).trim();
   const prompt = (promptInput ? promptInput.value : cqCustomPrompt).trim();
 
- if (!apiKey) { statusEl.innerHTML = `<div class="cq-status error">Please add a Gemini API key first. <button class="apikey-open-btn ghost" style="margin-top:6px;" onclick="openApiKeyManager(() => renderCustomQuizModal())">Add API Key</button></div>`; return; }
- if (!cqLectureFiles.length) { statusEl.innerHTML = `<div class="cq-status error">Please upload at least one lecture file first.</div>`; return; }
- if (!title) { statusEl.innerHTML = `<div class="cq-status error">Please give this quiz a title.</div>`; return; }
+  if (!apiKey) { statusEl.innerHTML = `<div class="cq-status error"> Please add a Gemini API key first. <button class="apikey-open-btn ghost" style="margin-top:6px;" onclick="openApiKeyManager(() => renderCustomQuizModal())"> Add API Key</button></div>`; return; }
+  if (!cqLectureFiles.length) { statusEl.innerHTML = `<div class="cq-status error"> Please upload at least one lecture file first.</div>`; return; }
+  if (!title) { statusEl.innerHTML = `<div class="cq-status error"> Please give this quiz a title.</div>`; return; }
 
   cqGeneratedTitle = title;
-  cqCustomPrompt   = prompt;
-  cqQuestionCount  = qCount;
+  cqCustomPrompt = prompt;
+  cqQuestionCount = qCount;
   cqBusy = true;
   cqPauseRequested = false;
   cqPauseSkipRequested = false;
@@ -853,8 +853,8 @@ async function generateQuizFromLecture() {
   cqStopRequested = false;
   cqCancelToken = { cancelled: false };
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = '⏳ Generating…'; }
-  if (pauseRow)  pauseRow.style.display  = 'flex';
-  if (pauseBtn)  { pauseBtn.style.display = 'inline-flex'; pauseBtn.disabled = false; pauseBtn.textContent = '⏸️ Pause'; }
+  if (pauseRow) pauseRow.style.display = 'flex';
+  if (pauseBtn) { pauseBtn.style.display = 'inline-flex'; pauseBtn.disabled = false; pauseBtn.textContent = '⏸️ Pause'; }
   if (resumeBtn) resumeBtn.style.display = 'none';
   {
     const stopBtn = document.getElementById('cqStopBtn');
@@ -875,7 +875,7 @@ async function generateQuizFromLecture() {
       if (!apiKey) throw new Error('No active API key. Add or select one, then click Generate Questions again.');
 
       const file = cqLectureFiles[fi];
-      const basePct  = (fi / totalFiles) * 100;
+      const basePct = (fi / totalFiles) * 100;
       const slicePct = 100 / totalFiles;
       const onProgress = (frac, label) => {
         const prefix = totalFiles > 1 ? `Lecture ${fi + 1} of ${totalFiles} — ` : '';
@@ -896,7 +896,7 @@ async function generateQuizFromLecture() {
             cqPauseSkipRequested = false;
             cqCancelToken = { cancelled: false }; // old token is permanently cancelled — start fresh
             apiKey = await _cqEnterPause(statusEl,
- `⏸️ Paused — stepped back to before "${escapeHtml(file.name)}" so nothing already done is lost. Open Manage APIs to switch keys, then press ▶️ Resume to continue.`);
+              `⏸️ Paused — stepped back to before "${escapeHtml(file.name)}" so nothing already done is lost. Open Manage APIs to switch keys, then press ▶️ Resume to continue.`);
             if (!apiKey) throw new Error('No active API key. Add or select one, then click Generate Questions again.');
             continue; // retry this same file
           }
@@ -920,7 +920,7 @@ async function generateQuizFromLecture() {
     let warn = '';
     if (truncatedFiles.length) {
       const fileList = truncatedFiles.map(n => `"${escapeHtml(n)}"`).join(', ');
- warn = ` ${truncatedFiles.length > 1 ? 'These files\' responses were' : 'This file\'s response was'} cut off because the document is very large: ${fileList}. Every complete question up to that point was still recovered, but try splitting very long documents into smaller files for a full set.`;
+      warn = ` ${truncatedFiles.length > 1 ? 'These files\' responses were' : 'This file\'s response was'} cut off because the document is very large: ${fileList}. Every complete question up to that point was still recovered, but try splitting very long documents into smaller files for a full set.`;
     }
 
     const clinicalCount = cleaned.filter(q =>
@@ -929,7 +929,7 @@ async function generateQuizFromLecture() {
     const clinicalPct = Math.round((clinicalCount / cleaned.length) * 100);
     const fileNote = cqLectureFiles.length > 1 ? ` from ${cqLectureFiles.length} files` : '';
 
-    statusEl.innerHTML = `<div class="cq-status success">✅ Generated ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${fileNote} (${clinicalPct}% clinical scenarios). Review below, then save.${warn}</div>`;
+    statusEl.innerHTML = `<div class="cq-status success"> Generated ${cleaned.length} question${cleaned.length !== 1 ? 's' : ''}${fileNote} (${clinicalPct}% clinical scenarios). Review below, then save.${warn}</div>`;
     renderCQPreview();
 
   } catch (err) {
@@ -938,11 +938,11 @@ async function generateQuizFromLecture() {
     if (err._cqStopped || err._cancelled) {
       statusEl.innerHTML = `<div class="cq-status warning">⏹️ Stopped. Nothing generated before the abort was lost, but you'll need to click <strong>Generate Questions</strong> again to continue.</div>`;
     } else if (isKeyErr) {
- statusEl.innerHTML = `<div class="cq-status error">Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
- <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())">Choose or Add a Different Key</button>
+      statusEl.innerHTML = `<div class="cq-status error"> Your active API key was rejected or is invalid.<br><small>${escapeHtml(err.message || String(err))}</small><br><br>
+        <button class="apikey-open-btn ghost" onclick="openApiKeyManager(() => renderCustomQuizModal())"> Choose or Add a Different Key</button>
       </div>`;
     } else {
-      statusEl.innerHTML = `<div class="cq-status error">❌ ${escapeHtml(err.message || String(err))}</div>`;
+      statusEl.innerHTML = `<div class="cq-status error"> ${escapeHtml(err.message || String(err))}</div>`;
     }
   } finally {
     cqBusy = false;
@@ -954,7 +954,7 @@ async function generateQuizFromLecture() {
     cqResumeResolve = null;
     if (pauseRow) pauseRow.style.display = 'none';
     const btn = document.getElementById('cqLectureGenBtn');
- if (btn) { btn.disabled = false; btn.textContent = 'Generate Questions'; }
+    if (btn) { btn.disabled = false; btn.textContent = ' Generate Questions'; }
   }
 }
 
@@ -974,15 +974,15 @@ function renderCQPreview() {
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:8px 0 10px;">
     <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;">
- Review &amp; Edit — ${cqGeneratedQuestions.length} question${cqGeneratedQuestions.length !== 1 ? 's' : ''}
+       Review &amp; Edit — ${cqGeneratedQuestions.length} question${cqGeneratedQuestions.length !== 1 ? 's' : ''}
     </div>
     <div style="font-size:.74rem;color:var(--text-muted);font-weight:600;">
- Click any field to edit &nbsp;·&nbsp; = correct answer &nbsp;·&nbsp; = re-ask AI &nbsp;·&nbsp; = linked case questions
+      Click any field to edit &nbsp;·&nbsp; = correct answer &nbsp;·&nbsp; = re-ask AI &nbsp;·&nbsp; = linked case questions
     </div>
   </div>`;
   // Same whole-quiz AI Tools panel the Admin and Custom-Quiz editors get
   // (AI Solve All / Fill Choices / Refine Questions), plus a fourth,
- // preview-only tool — Re-extract Missing Images — for anyone who
+  // preview-only tool — Re-extract Missing Images — for anyone who
   // forgot to hit the per-question AI buttons during extraction, or whose
   // extraction left some images un-cropped. See _renderBulkAiToolsPanel
   // and _editorBulkReextractImages in js/ai-features.js.
@@ -992,18 +992,18 @@ function renderCQPreview() {
 
   cqGeneratedQuestions.forEach((q, i) => {
     const optEntries = getOptionEntries(q);
-    const usedKeys   = optEntries.map(([k]) => k);
-    const nextKey    = ALL_KEYS.find(k => !usedKeys.includes(k));
+    const usedKeys = optEntries.map(([k]) => k);
+    const nextKey = ALL_KEYS.find(k => !usedKeys.includes(k));
 
     html += `<div class="cq-preview-q cq-editable-q" id="cqQ_${i}">`;
 
     /* ── Question header ── */
     const qBadge = q.ai_guessed
- ? `<span title="AI answered this from its own knowledge — answer was not found in the provided source. Please verify." style="background:var(--amber-pale);color:var(--unanswered-fg);font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid var(--amber-mid);">AI Guess</span>`
+      ? `<span title="AI answered this from its own knowledge — answer was not found in the provided source. Please verify." style="background:var(--amber-pale);color:var(--unanswered-fg);font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid var(--amber-mid);"> AI Guess</span>`
       : q.ai_answered
- ? `<span title="AI answered this question from the provided source" style="background:var(--violet-pale);color:var(--violet-dark);font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid var(--violet-border);">AI-answered</span>`
+      ? `<span title="AI answered this question from the provided source" style="background:var(--violet-pale);color:var(--violet-dark);font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid var(--violet-border);"> AI-answered</span>`
       : q.no_answer_key
- ? `<span title="No answer key found in the PDF — please set the correct answer manually" style="background:var(--unanswered-bg);color:var(--unanswered-fg);font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid var(--amber-strong);">No Key</span>`
+      ? `<span title="No answer key found in the PDF — please set the correct answer manually" style="background:var(--unanswered-bg);color:var(--unanswered-fg);font-size:.68rem;font-weight:800;border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid var(--amber-strong);"> No Key</span>`
       : '';
     html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;">
       <span style="background:var(--accent);color:#fff;font-size:.72rem;font-weight:800;
@@ -1014,7 +1014,7 @@ function renderCQPreview() {
       ${_renderReorderButtons('cq', i, cqGeneratedQuestions.length)}
       <button class="cq-edit-reask-btn" title="Delete this question"
         onclick="cqDeleteQuestion(${i})"
- style="background:var(--wrong-bg);color:var(--wrong-fg);border-color:var(--red-soft-border);">Delete</button>
+        style="background:var(--wrong-bg);color:var(--wrong-fg);border-color:var(--red-soft-border);"> Delete</button>
     </div>`;
 
     /* ── Question textarea ── */
@@ -1045,11 +1045,11 @@ function renderCQPreview() {
     const _reextractStatusId = `aiReextractStatus_cq_${i}`;
     // Same restore-from-cache pattern _renderAiRefineTools/_renderAiChoiceTools
     // use for their status boxes — without it, this box comes back empty on
- // any mid-run rebuild (e.g. closing Manage APIs) until the request
+    // any mid-run rebuild (e.g. closing Manage APIs) until the request
     // finishes, even though the ⏹ Stop button above still shows correctly
     // (it's driven by live busy state, not by this cached HTML).
     const _reextractCachedStatus = _reBusy ? getCachedStatusHTML(_reextractStatusId) : '';
- // Shared markup for the Re-extract Image button + instructions
+    // Shared markup for the Re-extract Image button + instructions
     // caret + ⏹ Stop button, used identically whether the question already
     // has an image (to try a better crop) or doesn't yet (to try again).
     const _reextractControlsHTML = _canReextract ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -1057,7 +1057,7 @@ function renderCQPreview() {
               <button class="cq-img-action-btn" type="button" id="aiReextractImageBtn_cq_${i}" ${_reBusy ? 'disabled' : ''}
                 title="Ask AI to re-locate and re-crop this image from the original source file"
                 onclick="cqReextractImage(${i})"
- style="border-top-right-radius:0;border-bottom-right-radius:0;">${_aiToolsBtnSpinnerHTML('cq', i, 'reextractImage')}Re-extract Image</button>
+                style="border-top-right-radius:0;border-bottom-right-radius:0;">${_aiToolsBtnSpinnerHTML('cq', i, 'reextractImage')} Re-extract Image</button>
               <button class="cq-img-action-btn" type="button" id="aiReextractInstrCaret_cq_${i}" ${_reBusy ? 'disabled' : ''}
                 title="Optional correction used only when re-extracting this image (e.g. widen the frame, fix the position)"
                 onclick="_toggleReextractInstrPicker(${i})"
@@ -1077,13 +1077,13 @@ function renderCQPreview() {
             style="max-width:200px;max-height:130px;object-fit:contain;display:block;" />
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;justify-content:center;">
- <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Question Image</div>
+          <div style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;"> Question Image</div>
           <label class="cq-img-action-btn" title="Upload a different image">
- Change Image
+             Change Image
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
           ${_reextractControlsHTML}
- <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqRemoveImage(${i})" type="button">Remove Image</button>
+          <button class="cq-img-action-btn cq-img-remove-btn" onclick="cqRemoveImage(${i})" type="button"> Remove Image</button>
           ${_reextractExtrasHTML}
         </div>
       </div>`;
@@ -1091,11 +1091,11 @@ function renderCQPreview() {
       html += `<div style="padding:8px 12px;background:var(--unanswered-bg);border:1.5px dashed var(--unanswered-fg);
         border-radius:7px;font-size:.78rem;color:#795500;font-weight:700;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
- AI detected an image for this question but couldn't extract it
+           AI detected an image for this question but couldn't extract it
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           <label class="cq-img-action-btn" style="color:var(--accent);border-color:var(--accent);" title="Upload image manually">
- Upload Image Manually
+             Upload Image Manually
             <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
           </label>
           ${_reextractControlsHTML}
@@ -1104,7 +1104,7 @@ function renderCQPreview() {
       </div>`;
     } else {
       html += `<label class="cq-img-upload-label" title="Attach an image to this question">
- Add Image (optional)
+         Add Image (optional)
         <input type="file" accept="image/*" style="display:none;" onchange="cqReplaceImage(${i}, event)" />
       </label>`;
     }
@@ -1116,7 +1116,7 @@ function renderCQPreview() {
     /* ── Options label ── */
     html += `<div style="font-size:.72rem;font-weight:700;color:var(--text-muted);
       text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">
- Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with</span>
+      Answer Choices &nbsp;<span style="font-weight:500;text-transform:none;letter-spacing:0;">— select the correct answer with </span>
     </div>`;
 
     /* ── Options rows ── */
@@ -1164,13 +1164,13 @@ function renderCQPreview() {
 
   /* ── Add question + save/discard ── */
   html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
- <button class="cq-btn" id="cqPreviewSaveBtn" onclick="saveGeneratedCustomQuiz()">Save Quiz</button>
+    <button class="cq-btn" id="cqPreviewSaveBtn" onclick="saveGeneratedCustomQuiz()"> Save Quiz</button>
     <button class="cq-btn cq-btn-secondary" id="cqPreviewAddBtn" onclick="cqAddBlankQuestion()"
       style="background:var(--green-mid);">＋ Add Question</button>
     <button class="cq-btn cq-btn-secondary" id="cqPreviewMergeBtn" onclick="openMergePicker('cq')"
- style="background:var(--violet);color:#fff;">Merge Quizzes In</button>
+      style="background:var(--violet);color:#fff;"> Merge Quizzes In</button>
     <button class="cq-btn cq-btn-secondary" id="cqPreviewSplitBtn" onclick="openSplitPanel('preview', null)"
- style="background:var(--violet);color:#fff;">Split into Multiple</button>
+      style="background:var(--violet);color:#fff;"> Split into Multiple</button>
     <button class="cq-btn cq-btn-secondary" id="cqPreviewDiscardBtn" onclick="discardGeneratedQuiz()">✖ Discard</button>
   </div>`;
 
@@ -1232,7 +1232,7 @@ function cqSetAnswer(idx, key) {
 
 function cqRemoveImage(idx) {
   if (!cqGeneratedQuestions || !cqGeneratedQuestions[idx]) return;
-  cqGeneratedQuestions[idx].image    = undefined;
+  cqGeneratedQuestions[idx].image = undefined;
   cqGeneratedQuestions[idx].has_image = false;
   _markQuestionEditDirty();
   renderCQPreview();
@@ -1261,7 +1261,7 @@ function _reextractInstrChanged(i, val) {
 }
 function _reextractInstrCaretLabel(i) {
   const draft = (_cqReextractInstrText[i] || '').trim();
- return draft ? 'Instructions •' : 'Instructions';
+  return draft ? ' Instructions •' : ' Instructions';
 }
 function _toggleReextractInstrPicker(i) {
   _toggleAiPopover(`aiReextractInstrPicker_cq_${i}`, `aiReextractInstrCaret_cq_${i}`,
@@ -1270,12 +1270,12 @@ function _toggleReextractInstrPicker(i) {
 function _renderReextractInstrPickerHTML(i) {
   const draft = _cqReextractInstrText[i] || '';
   return `<div class="ai-source-picker-inner" style="max-width:290px;">
- <div class="ai-source-picker-title">Custom Instructions — Re-extract Image only</div>
+    <div class="ai-source-picker-title"> Custom Instructions — Re-extract Image only</div>
     <div style="font-size:.71rem;color:var(--text-muted);padding:0 6px 6px;line-height:1.35;">
       If AI keeps getting this image wrong, tell it what to fix — e.g.
       "widen the frame, it's cutting off the left edge" or "wrong position,
       it's actually the graph on the next page". Used only for
- Re-extract Image on this question.
+       Re-extract Image on this question.
     </div>
     <textarea id="reextractInstrInput_${i}" rows="3"
       oninput="_reextractInstrChanged(${i}, this.value)"
@@ -1293,7 +1293,7 @@ async function cqReextractImage(i) {
   // Own DOM id (not the shared aiToolsStatus_cq_<i> box the textarea tools
   // use) — see the render block in renderCQPreview(). Every write below
   // goes through _aiToolsSetStatusById so this box survives a mid-run
- // rebuild (e.g. closing Manage APIs) the same way Refine/Solve/Fill
+  // rebuild (e.g. closing Manage APIs) the same way Refine/Solve/Fill
   // Choices already do — see that helper in js/ai-question-tools.js for why.
   const reextractStatusId = `aiReextractStatus_cq_${i}`;
 
@@ -1316,7 +1316,7 @@ async function cqReextractImage(i) {
   _aiToolsCancelToken[key] = token;
 
   _aiToolsSetBusy('cq', i, true, 'reextractImage');
- _aiToolsSetStatusById(reextractStatusId, _aiToolsLoadingHTML('Re-extracting image from source…'));
+  _aiToolsSetStatusById(reextractStatusId, _aiToolsLoadingHTML(' Re-extracting image from source…'));
 
   try {
     // Passing just this one question keeps the request scoped to it —
@@ -1355,10 +1355,10 @@ function cqReplaceImage(idx, event) {
     const dataUrl = reader.result;
     // Compress before storing
     try {
-      cqGeneratedQuestions[idx].image    = await compressImageDataUrl(dataUrl);
+      cqGeneratedQuestions[idx].image = await compressImageDataUrl(dataUrl);
       cqGeneratedQuestions[idx].has_image = true;
     } catch(e) {
-      cqGeneratedQuestions[idx].image    = dataUrl;
+      cqGeneratedQuestions[idx].image = dataUrl;
       cqGeneratedQuestions[idx].has_image = true;
     }
     _markQuestionEditDirty();
@@ -1494,19 +1494,19 @@ async function saveGeneratedCustomQuiz() {
   // spinner for the duration, same treatment as extraction's Generate
   // button, instead of leaving Save (and its siblings) clickable with no
   // feedback while the write is still in flight.
-  const statusEl  = liveStatusRef('cqStatus', 'cqStatus');
-  const saveBtn   = liveRef('cqPreviewSaveBtn');
+  const statusEl = liveStatusRef('cqStatus', 'cqStatus');
+  const saveBtn = liveRef('cqPreviewSaveBtn');
   const rowBtnIds = ['cqPreviewSaveBtn', 'cqPreviewAddBtn', 'cqPreviewMergeBtn', 'cqPreviewSplitBtn', 'cqPreviewDiscardBtn'];
   rowBtnIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
   if (saveBtn) saveBtn.innerHTML = '<span class="ai-btn-spinner"></span> Saving…';
- statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Saving quiz…</div>`;
+  statusEl.innerHTML = `<div class="cq-status info"><div class="cq-spinner"></div> Saving quiz…</div>`;
 
   try {
     await saveCustomQuizzesList(quizzes);
   } catch (e) {
     rowBtnIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
- if (saveBtn) saveBtn.innerHTML = 'Save Quiz';
-    statusEl.innerHTML = `<div class="cq-status error">❌ Failed to save: ${escapeHtml(e.message || String(e))}</div>`;
+    if (saveBtn) saveBtn.innerHTML = ' Save Quiz';
+    statusEl.innerHTML = `<div class="cq-status error"> Failed to save: ${escapeHtml(e.message || String(e))}</div>`;
     return;
   }
 
@@ -1518,6 +1518,6 @@ async function saveGeneratedCustomQuiz() {
 
   renderCustomQuizModal();
   const freshStatusEl = document.getElementById('cqStatus');
-  if (freshStatusEl) freshStatusEl.innerHTML = `<div class="cq-status success">✅ Quiz "${escapeHtml(title)}" saved! Start it from the list above.</div>`;
+  if (freshStatusEl) freshStatusEl.innerHTML = `<div class="cq-status success"> Quiz "${escapeHtml(title)}" saved! Start it from the list above.</div>`;
 }
 

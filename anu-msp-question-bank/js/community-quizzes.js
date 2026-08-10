@@ -8,23 +8,23 @@
    in that editor. Selection only; nothing is written until the
    editor's own "Save" is used afterwards.
 ══════════════════════════════════════════════════════════ */
-let mergeEditorKey = null;    // 'cq' | 'admin' | 'customQuiz' — which _caseGroupEditors entry to append into
-let mergeTab       = 'community'; // 'community' | 'custom' | 'curriculum'
+let mergeEditorKey = null; // 'cq' | 'admin' | 'customQuiz' — which _caseGroupEditors entry to append into
+let mergeTab = 'community'; // 'community' | 'custom' | 'curriculum'
 
-let mergeCommTab           = 'browse'; // 'browse' | 'mine'
-let mergeCommSearch        = '';
-let mergeCommYearFilter    = '';
-let mergeCommModuleFilter  = '';
+let mergeCommTab = 'browse'; // 'browse' | 'mine'
+let mergeCommSearch = '';
+let mergeCommYearFilter = '';
+let mergeCommModuleFilter = '';
 let mergeCommSubjectFilter = '';
-let mergeCommSort          = 'newest';
+let mergeCommSort = 'newest';
 let mergeSelectedCommunity = new Set(); // shared quiz ids
 
-let mergeCustomSearch      = '';
-let mergeSelectedCustom    = new Set(); // custom quiz ids
+let mergeCustomSearch = '';
+let mergeSelectedCustom = new Set(); // custom quiz ids
 
-let mergeCurrYear          = '';
-let mergeCurrModule        = '';
-let mergeCurrSubject       = '';
+let mergeCurrYear = '';
+let mergeCurrModule = '';
+let mergeCurrSubject = '';
 let mergeSelectedCurriculum = new Set(); // "subjectKey::lectureName"
 
 function openMergePicker(editorKey) {
@@ -60,9 +60,9 @@ function _mergeTotalSelected() {
 function _mergeUpdateFooter() {
   const total = _mergeTotalSelected();
   const countEl = document.getElementById('mergeFooterCount');
-  const btnEl   = document.getElementById('mergeConfirmBtn');
+  const btnEl = document.getElementById('mergeConfirmBtn');
   if (countEl) countEl.textContent = `${total} question set${total !== 1 ? 's' : ''} selected`;
- if (btnEl) { btnEl.disabled = !total; btnEl.textContent = total ? `Merge ${total} Selected` : 'Merge Selected'; }
+  if (btnEl) { btnEl.disabled = !total; btnEl.textContent = total ? ` Merge ${total} Selected` : ' Merge Selected'; }
 }
 
 function renderMergePicker() {
@@ -83,7 +83,7 @@ function renderMergePicker() {
     </div>
     <div style="display:flex;gap:8px;">
       <button class="cq-btn cq-btn-secondary" onclick="closeMergePicker()">✖ Cancel</button>
- <button class="cq-btn" id="mergeConfirmBtn" ${!total ? 'disabled' : ''} onclick="confirmMergeSelectedQuizzes()">${total ? `Merge ${total} Selected` : 'Merge Selected'}</button>
+      <button class="cq-btn" id="mergeConfirmBtn" ${!total ? 'disabled' : ''} onclick="confirmMergeSelectedQuizzes()">${total ? ` Merge ${total} Selected` : ' Merge Selected'}</button>
     </div>
   </div>`;
 
@@ -220,23 +220,23 @@ function _renderMergeCommunityList() {
   const q = mergeCommSearch.toLowerCase().trim();
   if (q) {
     pool = pool.filter(item => {
-      const inTitle  = (item.title || '').toLowerCase().includes(q);
+      const inTitle = (item.title || '').toLowerCase().includes(q);
       const inAuthor = (item.authorName || '').toLowerCase().includes(q);
-      const inCat    = (item.category || '').toLowerCase().includes(q);
-      const inTags   = (item.tags || []).some(t => t.includes(q));
+      const inCat = (item.category || '').toLowerCase().includes(q);
+      const inTags = (item.tags || []).some(t => t.includes(q));
       return inTitle || inAuthor || inCat || inTags;
     });
   }
-  if (mergeCommYearFilter)    pool = pool.filter(item => (item.year || '') === mergeCommYearFilter);
-  if (mergeCommModuleFilter)  pool = pool.filter(item => (item.module || '') === mergeCommModuleFilter);
+  if (mergeCommYearFilter) pool = pool.filter(item => (item.year || '') === mergeCommYearFilter);
+  if (mergeCommModuleFilter) pool = pool.filter(item => (item.module || '') === mergeCommModuleFilter);
   if (mergeCommSubjectFilter) pool = pool.filter(item => (item.subjectKey || '') === mergeCommSubjectFilter);
 
-  if (mergeCommSort === 'newest')    pool = [...pool].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
-  else if (mergeCommSort === 'oldest')    pool = [...pool].sort((a, b) => (a.sharedAt || 0) - (b.sharedAt || 0));
-  else if (mergeCommSort === 'az')        pool = [...pool].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  if (mergeCommSort === 'newest') pool = [...pool].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
+  else if (mergeCommSort === 'oldest') pool = [...pool].sort((a, b) => (a.sharedAt || 0) - (b.sharedAt || 0));
+  else if (mergeCommSort === 'az') pool = [...pool].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   else if (mergeCommSort === 'questions') pool = [...pool].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
 
-  const allYears   = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
+  const allYears = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
   const allModules = mergeCommYearFilter
     ? Object.keys(curriculum[mergeCommYearFilter] || {})
     : [...new Set(shared.map(i => i.module).filter(Boolean))].sort();
@@ -253,7 +253,7 @@ function _renderMergeCommunityList() {
     </div>
     <div class="comm-filter-bar">
       <div class="comm-search-wrap">
- <span class="comm-search-icon"></span>
+        <span class="comm-search-icon"></span>
         <input class="comm-search-input" id="mergeCommSearchInput" type="text"
                placeholder="Search by title, author, category or tag…"
                value="${searchVal}" oninput="mergeCommOnSearchInput(this.value)" />
@@ -276,10 +276,10 @@ function _renderMergeCommunityList() {
           }).join('')}
         </select>
         <select class="comm-filter-select" onchange="mergeCommSort=this.value;_renderMergeCommunityList()">
- <option value="newest" ${mergeCommSort==='newest'?'selected':''}>Newest</option>
- <option value="oldest" ${mergeCommSort==='oldest'?'selected':''}>Oldest</option>
- <option value="az" ${mergeCommSort==='az'?'selected':''}>A → Z</option>
- <option value="questions" ${mergeCommSort==='questions'?'selected':''}>Most Questions</option>
+          <option value="newest" ${mergeCommSort==='newest'?'selected':''}> Newest</option>
+          <option value="oldest" ${mergeCommSort==='oldest'?'selected':''}> Oldest</option>
+          <option value="az" ${mergeCommSort==='az'?'selected':''}> A → Z</option>
+          <option value="questions" ${mergeCommSort==='questions'?'selected':''}> Most Questions</option>
         </select>
       </div>
       <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
@@ -287,13 +287,13 @@ function _renderMergeCommunityList() {
 
   if (!pool.length) {
     html += `<div class="community-empty">
- <div class="ce-icon">${mergeCommSearch || mergeCommYearFilter || mergeCommModuleFilter || mergeCommSubjectFilter ? '' : '&#127758;'}</div>
+      <div class="ce-icon">${mergeCommSearch || mergeCommYearFilter || mergeCommModuleFilter || mergeCommSubjectFilter ? '' : '&#127758;'}</div>
       No quizzes match.
     </div>`;
   } else {
     pool.forEach(item => {
       const isOwn = item.authorUid === myUid;
-      const date  = new Date(item.sharedAt).toLocaleDateString();
+      const date = new Date(item.sharedAt).toLocaleDateString();
       const catBadge = (item.year || item.subjectLabel)
         ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
         : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
@@ -352,7 +352,7 @@ function _renderMergeCustomTab() {
 
   let html = `<div class="comm-filter-bar">
     <div class="comm-search-wrap">
- <span class="comm-search-icon"></span>
+      <span class="comm-search-icon"></span>
       <input class="comm-search-input" type="text" placeholder="Search your custom quizzes…"
              value="${escapeHtml(mergeCustomSearch)}" oninput="mergeCustomOnSearchInput(this.value)" />
     </div>
@@ -360,7 +360,7 @@ function _renderMergeCustomTab() {
   </div>`;
 
   if (!quizzes.length) {
- html += `<div class="community-empty"><div class="ce-icon"></div>No custom quizzes to merge from.</div>`;
+    html += `<div class="community-empty"><div class="ce-icon"></div>No custom quizzes to merge from.</div>`;
   } else {
     quizzes.forEach(q => {
       const checked = mergeSelectedCustom.has(q.id);
@@ -394,9 +394,9 @@ function _renderMergeCurriculumTab() {
   const el = document.getElementById('mergeTabContent');
   if (!el) return;
 
-  const years   = Object.keys(curriculum);
+  const years = Object.keys(curriculum);
   const modules = mergeCurrYear ? Object.keys(curriculum[mergeCurrYear] || {}) : [];
-  const subs    = (mergeCurrYear && mergeCurrModule) ? (curriculum[mergeCurrYear][mergeCurrModule] || []).filter(k => subjects[k]) : [];
+  const subs = (mergeCurrYear && mergeCurrModule) ? (curriculum[mergeCurrYear][mergeCurrModule] || []).filter(k => subjects[k]) : [];
 
   let html = `<div class="admin-field">
       <label>Year</label>
@@ -423,7 +423,7 @@ function _renderMergeCurriculumTab() {
   if (mergeCurrSubject && subjects[mergeCurrSubject]) {
     const lectures = Object.keys(subjects[mergeCurrSubject].lectures || {});
     if (!lectures.length) {
- html += `<div class="community-empty"><div class="ce-icon"></div>No lectures in this subject yet.</div>`;
+      html += `<div class="community-empty"><div class="ce-icon"></div>No lectures in this subject yet.</div>`;
     } else {
       lectures.forEach(lname => {
         const qCount = subjects[mergeCurrSubject].lectures[lname].length;
@@ -442,7 +442,7 @@ function _renderMergeCurriculumTab() {
       });
     }
   } else {
- html += `<div class="community-empty"><div class="ce-icon"></div>Select a year, module and subject to see its lectures.</div>`;
+    html += `<div class="community-empty"><div class="ce-icon"></div>Select a year, module and subject to see its lectures.</div>`;
   }
 
   el.innerHTML = html;
@@ -494,7 +494,7 @@ function _renderMergeSourceBadge(q) {
   return `<span title="Merged in from this quiz — not yet saved"
       style="background:#ECEFF1;color:#455A64;font-size:.68rem;font-weight:700;
         border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #B0BEC5;">
- ${escapeHtml(q._mergeSourceLabel)}</span>`;
+       ${escapeHtml(q._mergeSourceLabel)}</span>`;
 }
 
 /* Removes editor-only fields that should never be persisted, called right
