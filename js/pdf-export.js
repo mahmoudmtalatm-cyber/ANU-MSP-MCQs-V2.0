@@ -85,11 +85,11 @@ function _pdxFormatDate(d) {
    a big multi-source export reads as organised and colourful rather than
    one long grey wall of text. */
 const PDX_PALETTE = {
-  teal: { name: '🟦 Teal (default)', base: '#0E6E82', dark: '#0A3F52', light: '#29C2D9', pale: '#E4F3F6' },
-  violet: { name: '🟪 Violet', base: '#6B4FA0', dark: '#4E3878', light: '#7E57C2', pale: '#EFEAF8' },
-  gold: { name: '🟧 Gold', base: '#C98D1F', dark: '#8A5E12', light: '#E7B65C', pale: '#FBF1DE' },
-  forest: { name: '🟩 Forest', base: '#2E7A4F', dark: '#1F5C3B', light: '#4C9A6B', pale: '#E5F3EC' },
-  berry: { name: '🟥 Berry', base: '#B23A3A', dark: '#8F2A2A', light: '#D97A7A', pale: '#F8DADA' },
+  teal: { name: 'Teal (default)', base: '#0E6E82', dark: '#0A3F52', light: '#29C2D9', pale: '#E4F3F6' },
+  violet: { name: 'Violet', base: '#6B4FA0', dark: '#4E3878', light: '#7E57C2', pale: '#EFEAF8' },
+  gold: { name: 'Gold', base: '#C98D1F', dark: '#8A5E12', light: '#E7B65C', pale: '#FBF1DE' },
+  forest: { name: 'Forest', base: '#2E7A4F', dark: '#1F5C3B', light: '#4C9A6B', pale: '#E5F3EC' },
+  berry: { name: 'Berry', base: '#B23A3A', dark: '#8F2A2A', light: '#D97A7A', pale: '#F8DADA' },
 };
 const PDX_TEXT_SIZES = { small: { q: 10.5, opt: 9.5, label: 8.5 }, medium: { q: 12, opt: 10.5, label: 9.5 }, large: { q: 13.5, opt: 12, label: 10.5 } };
 const PDX_IMAGE_SIZES = { small: 90, medium: 160, large: 230 }; // max image height, in pt
