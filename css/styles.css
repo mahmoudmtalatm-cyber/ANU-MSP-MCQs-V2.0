@@ -372,12 +372,28 @@
     .home-footer {
       background: linear-gradient(120deg, var(--nav-current), var(--accent-dark));
       text-align: center;
-      padding: 22px 20px 26px;
+      padding: 34px 20px 30px;
       color: #fff;
       position: relative;
       overflow: hidden;
     }
-    .home-footer-credit { font-size: .84rem; font-weight: 600; opacity: .82; margin-bottom: 10px; letter-spacing: .2px; }
+    .home-footer::before {
+      content: "";
+      position: absolute; inset: 0;
+      background-image: radial-gradient(circle at 12% 25%, rgba(255,255,255,.08), transparent 42%),
+                         radial-gradient(circle at 90% 15%, rgba(143,211,255,.14), transparent 40%);
+      pointer-events: none;
+    }
+    .home-footer > * { position: relative; }
+    .footer-eyebrow {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: .78rem; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase;
+      color: #fff; background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.3); border-radius: 999px;
+      padding: 6px 16px; margin-bottom: 14px;
+    }
+    .home-footer-credit { font-size: .9rem; font-weight: 500; opacity: .82; margin-bottom: 18px; letter-spacing: .2px; }
+    .home-footer-credit strong { font-weight: 700; opacity: 1; }
     .home-footer-feedback {
       display: inline-flex; align-items: center; gap: 7px;
       background: rgba(255,255,255,.1);
@@ -408,17 +424,17 @@
       gap: 26px;
     }
 
-    /* Wizard layout — the quiz-setup card now sits alongside a side panel
-       (legend + quick tips) in a responsive two-column grid, instead of
-       floating alone in the middle of the page. */
+    /* Wizard layout — the quiz-setup card is centered on the page, with the
+       navigator legend stacked directly underneath it. */
     .home-layout {
-      width: 100%; max-width: 980px;
-      display: grid;
-      grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-      align-items: start;
+      width: 100%; max-width: 620px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       gap: 22px;
+      margin: 0 auto;
     }
-    .side-panel { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 90px; }
+    .side-panel { display: flex; flex-direction: column; gap: 16px; width: 100%; }
     .side-card {
       background: var(--bg-card);
       border: 1px solid var(--border-soft);
@@ -940,12 +956,6 @@
       border-color: var(--accent); background: var(--accent); color: #fff;
       box-shadow: 0 3px 12px rgba(14,110,130,.35);
     }
-    /* Responsive: two-column wizard/side-panel collapses to one column */
-    @media (max-width: 860px) {
-      .home-layout { grid-template-columns: 1fr; }
-      .side-panel { position: static; }
-    }
-
     /* Mobile tweaks */
     @media (max-width: 600px) {
       .header { padding: 0 14px; min-height: 58px; }
