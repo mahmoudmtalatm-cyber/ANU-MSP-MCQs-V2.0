@@ -22,7 +22,7 @@
    where you are, and _filterQuizzesByActiveCollection() narrows the quiz
    list to match. Quizzes can be filed into a folder by dragging their card
    onto a tree node, or — for touch/keyboard users, since native HTML5 drag
- isn't reliable on mobile — via the Move button's dropdown on every
+   isn't reliable on mobile — via the 📁 Move button's dropdown on every
    quiz card (and a bulk "Move to…" for multi-selected quizzes). Folders
    themselves are draggable too, for reordering/re-nesting; a drop is
    rejected with a friendly message if it would nest a folder inside its
@@ -40,16 +40,16 @@ let cqDraggedCollectionId = null;
 let cqEditingCollectionId = null;
 let cqNewCollectionParentId = undefined; // undefined = no inline "new folder" form open; null = form open at root
 let cqCollectionMenuOpenFor = null;      // collection id whose ⋮ popover is open
-let cqCollectionMoveMenuFor = null; // quiz id whose Move popover is open
+let cqCollectionMoveMenuFor = null;      // quiz id whose 📁 Move popover is open
 let cqBulkMoveMenuOpen = false;
 let cqSidebarMobileOpen = false;         // mobile (<720px): drawer hidden by default
 let cqSidebarCollapsed = _cqReadCollapsedFromStorage(); // desktop (≥720px): sidebar shown by default, collapsible via header button
 
 // This same folder tree/breadcrumb/quiz-list UI is now rendered from three
-// different hosts: the student-facing "Custom Quizzes" modal
+// different hosts: the student-facing "🤖 Custom Quizzes" modal
 // (js/firebase-storage.js → renderCustomQuizModal), the admin panel's
-// "Publish Quizzes" source picker (js/admin-panel.js → renderAdminPanel,
-// "My Custom Quizzes" tab), and the Export to PDF picker's Custom
+// "📤 Publish Quizzes" source picker (js/admin-panel.js → renderAdminPanel,
+// "🤖 My Custom Quizzes" tab), and the 🖨️ Export to PDF picker's Custom
 // tab (js/pdf-export.js → _pdxRenderCustomTab). Every action in this file
 // (selecting a folder, renaming, dragging a quiz, etc.) needs to re-render
 // whichever of those three is actually on screen — cqCollectionsHost
@@ -191,12 +191,12 @@ function renderCqCollectionsSidebarHTML(quizzes, collections) {
 
   return `
   <button class="cq-coll-mobile-toggle" onclick="cqToggleSidebarMobile()">
- ${cqSidebarMobileOpen ? 'Hide Folders ✕' : 'Browse Folders ▾'}
+    📁 ${cqSidebarMobileOpen ? 'Hide Folders ✕' : 'Browse Folders ▾'}
   </button>
- <button class="cq-coll-reopen-btn" onclick="cqToggleSidebarCollapsed()" title="Show the folders panel">Show Folders ▸</button>
+  <button class="cq-coll-reopen-btn" onclick="cqToggleSidebarCollapsed()" title="Show the folders panel">📁 Show Folders ▸</button>
   <div class="cq-coll-sidebar ${cqSidebarMobileOpen ? 'mobile-open' : ''}">
     <div class="cq-coll-sidebar-header">
- <span>Collections</span>
+      <span>📁 Collections</span>
       <div class="cq-coll-header-actions">
         <button class="cq-coll-new-btn" title="New top-level collection" onclick="cqStartNewCollection(null)">➕ New</button>
         <button class="cq-coll-collapse-btn" title="Hide the folders panel" onclick="cqToggleSidebarCollapsed()">◂</button>
@@ -206,7 +206,7 @@ function renderCqCollectionsSidebarHTML(quizzes, collections) {
       <div class="cq-coll-row cq-coll-pseudo ${allActive ? 'active' : ''}" onclick="cqSelectCollection(null)"
            ondragover="cqRootDragOver(event)" ondragleave="cqRootDragLeave(event)" ondrop="cqRootDrop(event)">
         <span class="cq-coll-caret empty"></span>
- <span class="cq-coll-icon"></span>
+        <span class="cq-coll-icon">🗂️</span>
         <span class="cq-coll-name">All Quizzes</span>
         <span class="cq-coll-count">${quizzes.length}</span>
       </div>
@@ -215,7 +215,7 @@ function renderCqCollectionsSidebarHTML(quizzes, collections) {
       <div class="cq-coll-row cq-coll-pseudo ${uncatActive ? 'active' : ''}" onclick="cqSelectCollection('${CQ_UNCATEGORIZED}')"
            ondragover="cqUncatDragOver(event)" ondragleave="cqUncatDragLeave(event)" ondrop="cqUncatDrop(event)">
         <span class="cq-coll-caret empty"></span>
- <span class="cq-coll-icon"></span>
+        <span class="cq-coll-icon">📭</span>
         <span class="cq-coll-name">Uncategorized</span>
         <span class="cq-coll-count">${uncatCount}</span>
       </div>
@@ -264,7 +264,7 @@ function _renderCollectionNode(collections, quizzes, node, depth) {
 function _renderCollectionMenuHTML(node) {
   return `<div class="cq-coll-menu" id="cqCollMenu_${node.id}" onclick="event.stopPropagation()">
     <button onclick="cqStartNewCollection('${node.id}')">➕ New subfolder</button>
- <button onclick="cqRenameCollectionStart('${node.id}')">Rename</button>
+    <button onclick="cqRenameCollectionStart('${node.id}')">✏️ Rename</button>
     <div class="cq-coll-menu-label">Color</div>
     <div class="cq-coll-menu-colors">
       ${CQ_COLLECTION_COLORS.map(c => `<span class="cq-coll-swatch ${node.color === c ? 'selected' : ''}" style="background:${c}" onclick="cqSetCollectionColor('${node.id}','${c}')"></span>`).join('')}
@@ -273,7 +273,7 @@ function _renderCollectionMenuHTML(node) {
     <div class="cq-coll-menu-icons">
       ${CQ_COLLECTION_ICONS.map(ic => `<span class="cq-coll-icon-opt ${node.icon === ic ? 'selected' : ''}" onclick="cqSetCollectionIcon('${node.id}','${ic}')">${ic}</span>`).join('')}
     </div>
- <button class="danger" onclick="cqDeleteCollection('${node.id}')">Delete folder</button>
+    <button class="danger" onclick="cqDeleteCollection('${node.id}')">🗑️ Delete folder</button>
   </div>`;
 }
 
@@ -281,7 +281,7 @@ function _renderNewCollectionInlineForm(parentId, depth) {
   return `<div class="cq-coll-node" style="--depth:${depth}">
     <div class="cq-coll-row cq-coll-new-row">
       <span class="cq-coll-caret empty"></span>
- <span class="cq-coll-icon"></span>
+      <span class="cq-coll-icon">📁</span>
       <input type="text" class="cq-coll-rename-input" id="cqNewCollNameInput" placeholder="Folder name…"
         onkeydown="if(event.key==='Enter'){cqCommitNewCollection(${parentId === null ? 'null' : `'${parentId}'`}, this.value)} else if(event.key==='Escape'){cqCancelNewCollection()}" />
       <button class="cq-coll-new-confirm" onclick="cqCommitNewCollection(${parentId === null ? 'null' : `'${parentId}'`}, document.getElementById('cqNewCollNameInput').value)">✓</button>
@@ -292,14 +292,14 @@ function _renderNewCollectionInlineForm(parentId, depth) {
 
 function renderCqBreadcrumbHTML(collections) {
   if (cqActiveCollectionId == null) {
- return `<div class="cq-coll-breadcrumb"><span class="crumb current">All Quizzes</span></div>`;
+    return `<div class="cq-coll-breadcrumb"><span class="crumb current">🗂️ All Quizzes</span></div>`;
   }
   if (cqActiveCollectionId === CQ_UNCATEGORIZED) {
- return `<div class="cq-coll-breadcrumb"><span class="crumb" onclick="cqSelectCollection(null)">All Quizzes</span><span class="sep">›</span><span class="crumb current">Uncategorized</span></div>`;
+    return `<div class="cq-coll-breadcrumb"><span class="crumb" onclick="cqSelectCollection(null)">🗂️ All Quizzes</span><span class="sep">›</span><span class="crumb current">📭 Uncategorized</span></div>`;
   }
   const path = _collectionPath(collections, cqActiveCollectionId);
   if (!path.length) { cqActiveCollectionId = null; return renderCqBreadcrumbHTML(collections); } // folder no longer exists
- const crumbs = [`<span class="crumb" onclick="cqSelectCollection(null)">All Quizzes</span>`];
+  const crumbs = [`<span class="crumb" onclick="cqSelectCollection(null)">🗂️ All Quizzes</span>`];
   path.forEach((c, i) => {
     const isLast = i === path.length - 1;
     crumbs.push(`<span class="sep">›</span><span class="crumb ${isLast ? 'current' : ''}" ${isLast ? '' : `onclick="cqSelectCollection('${c.id}')"`}>${escapeHtml(c.icon || '📁')} ${escapeHtml(c.name)}</span>`);
@@ -320,10 +320,10 @@ function _quizCollectionChipHTML(quiz, collections) {
   return `<span class="cq-coll-chip" title="${escapeHtml(label)}" style="color:${color};border-color:${color};background:color-mix(in srgb, ${color} 12%, white);">${escapeHtml(col.icon || '📁')} ${escapeHtml(label)}</span>`;
 }
 
-/** Flat, indented list of every folder — used inside the Move
+/** Flat, indented list of every folder — used inside the 📁 Move
  *  dropdowns (single-quiz and bulk). `currentId` gets a ✓/highlight. */
 function _renderCollectionOptionRows(collections, currentId, onPick) {
- const rows = [`<button class="${!currentId ? 'current' : ''}" onclick="${onPick(null)}">Uncategorized</button>`];
+  const rows = [`<button class="${!currentId ? 'current' : ''}" onclick="${onPick(null)}">📭 Uncategorized</button>`];
   const walk = (parentId, depth) => {
     _collectionChildren(collections, parentId).forEach(c => {
       rows.push(`<button class="${currentId === c.id ? 'current' : ''}" style="padding-left:${10 + depth * 14}px" onclick="${onPick(c.id)}">${escapeHtml(c.icon || '📁')} ${escapeHtml(c.name)}</button>`);
@@ -518,23 +518,23 @@ function _cqRenderDeleteCollectionModal() {
   if (_cqDeleteModalStep === 1) {
     _cqDeleteModalEl.innerHTML = `
       <div class="qm-modal">
- <div class="qm-title">Delete "${escapeHtml(col.name)}"</div>
+        <div class="qm-title">🗑️ Delete "${escapeHtml(col.name)}"</div>
         ${(nestedFolderCount || totalNestedQuizCount) ? `<div class="cq-del-summary">
- ${nestedFolderCount ? `<div>${nestedFolderCount} subfolder${nestedFolderCount !== 1 ? 's' : ''} inside</div>` : ''}
- ${totalNestedQuizCount ? `<div>${totalNestedQuizCount} quiz${totalNestedQuizCount !== 1 ? 'zes' : ''} filed inside (including subfolders)</div>` : ''}
+          ${nestedFolderCount ? `<div>📁 ${nestedFolderCount} subfolder${nestedFolderCount !== 1 ? 's' : ''} inside</div>` : ''}
+          ${totalNestedQuizCount ? `<div>📝 ${totalNestedQuizCount} quiz${totalNestedQuizCount !== 1 ? 'zes' : ''} filed inside (including subfolders)</div>` : ''}
         </div>` : ''}
         <div class="cq-del-options">
           <label class="cq-del-opt">
             <input type="radio" name="cqDelMode" value="keep" checked>
             <div>
- <div class="cq-del-opt-title">Just remove this folder</div>
+              <div class="cq-del-opt-title">📤 Just remove this folder</div>
               <div class="cq-del-opt-desc">Nothing is deleted — subfolders move up${col.parentId ? " to this folder's parent" : ' to the top level'}, and any quiz filed directly here becomes Uncategorized.</div>
             </div>
           </label>
           <label class="cq-del-opt">
             <input type="radio" name="cqDelMode" value="everything">
             <div>
- <div class="cq-del-opt-title">Delete everything inside</div>
+              <div class="cq-del-opt-title">🔥 Delete everything inside</div>
               <div class="cq-del-opt-desc">Permanently deletes this folder, every subfolder inside it, and every quiz filed anywhere inside — this can't be undone.</div>
             </div>
           </label>
@@ -550,10 +550,10 @@ function _cqRenderDeleteCollectionModal() {
     if (totalNestedQuizCount) pieces.push(`${totalNestedQuizCount} quiz${totalNestedQuizCount !== 1 ? 'zes' : ''}`);
     _cqDeleteModalEl.innerHTML = `
       <div class="qm-modal">
- <div class="qm-title">Permanently delete "${escapeHtml(col.name)}"?</div>
+        <div class="qm-title">🔥 Permanently delete "${escapeHtml(col.name)}"?</div>
         <div class="qm-status err">This will permanently delete ${pieces.join(' and ')}. This action can't be undone.</div>
         <div class="qm-actions">
- <button class="qm-btn danger" onclick="_cqDeleteCollectionExecute('everything')">Yes, delete everything</button>
+          <button class="qm-btn danger" onclick="_cqDeleteCollectionExecute('everything')">🔥 Yes, delete everything</button>
           <button class="qm-btn secondary" onclick="_cqDeleteCollectionModalBack()">◀ Back</button>
         </div>
       </div>`;
@@ -628,7 +628,7 @@ async function cqReparentCollection(id, newParentId) {
 }
 
 // ---------------------------------------------------------------------------
-// Actions — move a quiz into a folder (drag-and-drop, or the Move menu)
+// Actions — move a quiz into a folder (drag-and-drop, or the 📁 Move menu)
 // ---------------------------------------------------------------------------
 
 async function cqMoveQuizToCollection(quizId, collectionId) {
@@ -750,7 +750,7 @@ async function cqUncatDrop(e) {
 }
 
 // ---------------------------------------------------------------------------
-// ⋮ / popover open state + rendering
+// ⋮ / 📁 popover open state + rendering
 // ---------------------------------------------------------------------------
 
 function cqToggleCollectionMenu(id) {
@@ -759,7 +759,7 @@ function cqToggleCollectionMenu(id) {
   _cqRerenderCollectionsUI();
 }
 
-// Close any open ⋮/popover on an outside click — mirrors the pattern
+// Close any open ⋮/📁 popover on an outside click — mirrors the pattern
 // js/icon-picker.js already uses for its own popover.
 document.addEventListener('click', (e) => {
   if (cqCollectionMenuOpenFor) {

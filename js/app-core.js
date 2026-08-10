@@ -15,8 +15,8 @@ const SUPER_ADMIN_EMAIL = "mahmoudmtalatm@gmail.com";
 const ADMIN_PERMISSIONS = ['curriculum', 'community', 'admins'];
 const ADMIN_PERMISSION_LABELS = {
   curriculum: 'Manage Curriculum & Publish Quizzes',
-  community:  'Manage Community Quizzes',
-  admins:     'Assign / Remove Admins'
+  community: 'Manage Community Quizzes',
+  admins: 'Assign / Remove Admins'
 };
 
 // In-memory copy of the Firestore admin roster, populated by loadAdminRoster().
@@ -149,8 +149,8 @@ async function assignAdmin(actingUser, targetEmail, permissions, curriculumScope
    them, or whoever assigned that person, and so on — regardless of
    permissions, so authority can only flow downward. */
 function getAdminAssignerChain(emailLower) {
-  const roster  = window._adminRoster || {};
-  const chain   = [];
+  const roster = window._adminRoster || {};
+  const chain = [];
   const visited = new Set([emailLower]);
   let current = emailLower;
   while (true) {
@@ -283,13 +283,13 @@ async function fbSignIn() {
 async function fbSignOut() {
   if (!confirm('Sign out of your account?')) return;
   await window._signOut(window._auth);
-  window._currentUser  = null;
-  window._cachedStats  = null;
+  window._currentUser = null;
+  window._cachedStats = null;
   updateAuthUI(null);
 }
   function updateSubjectButtonStates() {
   document.querySelectorAll('.subject-btn').forEach(btn => {
-    const name  = btn.dataset.subject;
+    const name = btn.dataset.subject;
     const count = selectedLectures[name]?.size || 0;
     btn.classList.toggle('has-selection', count > 0 && name !== selectedSubject);
   });
@@ -305,9 +305,9 @@ async function fbSignOut() {
    Question object structure:
    {
      question: "The question text",
-     image: "https://example.com/image.png",   ← OPTIONAL: URL or base64 data URI
+     image: "https://example.com/image.png", ← OPTIONAL: URL or base64 data URI
      options: { A: "...", B: "...", C: "...", D: "..." },
-     answer: "A"   ← must match one of the option keys
+     answer: "A" ← must match one of the option keys
    }
 
    Example with image:
@@ -325,28 +325,28 @@ const subjects = {};
 const curriculum = {};
 // year -> icon override, set via the icon picker in Manage Curriculum.
 // Years without an explicit icon fall back to an auto-numbered emoji
-// (1️⃣, 2️⃣, 3️⃣, … 🔟, 1️⃣1️⃣, …) based on their position — see _yearIcon().
+// (1️⃣, 2️⃣, 3️⃣, … , 1️⃣1️⃣, …) based on their position — see _yearIcon().
 let yearIconMap = {};
 
 /* ══════════════════════════════════════════════════════════
    STATE
 ══════════════════════════════════════════════════════════ */
 let currentQuestions = [];
-let currentIndex     = 0;
-let userAnswers      = {};
-let markedSet        = new Set();
-let timeLeft         = 0;
-let timerInterval    = null;
-let selectedSubject  = '';
-let selectedYear     = '';
-let selectedModule   = '';
-let questionTimes    = {};
-let questionStart    = 0;
-let currentLecture   = '';
-let changeLog        = [];
+let currentIndex = 0;
+let userAnswers = {};
+let markedSet = new Set();
+let timeLeft = 0;
+let timerInterval = null;
+let selectedSubject = '';
+let selectedYear = '';
+let selectedModule = '';
+let questionTimes = {};
+let questionStart = 0;
+let currentLecture = '';
+let changeLog = [];
 let selectedLectures = {}; // { subjectName: Set of lecture names }
-let correctToWrong   = 0;
-let wrongToCorrect   = 0;
+let correctToWrong = 0;
+let wrongToCorrect = 0;
 let currentQuizSource = 'curriculum'; // 'curriculum' | 'custom' | 'community' | 'retake'
 
 /* Curriculum context for the quiz currently in progress — snapshotted the
@@ -362,8 +362,8 @@ let currentQuizSource = 'curriculum'; // 'curriculum' | 'custom' | 'community' |
    that have no Year/Module (custom quizzes, community quizzes) — those are
    grouped under their own labelled bucket instead; see subjectDisplayName()
    and buildCurriculumStatsTree() below. */
-let currentQuizYear       = '';
-let currentQuizModule     = '';
+let currentQuizYear = '';
+let currentQuizModule = '';
 let currentQuizComponents = null; // [{ subject, lectures: [...] }] | null
 
 /* ══════════════════════════════════════════════════════════
@@ -415,7 +415,7 @@ function buildYearGrid() {
 /* Keycap-digit emoji for a position, e.g. 1 → "1️⃣", 10 → "", 11 → "1️⃣1️⃣".
    Used as the default year icon until an admin picks a custom one. */
 function _numberEmoji(n) {
-  if (n === 10) return '🔟';
+  if (n === 10) return '';
   return String(n).split('').map(d => d + '\uFE0F\u20E3').join('');
 }
 
@@ -430,10 +430,10 @@ function _yearIcon(year, position) {
    something whose data hasn't finished loading yet.
 ══════════════════════════════════════════════════════════ */
 const _fsReady = {
-  curriculum:    false,
-  published:     false,
-  stats:         true,   // true until a signed-in user triggers a load
-  customQuizzes: true,   // true until a signed-in user triggers a load
+  curriculum: false,
+  published: false,
+  stats: true, // true until a signed-in user triggers a load
+  customQuizzes: true, // true until a signed-in user triggers a load
 };
 
 function fsLoadingShow(msg) {
@@ -468,17 +468,17 @@ buildYearGrid();
 ══════════════════════════════════════════════════════════ */
 function selectYear(year) {
   fsAwaitIfNeeded('curriculum', 'Loading curriculum…');
-  selectedYear    = year;
-  selectedModule  = '';
+  selectedYear = year;
+  selectedModule = '';
   selectedSubject = '';
   selectedLectures = {};
 
   document.querySelectorAll('.year-btn').forEach(b => b.classList.toggle('active', b.dataset.year === year));
 
-  const moduleSection  = document.getElementById('moduleSection');
+  const moduleSection = document.getElementById('moduleSection');
   const subjectSection = document.getElementById('subjectSection');
-  document.getElementById('moduleGrid').innerHTML   = '';
-  document.getElementById('subjectGrid').innerHTML  = '';
+  document.getElementById('moduleGrid').innerHTML = '';
+  document.getElementById('subjectGrid').innerHTML = '';
   document.getElementById('lectureCheckList').innerHTML =
     '<div style="color:var(--text-muted);font-size:.9rem;padding:8px;">— Choose a subject first —</div>';
   document.getElementById('qCountBadge').classList.add('hidden');
@@ -505,7 +505,7 @@ function selectYear(year) {
 }
 
 function selectModule(mod) {
-  selectedModule  = mod;
+  selectedModule = mod;
   selectedSubject = '';
   selectedLectures = {};
 
@@ -556,9 +556,9 @@ function selectSubject(name) {
   if (!selectedLectures[name]) selectedLectures[name] = new Set();
 
   lectures.forEach(lname => {
-    const qCount   = subjects[name].lectures[lname].length;
+    const qCount = subjects[name].lectures[lname].length;
     const isChecked = selectedLectures[name].has(lname);
-    const label    = document.createElement('label');
+    const label = document.createElement('label');
     label.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 4px;border-radius:6px;';
     label.innerHTML = `
       <input type="checkbox" value="${lname}" ${isChecked ? 'checked' : ''}
@@ -577,7 +577,7 @@ function selectSubject(name) {
 
   updateLectureCount();
 }
-function onLectureChange() { updateLectureCount(); }  // kept for safety
+function onLectureChange() { updateLectureCount(); } // kept for safety
 
 function updateLectureCount() {
   let total = 0;
@@ -588,7 +588,7 @@ function updateLectureCount() {
     });
   });
   const badge = document.getElementById('qCountBadge');
-  const btn   = document.getElementById('startBtn');
+  const btn = document.getElementById('startBtn');
   if (total === 0) { badge.classList.add('hidden'); btn.disabled = true; }
   else {
     document.getElementById('qCountText').textContent = `${total} question${total !== 1 ? 's' : ''}`;
@@ -629,32 +629,32 @@ function startRetakeQuiz(questionsArray, ctx) {
     return alert('No wrong questions found to retake.');
   }
   currentQuestions = questionsArray;
-  selectedSubject  = (ctx && ctx.subject) || selectedSubject || 'Retake';
-  currentLecture   = 'Retake — Wrong Questions';
+  selectedSubject = (ctx && ctx.subject) || selectedSubject || 'Retake';
+  currentLecture = 'Retake — Wrong Questions';
   // A single-quiz retake (ctx supplied by retakeSingleQuiz) inherits that
   // quiz's own Year/Module/components, so it still groups correctly in
   // Statistics. A combined retake across several original quizzes has no
   // single Year/Module to inherit, so it's explicitly left blank and lands
   // in its own "Retake" bucket instead — see buildCurriculumStatsTree().
-  currentQuizYear       = (ctx && ctx.year)   || '';
-  currentQuizModule     = (ctx && ctx.module) || '';
+  currentQuizYear = (ctx && ctx.year) || '';
+  currentQuizModule = (ctx && ctx.module) || '';
   currentQuizComponents = (ctx && ctx.components) || null;
-  currentQuizSource     = 'retake';
-  currentIndex     = 0;
-  userAnswers      = {};
-  markedSet        = new Set();
-  questionTimes    = {};
-  correctToWrong   = 0;
-  wrongToCorrect   = 0;
-  changeLog        = [];
-  timeLeft         = Math.max(questionsArray.length * 60, 120);
+  currentQuizSource = 'retake';
+  currentIndex = 0;
+  userAnswers = {};
+  markedSet = new Set();
+  questionTimes = {};
+  correctToWrong = 0;
+  wrongToCorrect = 0;
+  changeLog = [];
+  timeLeft = Math.max(questionsArray.length * 60, 120);
   showScreen('quiz');
   renderQuestion();
   startTimer();
 }
 
 function startQuiz() {
-  const mins    = parseInt(document.getElementById('timeInput').value, 10);
+  const mins = parseInt(document.getElementById('timeInput').value, 10);
   const shuffle = document.getElementById('shuffleToggle').checked;
 
   let combined = [], totalLecCount = 0;
@@ -668,7 +668,7 @@ function startQuiz() {
     });
   });
 
-  if (!combined.length)   return alert('Please select at least one lecture.');
+  if (!combined.length) return alert('Please select at least one lecture.');
   if (!mins || mins <= 0) return alert('Please enter a valid duration in minutes.');
 
   // Always pass through the group-aware layout, shuffled or not — this
@@ -677,8 +677,8 @@ function startQuiz() {
   // "normal" mode, not just when Shuffle is on. See _cqGroupAwareOrder.
   combined = _cqGroupAwareOrder(combined, shuffle);
 
-  selectedSubject  = involvedSubjects.length === 1 ? involvedSubjects[0] : involvedSubjects.join(' + ');
-  currentLecture   = totalLecCount === 1
+  selectedSubject = involvedSubjects.length === 1 ? involvedSubjects[0] : involvedSubjects.join(' + ');
+  currentLecture = totalLecCount === 1
     ? [...selectedLectures[involvedSubjects[0]]][0]
     : `${totalLecCount} lectures (${involvedSubjects.map(subjectDisplayName).join(', ')})`;
   currentQuestions = combined;
@@ -692,10 +692,10 @@ function startQuiz() {
   // whole quiz. Per-subject lecture lists are kept too (currentQuizComponents)
   // so Statistics can still show each subject's own lecture titles even
   // inside a combined multi-subject quiz.
-  currentQuizYear   = selectedYear;
+  currentQuizYear = selectedYear;
   currentQuizModule = selectedModule;
   currentQuizComponents = involvedSubjects.map(subj => ({
-    subject:  subj,
+    subject: subj,
     lectures: [...selectedLectures[subj]]
   }));
 
@@ -768,15 +768,15 @@ function relabelOptionsSequentially(q) {
 ══════════════════════════════════════════════════════════ */
 function renderQuestion() {
   questionStart = Date.now();
-  const q     = currentQuestions[currentIndex];
+  const q = currentQuestions[currentIndex];
   const total = currentQuestions.length;
 
   document.getElementById('qNumber').textContent = `Q${currentIndex+1} / ${total}`;
-  document.getElementById('qText').textContent   = q.question;
+  document.getElementById('qText').textContent = q.question;
 
   // Optional image
   const imgWrap = document.getElementById('qImageWrap');
-  const imgEl   = document.getElementById('qImage');
+  const imgEl = document.getElementById('qImage');
   if (q.image) {
     imgEl.src = q.image;
     imgWrap.classList.remove('hidden');
@@ -806,18 +806,18 @@ function renderQuestion() {
 }
 
 function selectAnswer(key) {
-  const prev    = userAnswers[currentIndex] || '';
+  const prev = userAnswers[currentIndex] || '';
   const correct = currentQuestions[currentIndex].answer;
   if (prev && prev !== key) {
-    if (prev === correct)   correctToWrong++;
+    if (prev === correct) correctToWrong++;
     else if (key === correct) wrongToCorrect++;
-    const _q    = currentQuestions[currentIndex];
+    const _q = currentQuestions[currentIndex];
     const _type = prev === correct ? 'c2w' : key === correct ? 'w2c' : 'w2w';
     changeLog.push({
-      qIndex:   currentIndex,
-      fromKey:  prev,       fromText: _q.options[prev],
-      toKey:    key,        toText:   _q.options[key],
-      type:     _type
+      qIndex: currentIndex,
+      fromKey: prev, fromText: _q.options[prev],
+      toKey: key, toText: _q.options[key],
+      type: _type
     });
   }
   userAnswers[currentIndex] = key;
@@ -843,9 +843,9 @@ function renderNavigator() {
   });
 }
 function navState(i) {
-  if (i === currentIndex)  return 'state-current';
-  if (markedSet.has(i))    return 'state-marked';
-  if (userAnswers[i])      return 'state-answered';
+  if (i === currentIndex) return 'state-current';
+  if (markedSet.has(i)) return 'state-marked';
+  if (userAnswers[i]) return 'state-answered';
   return 'state-default';
 }
 
@@ -858,8 +858,8 @@ function goTo(i) {
   currentIndex = i;
   renderQuestion();
 }
-function prevQ()  { if (currentIndex > 0) goTo(currentIndex - 1); }
-function nextQ()  { if (currentIndex < currentQuestions.length - 1) goTo(currentIndex + 1); }
+function prevQ() { if (currentIndex > 0) goTo(currentIndex - 1); }
+function nextQ() { if (currentIndex < currentQuestions.length - 1) goTo(currentIndex + 1); }
 
 /* ══════════════════════════════════════════════════════════
    MARK
@@ -873,7 +873,7 @@ function toggleMark() {
 function updateMarkBtn() {
   const btn = document.getElementById('markBtn');
   btn.classList.toggle('is-marked', markedSet.has(currentIndex));
- btn.textContent = markedSet.has(currentIndex) ? 'Unmark' : 'Mark / Unmark';
+  btn.textContent = markedSet.has(currentIndex) ? ' Unmark' : ' Mark / Unmark';
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -897,25 +897,25 @@ function submitQuiz() {
     if (userAnswers[i] === q.answer) score++;
   });
 
-  const pct   = Math.round(score / total * 100);
- const emoji = pct === 100 ? '' : pct >= 70 ? '' : '';
+  const pct = Math.round(score / total * 100);
+  const emoji = pct === 100 ? '' : pct >= 70 ? '' : '';
   if (pct === 100) launchConfetti();
 
-  document.getElementById('resultsTitle').textContent = `${emoji}  Quiz Results`;
+  document.getElementById('resultsTitle').textContent = `${emoji} Quiz Results`;
   const totalTime = Object.values(questionTimes).reduce((a,b) => a+b, 0);
-  const answered  = Object.keys(questionTimes).length || 1;
-  const avgTime   = Math.round(totalTime / answered);
-  const avgMins   = Math.floor(avgTime / 60);
-  const avgSecs   = String(avgTime % 60).padStart(2,'0');
-  const avgLabel  = avgMins > 0 ? `${avgMins}m ${avgSecs}s` : `${avgSecs}s`;
-  document.getElementById('resultsTitle').textContent = `${emoji}  Quiz Results  ·  ⏱ avg ${avgLabel}/question`;
+  const answered = Object.keys(questionTimes).length || 1;
+  const avgTime = Math.round(totalTime / answered);
+  const avgMins = Math.floor(avgTime / 60);
+  const avgSecs = String(avgTime % 60).padStart(2,'0');
+  const avgLabel = avgMins > 0 ? `${avgMins}m ${avgSecs}s` : `${avgSecs}s`;
+  document.getElementById('resultsTitle').textContent = `${emoji} Quiz Results · ⏱ avg ${avgLabel}/question`;
   const badge = document.getElementById('scoreBadge');
-  badge.textContent  = `${score} / ${total}  (${pct}%)`;
+  badge.textContent = `${score} / ${total} (${pct}%)`;
   badge.style.background = pct >= 70 ? 'var(--green-pale-border)' : 'var(--red-pale)';
-  const _totalSecs  = Object.values(questionTimes).reduce((a,b)=>a+b,0);
-  const _timedQs    = Object.keys(questionTimes).length;
+  const _totalSecs = Object.values(questionTimes).reduce((a,b)=>a+b,0);
+  const _timedQs = Object.keys(questionTimes).length;
   const _unanswered = currentQuestions.length - Object.keys(userAnswers).length;
-  const _wrong      = currentQuestions.length - score - _unanswered;
+  const _wrong = currentQuestions.length - score - _unanswered;
   saveQuizStats(score, currentQuestions.length, _wrong, _unanswered, _totalSecs, _timedQs, correctToWrong, wrongToCorrect, selectedSubject, currentLecture, currentQuizYear, currentQuizModule, currentQuizComponents, currentQuizSource);
 
   buildResults();
@@ -946,7 +946,7 @@ function buildResults() {
   // Cancel any in-progress explanations from a previous result view
   _cancelAndClearResultsAiState();
   const explainAllBtn = document.getElementById('explainAllBtn');
- if (explainAllBtn) { explainAllBtn.disabled = false; explainAllBtn.innerHTML = '&nbsp; Explain All Questions'; explainAllBtn.onclick = explainAllQuestions; }
+  if (explainAllBtn) { explainAllBtn.disabled = false; explainAllBtn.innerHTML = '&nbsp; Explain All Questions'; explainAllBtn.onclick = explainAllQuestions; }
 
   const body = document.getElementById('resultsBody');
   body.innerHTML = '';
@@ -955,7 +955,7 @@ function buildResults() {
     summary.style.cssText = 'background:#fff;border:1px solid var(--border-soft);border-radius:10px;padding:14px 20px;display:flex;gap:24px;flex-wrap:wrap;margin-bottom:4px;';
     summary.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
- <span style="font-size:1.3rem"></span>
+        <span style="font-size:1.3rem"></span>
         <div>
           <div style="font-size:.78rem;font-weight:700;color:#5A7080;text-transform:uppercase;letter-spacing:.8px;">Answer Changes</div>
           <div style="display:flex;gap:16px;margin-top:4px;flex-wrap:wrap;">
@@ -969,7 +969,7 @@ function buildResults() {
 if (changeLog.length > 0) {
     const flowSection = document.createElement('div');
     flowSection.className = 'change-flow-section';
- flowSection.innerHTML = `<div class="change-flow-title">Answer Changes Flow — ${changeLog.length} change${changeLog.length!==1?'s':''}</div>`;
+    flowSection.innerHTML = `<div class="change-flow-title"> Answer Changes Flow — ${changeLog.length} change${changeLog.length!==1?'s':''}</div>`;
     const flowList = document.createElement('div');
     flowList.className = 'change-flow-list';
     const verdicts = {
@@ -978,12 +978,12 @@ if (changeLog.length > 0) {
       w2w: '↔ You changed from one wrong answer to another'
     };
     changeLog.forEach((ch, idx) => {
-      const q       = currentQuestions[ch.qIndex];
-      const item    = document.createElement('div');
+      const q = currentQuestions[ch.qIndex];
+      const item = document.createElement('div');
       item.className = `change-flow-item ${ch.type}`;
-      const qShort  = q.question.length > 65 ? q.question.substring(0,65)+'…' : q.question;
-      const fShort  = ch.fromText.length > 55 ? ch.fromText.substring(0,55)+'…' : ch.fromText;
-      const tShort  = ch.toText.length   > 55 ? ch.toText.substring(0,55)+'…'   : ch.toText;
+      const qShort = q.question.length > 65 ? q.question.substring(0,65)+'…' : q.question;
+      const fShort = ch.fromText.length > 55 ? ch.fromText.substring(0,55)+'…' : ch.fromText;
+      const tShort = ch.toText.length > 55 ? ch.toText.substring(0,55)+'…' : ch.toText;
       item.innerHTML = `
         <span class="cf-num">Change ${idx+1}</span>
         <div class="cf-body">
@@ -1001,19 +1001,19 @@ if (changeLog.length > 0) {
     body.appendChild(flowSection);
   }
   currentQuestions.forEach((q, i) => {
-    const userAns  = userAnswers[i] || '';
-    const correct  = q.answer;
-    const isOk     = userAns === correct;
+    const userAns = userAnswers[i] || '';
+    const correct = q.answer;
+    const isOk = userAns === correct;
     const isUnansw = userAns === '';
-    const isMark   = markedSet.has(i);
+    const isMark = markedSet.has(i);
 
     let cls, statusText, statusClass, stripColor;
     if (isOk) {
-      cls='correct';    statusText='✔  Correct';       statusClass='correct';    stripColor='var(--correct-fg)';
+      cls='correct'; statusText='✔ Correct'; statusClass='correct'; stripColor='var(--correct-fg)';
     } else if (isUnansw) {
-      cls='unanswered'; statusText='—  Not answered';  statusClass='unanswered'; stripColor='var(--unanswered-fg)';
+      cls='unanswered'; statusText='— Not answered'; statusClass='unanswered'; stripColor='var(--unanswered-fg)';
     } else {
-      cls='wrong';      statusText='✘  Incorrect';     statusClass='wrong';      stripColor='var(--wrong-fg)';
+      cls='wrong'; statusText='✘ Incorrect'; statusClass='wrong'; stripColor='var(--wrong-fg)';
     }
 
     const card = document.createElement('div');
@@ -1029,7 +1029,7 @@ if (changeLog.length > 0) {
         <div class="r-strip" style="background:${stripColor}"></div>
         <div class="r-content">
           <div class="r-card-header">
- <div class="r-qnum">Q${i+1}${isMark?' &nbsp;Marked':''}</div>
+            <div class="r-qnum">Q${i+1}${isMark?' &nbsp; Marked':''}</div>
             <div class="r-status ${statusClass}">${statusText}</div>
           </div>
           <div class="r-question">${q.question}</div>
@@ -1042,11 +1042,11 @@ if (changeLog.length > 0) {
     const optsDiv = card.querySelector('.r-options');
     getOptionEntries(q).forEach(([key, val]) => {
       const isCorrectOpt = key === correct;
-      const isUserOpt    = key === userAns;
+      const isUserOpt = key === userAns;
 
       let bg='', fg='', pfx='';
-      if (isCorrectOpt)      { bg='#C8E6C9'; fg='#1B5E20'; pfx='✔'; }
-      else if (isUserOpt)    { bg='var(--red-pale)'; fg='var(--red-deep)'; pfx='✘'; }
+      if (isCorrectOpt) { bg='#C8E6C9'; fg='#1B5E20'; pfx='✔'; }
+      else if (isUserOpt) { bg='var(--red-pale)'; fg='var(--red-deep)'; pfx='✘'; }
 
       const row = document.createElement('div');
       row.className = 'r-option';
@@ -1063,7 +1063,7 @@ if (changeLog.length > 0) {
     const explainBtn = document.createElement('button');
     explainBtn.className = 'ai-explain-btn';
     explainBtn.id = `explainBtn_${i}`;
- explainBtn.innerHTML = 'Explain';
+    explainBtn.innerHTML = ' Explain';
     explainBtn.onclick = () => explainQuestion(i);
     card.querySelector('.r-content').appendChild(explainBtn);
 
@@ -1076,7 +1076,7 @@ if (changeLog.length > 0) {
     const chatBtn = document.createElement('button');
     chatBtn.className = 'ai-chat-btn';
     chatBtn.id = `chatBtn_${i}`;
- chatBtn.innerHTML = 'Chat';
+    chatBtn.innerHTML = ' Chat';
     chatBtn.onclick = () => toggleChatPanel(i);
     card.querySelector('.r-content').appendChild(chatBtn);
 
@@ -1174,7 +1174,7 @@ function defaultStats() {
         `stats/{uid}` document. The per-user cache/version check (see
         _fetchStatsServerVersion in js/firebase-storage.js) skips even
         this small read entirely when nothing's changed since last time.
-     2. PER-QUIZ  — `historyManifest` is just { historyId: timestamp },
+     2. PER-QUIZ — `historyManifest` is just { historyId: timestamp },
         so comparing it against the local IndexedDB-backed cache tells
         us EXACTLY which quizzes are new since last time. Taking one
         more quiz only ever fetches that one new document — every
@@ -1239,27 +1239,27 @@ function subjectDisplayName(raw) {
 }
 
 async function saveQuizStats(score, total, wrong, unanswered, timeSecs, timedQs, c2w, w2c, subject, lecture, year, module, components, source) {
-  const st  = loadStats();
+  const st = loadStats();
   const pct = Math.round(score / total * 100);
 
   st.totalQuizzes++;
-  st.totalQuestions  += total;
-  st.totalCorrect    += score;
-  st.totalWrong      += wrong;
+  st.totalQuestions += total;
+  st.totalCorrect += score;
+  st.totalWrong += wrong;
   st.totalUnanswered += unanswered;
-  st.totalTimeSecs   += timeSecs;
-  st.totalTimedQs    += timedQs;
-  st.correctToWrong  += c2w;
-  st.wrongToCorrect  += w2c;
-  st.totalScorePct   += pct;
-  if (st.bestScore  === null || pct > st.bestScore)  st.bestScore  = pct;
+  st.totalTimeSecs += timeSecs;
+  st.totalTimedQs += timedQs;
+  st.correctToWrong += c2w;
+  st.wrongToCorrect += w2c;
+  st.totalScorePct += pct;
+  if (st.bestScore === null || pct > st.bestScore) st.bestScore = pct;
   if (st.worstScore === null || pct < st.worstScore) st.worstScore = pct;
 
   if (!st.subjectStats[subject])
     st.subjectStats[subject] = { quizzes: 0, correct: 0, total: 0 };
   st.subjectStats[subject].quizzes++;
   st.subjectStats[subject].correct += score;
-  st.subjectStats[subject].total   += total;
+  st.subjectStats[subject].total += total;
 
   const avgTime = timedQs > 0 ? Math.round(timeSecs / timedQs) : 0;
 
@@ -1372,7 +1372,7 @@ function _makeHistoryItem(h) {
   const wrongCount = (h.wrongQuestions || []).length;
   const retakeBtn = document.createElement('button');
   retakeBtn.style.cssText = 'display:block;width:100%;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:white;font-weight:700;cursor:pointer;font-size:.8rem;opacity:' + (wrongCount > 0 ? '1' : '.4') + ';';
- retakeBtn.textContent = `Retake ${wrongCount} wrong Q${wrongCount !== 1 ? 's' : ''}`;
+  retakeBtn.textContent = ` Retake ${wrongCount} wrong Q${wrongCount !== 1 ? 's' : ''}`;
   retakeBtn.disabled = wrongCount === 0;
   retakeBtn.onclick = (e) => { e.stopPropagation(); retakeSingleQuiz(h); };
   item.appendChild(retakeBtn);
@@ -1397,10 +1397,10 @@ function _makeHistoryItem(h) {
 // backward compatibility — any history entry recorded before this feature
 // existed (it simply has no year/module field at all).
 function _otherBucketLabel(h) {
- if (h.source === 'custom') return 'Custom Quizzes';
- if (h.source === 'community') return 'Community Quizzes';
- if (h.source === 'retake') return 'Retake Sessions';
- return 'Unspecified (older quizzes)';
+  if (h.source === 'custom') return ' Custom Quizzes';
+  if (h.source === 'community') return ' Community Quizzes';
+  if (h.source === 'retake') return ' Retake Sessions';
+  return ' Unspecified (older quizzes)';
 }
 
 function _pctOf(node) { return node.total > 0 ? Math.round(node.correct / node.total * 100) : 0; }
@@ -1412,9 +1412,9 @@ function _perfColor(pct) {
 }
 
 function buildCurriculumStatsTree(history) {
-  const tree  = {}; // year -> { quizzes, correct, total, modules: { module -> { quizzes, correct, total, subjects: { subj -> {quizzes,correct,total,entries[]} } } } }
+  const tree = {}; // year -> { quizzes, correct, total, modules: { module -> { quizzes, correct, total, subjects: { subj -> {quizzes,correct,total,entries[]} } } } }
   const other = {}; // bucketLabel -> { quizzes, correct, total, entries: [] }
-  const bump  = (node, h) => { node.quizzes++; node.correct += h.score; node.total += h.total; };
+  const bump = (node, h) => { node.quizzes++; node.correct += h.score; node.total += h.total; };
 
   history.forEach(h => {
     if (h.year && h.module) {
@@ -1443,7 +1443,7 @@ function buildCurriculumStatsTree(history) {
 let _statsFlow = { year: null, module: null, openSubject: null, openOther: null };
 
 function _sfSelectYear(year) {
-  _statsFlow.year   = (_statsFlow.year === year) ? null : year;
+  _statsFlow.year = (_statsFlow.year === year) ? null : year;
   _statsFlow.module = null; _statsFlow.openSubject = null;
   renderStatsModal();
 }
@@ -1525,7 +1525,7 @@ function _renderCurriculumFlow(container, tree) {
   crumb.className = 'flow-breadcrumb';
   const allLink = document.createElement('span');
   allLink.className = 'flow-crumb' + (!_statsFlow.year ? ' active' : '');
- allLink.textContent = 'All Years';
+  allLink.textContent = ' All Years';
   allLink.onclick = () => { _statsFlow.year = null; _statsFlow.module = null; _statsFlow.openSubject = null; renderStatsModal(); };
   crumb.appendChild(allLink);
   if (_statsFlow.year) {
@@ -1620,7 +1620,7 @@ function _renderOtherSources(container, other) {
 
   const sec = document.createElement('div');
   sec.className = 'stats-section';
- sec.innerHTML = `<div class="stats-section-title">Other Quiz Sources</div>`;
+  sec.innerHTML = `<div class="stats-section-title"> Other Quiz Sources</div>`;
   const list = document.createElement('div');
   list.className = 'quiz-toggle-list';
   labels
@@ -1635,28 +1635,28 @@ function _renderOtherSources(container, other) {
 }
 
 function renderStatsModal() {
-  const st   = loadStats();
+  const st = loadStats();
   const body = document.getElementById('statsBody');
   body.innerHTML = '';
 
   if (st.totalQuizzes === 0) {
- body.innerHTML = `<div class="no-stats-box"><div class="ns-icon"></div>No data yet — complete a quiz to see your statistics.</div>`;
+    body.innerHTML = `<div class="no-stats-box"><div class="ns-icon"></div>No data yet — complete a quiz to see your statistics.</div>`;
     return;
   }
 
-  const overallAcc  = Math.round(st.totalCorrect / st.totalQuestions * 100);
-  const avgScore    = Math.round(st.totalScorePct / st.totalQuizzes);
-  const avgTime     = st.totalTimedQs > 0 ? Math.round(st.totalTimeSecs / st.totalTimedQs) : 0;
-  const studyMins   = Math.floor(st.totalTimeSecs / 60);
+  const overallAcc = Math.round(st.totalCorrect / st.totalQuestions * 100);
+  const avgScore = Math.round(st.totalScorePct / st.totalQuizzes);
+  const avgTime = st.totalTimedQs > 0 ? Math.round(st.totalTimeSecs / st.totalTimedQs) : 0;
+  const studyMins = Math.floor(st.totalTimeSecs / 60);
   const totalChanges = st.correctToWrong + st.wrongToCorrect;
   const c2wPct = totalChanges > 0 ? Math.round(st.correctToWrong / totalChanges * 100) : 0;
-  const w2cPct = totalChanges > 0 ? Math.round(st.wrongToCorrect  / totalChanges * 100) : 0;
-  const net    = st.wrongToCorrect - st.correctToWrong;
+  const w2cPct = totalChanges > 0 ? Math.round(st.wrongToCorrect / totalChanges * 100) : 0;
+  const net = st.wrongToCorrect - st.correctToWrong;
 
   /* — Overall Performance — */
   const sec1 = document.createElement('div');
   sec1.className = 'stats-section';
- sec1.innerHTML = `<div class="stats-section-title">Overall Performance</div>`;
+  sec1.innerHTML = `<div class="stats-section-title"> Overall Performance</div>`;
   const g1 = document.createElement('div');
   g1.className = 'stats-grid';
   g1.innerHTML = `
@@ -1676,7 +1676,7 @@ function renderStatsModal() {
   /* — Answer Changes — */
   const sec2 = document.createElement('div');
   sec2.className = 'stats-section';
- sec2.innerHTML = `<div class="stats-section-title">Answer Changes (All Time) — ${totalChanges} total</div>`;
+  sec2.innerHTML = `<div class="stats-section-title"> Answer Changes (All Time) — ${totalChanges} total</div>`;
   if (totalChanges === 0) {
     sec2.innerHTML += `<div style="color:var(--text-muted);font-size:.88rem;">No answer changes recorded yet.</div>`;
   } else {
@@ -1698,13 +1698,13 @@ function renderStatsModal() {
     nl.className = 'net-label';
     if (net > 0) {
       nl.style.cssText = 'background:var(--correct-bg);color:var(--correct-fg);border:1px solid var(--green-pale-border)';
-      nl.textContent   = `✔ Net gain: changing answers gave you +${net} extra correct`;
+      nl.textContent = `✔ Net gain: changing answers gave you +${net} extra correct`;
     } else if (net < 0) {
       nl.style.cssText = 'background:var(--wrong-bg);color:var(--wrong-fg);border:1px solid var(--red-soft-border)';
-      nl.textContent   = `✘ Net loss: changing answers cost you ${Math.abs(net)} correct`;
+      nl.textContent = `✘ Net loss: changing answers cost you ${Math.abs(net)} correct`;
     } else {
       nl.style.cssText = 'background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border-soft)';
-      nl.textContent   = `Neutral: answer changes had no net effect`;
+      nl.textContent = `Neutral: answer changes had no net effect`;
     }
     sec2.appendChild(nl);
   }
@@ -1715,7 +1715,7 @@ function renderStatsModal() {
   if (Object.keys(tree).length > 0) {
     const sec3 = document.createElement('div');
     sec3.className = 'stats-section';
- sec3.innerHTML = `<div class="stats-section-title">Curriculum Breakdown — Year / Module / Subject</div>`;
+    sec3.innerHTML = `<div class="stats-section-title"> Curriculum Breakdown — Year / Module / Subject</div>`;
     _renderCurriculumFlow(sec3, tree);
     body.appendChild(sec3);
   }
@@ -1725,7 +1725,7 @@ function renderStatsModal() {
   if (st.history.length > 0) {
     const sec4 = document.createElement('div');
     sec4.className = 'stats-section';
- sec4.innerHTML = `<div class="stats-section-title">Quiz History</div>`;
+    sec4.innerHTML = `<div class="stats-section-title"> Quiz History</div>`;
     const hl = document.createElement('div');
     hl.className = 'history-list';
     st.history.forEach(h => hl.appendChild(_makeHistoryItem(h)));
@@ -1736,7 +1736,7 @@ function renderStatsModal() {
   /* — Reset — */
   const rb = document.createElement('button');
   rb.className = 'stats-reset-btn';
- rb.textContent = 'Reset All Statistics';
+  rb.textContent = ' Reset All Statistics';
   rb.onclick = resetStats;
   body.appendChild(rb);
 }
@@ -1761,12 +1761,12 @@ function closeRetake() {
 }
 
 function renderRetakeSelector() {
-  const st   = loadStats();
+  const st = loadStats();
   const body = document.getElementById('retakeBody');
   body.innerHTML = '';
 
   if (!st.history.length) {
- body.innerHTML = '<div class="no-stats-box"><div class="ns-icon"></div>No quiz history yet. Complete a quiz first.</div>';
+    body.innerHTML = '<div class="no-stats-box"><div class="ns-icon"></div>No quiz history yet. Complete a quiz first.</div>';
     return;
   }
 
@@ -1824,7 +1824,7 @@ function renderRetakeSelector() {
   const retakeBtn = document.createElement('button');
   retakeBtn.className = 'btn btn-primary';
   retakeBtn.style.marginTop = '12px';
- retakeBtn.textContent = 'Retake Selected Wrong Questions';
+  retakeBtn.textContent = ' Retake Selected Wrong Questions';
   retakeBtn.onclick = async () => {
     const checked = [...document.querySelectorAll('#retakeBody input[type=checkbox]:checked')];
     if (!checked.length) return alert('Please select at least one quiz.');

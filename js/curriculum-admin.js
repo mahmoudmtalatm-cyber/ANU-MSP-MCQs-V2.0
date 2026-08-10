@@ -41,7 +41,7 @@ function renderAdminCurriculumPanel() {
 
 function adminCurrBreadcrumbHtml() {
   let html = `<div class="curr-breadcrumb">`;
- html += `<span class="curr-crumb ${adminCurrNavLevel === 'years' ? 'active' : ''}" onclick="adminCurrGoYears()">Years</span>`;
+  html += `<span class="curr-crumb ${adminCurrNavLevel === 'years' ? 'active' : ''}" onclick="adminCurrGoYears()">📅 Years</span>`;
   if (adminTargetYear) {
     html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${adminCurrNavLevel === 'modules' ? 'active' : ''}" onclick="adminCurrGoModules()">${escapeHtml(adminTargetYear)}</span>`;
   }
@@ -114,7 +114,7 @@ function renderAdminCurrYearsLevel(body) {
           <button class="curr-add-btn" onclick="adminAddYear()">Add Year</button>
         </div>
         <div class="curr-status" id="currYearStatus"></div>
- ` : `<div class="scope-hint">Your curriculum access: ${escapeHtml(curriculumScopeSummary(scope))}. Only whole-curriculum admins can restructure Years/Modules/Subjects — you can still fully manage quizzes anywhere within your access.</div>`}
+        ` : `<div class="scope-hint">📍 Your curriculum access: ${escapeHtml(curriculumScopeSummary(scope))}. Only whole-curriculum admins can restructure Years/Modules/Subjects — you can still fully manage quizzes anywhere within your access.</div>`}
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Existing Years — tap one to manage its modules</div>
         <div id="currYearList">${years.length ? years.map((y, i) => `
           <div class="curr-item-row curr-item-open" onclick="adminCurrOpenYear('${escapeHtml(y)}')">
@@ -123,9 +123,9 @@ function renderAdminCurrYearsLevel(body) {
               <div class="curr-item-sub">${Object.keys(curriculum[y] || {}).length} module(s)</div>
             </div>
             ${isFull ? `
- <button class="curr-item-btn edit" onclick="event.stopPropagation();adminEditYearIcon('${escapeHtml(y)}')">Icon</button>
- <button class="curr-item-btn edit" onclick="event.stopPropagation();adminRenameYear('${escapeHtml(y)}')">Rename</button>
- <button class="curr-item-btn del" onclick="event.stopPropagation();adminDeleteYear('${escapeHtml(y)}')">Delete</button>
+            <button class="curr-item-btn edit" onclick="event.stopPropagation();adminEditYearIcon('${escapeHtml(y)}')">🎨 Icon</button>
+            <button class="curr-item-btn edit" onclick="event.stopPropagation();adminRenameYear('${escapeHtml(y)}')">✏️ Rename</button>
+            <button class="curr-item-btn del"  onclick="event.stopPropagation();adminDeleteYear('${escapeHtml(y)}')">🗑 Delete</button>
             ` : ''}
             <span class="curr-item-arrow">▶</span>
           </div>`).join('') : '<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</div>
@@ -158,7 +158,7 @@ function renderAdminCurrModulesLevel(body) {
           <button class="curr-add-btn" onclick="adminAddModule()">Add Module</button>
         </div>
         <div class="curr-status" id="currModuleStatus"></div>
- ` : `<div class="scope-hint">Your curriculum access: ${escapeHtml(curriculumScopeSummary(scope))}. Only whole-curriculum admins can restructure Years/Modules/Subjects.</div>`}
+        ` : `<div class="scope-hint">📍 Your curriculum access: ${escapeHtml(curriculumScopeSummary(scope))}. Only whole-curriculum admins can restructure Years/Modules/Subjects.</div>`}
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Modules in ${escapeHtml(year)} — tap one to manage its subjects</div>
         <div id="currModuleList">${mods.length ? mods.map(m => `
           <div class="curr-item-row curr-item-open" onclick="adminCurrOpenModule('${escapeHtml(m)}')">
@@ -167,9 +167,9 @@ function renderAdminCurrModulesLevel(body) {
               <div class="curr-item-sub">${(curriculum[year][m] || []).filter(k => subjects[k]).length} subject(s)</div>
             </div>
             ${isFull ? `
- <button class="curr-item-btn edit" onclick="event.stopPropagation();adminEditModuleIcon('${escapeHtml(year)}','${escapeHtml(m)}')">Icon</button>
- <button class="curr-item-btn edit" onclick="event.stopPropagation();adminRenameModule('${escapeHtml(year)}','${escapeHtml(m)}')">Rename</button>
- <button class="curr-item-btn del" onclick="event.stopPropagation();adminDeleteModule('${escapeHtml(year)}','${escapeHtml(m)}')">Delete</button>
+            <button class="curr-item-btn edit" onclick="event.stopPropagation();adminEditModuleIcon('${escapeHtml(year)}','${escapeHtml(m)}')">🎨 Icon</button>
+            <button class="curr-item-btn edit" onclick="event.stopPropagation();adminRenameModule('${escapeHtml(year)}','${escapeHtml(m)}')">✏️ Rename</button>
+            <button class="curr-item-btn del"  onclick="event.stopPropagation();adminDeleteModule('${escapeHtml(year)}','${escapeHtml(m)}')">🗑 Delete</button>
             ` : ''}
             <span class="curr-item-arrow">▶</span>
           </div>`).join('') : `<span style="color:var(--text-muted);font-size:.8rem;">${isFull ? 'No modules yet in this year' : 'No modules within your curriculum access in this year'}</span>`}</div>
@@ -211,7 +211,7 @@ function renderAdminCurrSubjectsLevel(body) {
           <button class="curr-add-btn secondary" onclick="adminAddSubject()">Add Subject</button>
         </div>
         <div class="curr-status" id="currSubjStatus"></div>
- ` : `<div class="scope-hint">Your curriculum access: ${escapeHtml(curriculumScopeSummary(scope))}. Only whole-curriculum admins can restructure Years/Modules/Subjects — tap a subject below to manage its quizzes.</div>`}
+        ` : `<div class="scope-hint">📍 Your curriculum access: ${escapeHtml(curriculumScopeSummary(scope))}. Only whole-curriculum admins can restructure Years/Modules/Subjects — tap a subject below to manage its quizzes.</div>`}
         <div class="curr-section-title" style="margin-top:10px;margin-bottom:6px;">Subjects in ${escapeHtml(mod)} — tap one to manage its quizzes</div>
         <div id="currSubjList" class="curr-list">${keys.length ? keys.map(k => {
           const s = subjects[k];
@@ -221,9 +221,9 @@ function renderAdminCurrSubjectsLevel(body) {
               <div class="curr-item-sub">key: ${escapeHtml(k)}</div>
             </div>
             ${isFull ? `
- <button class="curr-item-btn edit" onclick="event.stopPropagation();adminEditSubjectIcon('${escapeHtml(k)}')">Icon</button>
- <button class="curr-item-btn edit" onclick="event.stopPropagation();adminRenameSubject('${escapeHtml(k)}')">Rename</button>
- <button class="curr-item-btn del" onclick="event.stopPropagation();adminDeleteSubject('${escapeHtml(k)}')">Delete</button>
+            <button class="curr-item-btn edit" onclick="event.stopPropagation();adminEditSubjectIcon('${escapeHtml(k)}')">🎨 Icon</button>
+            <button class="curr-item-btn edit" onclick="event.stopPropagation();adminRenameSubject('${escapeHtml(k)}')">✏️ Rename</button>
+            <button class="curr-item-btn del"  onclick="event.stopPropagation();adminDeleteSubject('${escapeHtml(k)}')">🗑 Delete</button>
             ` : ''}
             <span class="curr-item-arrow">▶</span>
           </div>`;
@@ -251,7 +251,7 @@ function renderAdminCurrQuizzesLevel(body) {
       <button class="curr-back-btn" onclick="adminCurrGoSubjects()">← Back to Subjects</button>
 
       <div class="curr-section">
- <div class="curr-section-title">Manage Quizzes — ${escapeHtml(subjects[adminTargetSubject]?.label || adminTargetSubject)}</div>
+        <div class="curr-section-title">🗂️ Manage Quizzes — ${escapeHtml(subjects[adminTargetSubject]?.label || adminTargetSubject)}</div>
         <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;margin-bottom:10px;">
           View, edit, reorder, copy/move, or delete the quizzes published to this subject.
         </div>
@@ -269,8 +269,8 @@ async function adminAddYear() {
   const status = document.getElementById('currYearStatus');
   const name   = (input?.value || '').trim();
   const icon   = (iconIn?.value || '').trim() || _numberEmoji(Object.keys(curriculum).length + 1);
- if (!name) { status.textContent = 'Please enter a year name.'; status.className = 'curr-status err'; return; }
- if (curriculum[name]) { status.textContent = `"${name}" already exists.`; status.className = 'curr-status err'; return; }
+  if (!name)          { status.textContent = '⚠️ Please enter a year name.'; status.className = 'curr-status err'; return; }
+  if (curriculum[name]) { status.textContent = `⚠️ "${name}" already exists.`; status.className = 'curr-status err'; return; }
   curriculum[name] = {};
   yearIconMap[name] = icon;
   addCustomIcon(icon);
@@ -303,11 +303,11 @@ async function adminAddModule() {
   const status  = document.getElementById('currModuleStatus');
   const yr  = adminTargetYear;
   const mod = (input?.value || '').trim();
- const icon = (iconIn?.value || '').trim() || '';
- if (!yr) { status.textContent = 'Select a year first.'; status.className = 'curr-status err'; return; }
- if (!mod) { status.textContent = 'Enter a module name.'; status.className = 'curr-status err'; return; }
- if (!curriculum[yr]) { status.textContent = 'Year not found.'; status.className = 'curr-status err'; return; }
- if (curriculum[yr][mod]) { status.textContent = `Module "${mod}" already exists in ${yr}.`; status.className = 'curr-status err'; return; }
+  const icon = (iconIn?.value || '').trim() || '📚';
+  if (!yr)  { status.textContent = '⚠️ Select a year first.'; status.className = 'curr-status err'; return; }
+  if (!mod) { status.textContent = '⚠️ Enter a module name.'; status.className = 'curr-status err'; return; }
+  if (!curriculum[yr]) { status.textContent = '⚠️ Year not found.'; status.className = 'curr-status err'; return; }
+  if (curriculum[yr][mod]) { status.textContent = `⚠️ Module "${mod}" already exists in ${yr}.`; status.className = 'curr-status err'; return; }
   curriculum[yr][mod] = [];
   if (!moduleIconMap[yr]) moduleIconMap[yr] = {};
   moduleIconMap[yr][mod] = icon;
@@ -323,7 +323,7 @@ async function adminAddModule() {
 /* Look up the icon for a module: admin-set icon > default */
 function _moduleIcon(year, mod) {
   return (moduleIconMap[year] && moduleIconMap[year][mod])
- || '';
+    || '📚';
 }
 
 async function adminEditModuleIcon(year, mod) {
@@ -347,13 +347,13 @@ async function adminAddSubject() {
   const yr    = adminTargetYear;
   const mod   = adminTargetModule;
   const label = (labelIn?.value || '').trim();
- const icon = (iconIn?.value || '').trim() || '';
+  const icon  = (iconIn?.value  || '').trim() || '📘';
   const key   = (keyIn?.value   || '').trim();
- if (!yr) { status.textContent = 'Select a year.'; status.className = 'curr-status err'; return; }
- if (!mod) { status.textContent = 'Select a module.'; status.className = 'curr-status err'; return; }
- if (!label) { status.textContent = 'Enter a subject label.'; status.className = 'curr-status err'; return; }
- if (!key) { status.textContent = 'Enter an internal key.'; status.className = 'curr-status err'; return; }
- if (subjects[key]) { status.textContent = `Key "${key}" already exists. Choose another.`; status.className = 'curr-status err'; return; }
+  if (!yr)    { status.textContent = '⚠️ Select a year.';          status.className = 'curr-status err'; return; }
+  if (!mod)   { status.textContent = '⚠️ Select a module.';        status.className = 'curr-status err'; return; }
+  if (!label) { status.textContent = '⚠️ Enter a subject label.';  status.className = 'curr-status err'; return; }
+  if (!key)   { status.textContent = '⚠️ Enter an internal key.';  status.className = 'curr-status err'; return; }
+  if (subjects[key]) { status.textContent = `⚠️ Key "${key}" already exists. Choose another.`; status.className = 'curr-status err'; return; }
   status.textContent = '⏳ Saving…'; status.className = 'curr-status';
   subjects[key] = { icon, label, lectures: {} };
   if (!curriculum[yr]) curriculum[yr] = {};
@@ -364,7 +364,7 @@ async function adminAddSubject() {
   status.textContent = `✅ Subject "${label}" added to ${yr} → ${mod}!`;
   status.className = 'curr-status ok';
   labelIn.value = ''; keyIn.value = '';
- selectIconForField('currSubjIcon', '');
+  selectIconForField('currSubjIcon', '📘');
   setTimeout(() => renderAdminCurriculumPanel(), 400);
 }
 
@@ -520,7 +520,7 @@ function adminOpenMoveQuiz(lectureId, encodedName) {
   el.id = 'moveQuizModal';
   el.innerHTML = `
     <div class="qm-modal">
- <div class="qm-title">Copy / Move Quiz</div>
+      <div class="qm-title">📋 Copy / Move Quiz</div>
       <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:14px;">
         Quiz: <strong>${escapeHtml(_moveQuizLectureName)}</strong><br>
         From: <strong>${escapeHtml(adminTargetYear)} → ${escapeHtml(adminTargetModule)} → ${escapeHtml(subjects[adminTargetSubject]?.label || adminTargetSubject)}</strong>
@@ -543,8 +543,8 @@ function adminOpenMoveQuiz(lectureId, encodedName) {
       </div>
       <div id="mqStatus"></div>
       <div class="qm-actions">
- <button class="qm-btn primary" onclick="adminExecMoveQuiz(false)">Copy</button>
- <button class="qm-btn danger" onclick="adminExecMoveQuiz(true)">Move (delete original)</button>
+        <button class="qm-btn primary" onclick="adminExecMoveQuiz(false)">📋 Copy</button>
+        <button class="qm-btn danger"  onclick="adminExecMoveQuiz(true)">✂️ Move (delete original)</button>
         <button class="qm-btn secondary" onclick="adminCloseMoveQuiz()">Cancel</button>
       </div>
     </div>`;
@@ -577,12 +577,12 @@ async function adminExecMoveQuiz(andDelete) {
 
   if (!destYear || !destModule || !destSubject) {
     statusEl.className = 'qm-status err';
- statusEl.textContent = 'Please select a destination year, module, and subject.';
+    statusEl.textContent = '⚠️ Please select a destination year, module, and subject.';
     return;
   }
   if (destSubject === adminTargetSubject && !andDelete) {
     statusEl.className = 'qm-status err';
- statusEl.textContent = 'Source and destination subject are the same.';
+    statusEl.textContent = '⚠️ Source and destination subject are the same.';
     return;
   }
 

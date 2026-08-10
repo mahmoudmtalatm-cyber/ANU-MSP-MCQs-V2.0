@@ -28,7 +28,7 @@
    Choice) are different: every question card renders its own copy, and
    each one now remembers its OWN on/off state, independently of every
    other question — turning it on for question 3 has no effect on
- question 7, even though both show the same "Fill Choices" button.
+   question 7, even though both show the same " Fill Choices" button.
    That state is keyed by `${editorKey}_${i}_${toolKey}` and lives only in
    memory for the current session (not persisted): a question's index can
    point at a completely different question next time the editor opens
@@ -37,15 +37,15 @@
    actually turned it on for. */
 const AI_TOOLS_THINKING_STORE = 'aiToolsThinkingSettings';
 const _AI_TOOLS_BULK_THINKING_DEFAULTS = {
- fillBulk: false, // Fill Choices — bulk (post-extraction pass / "Fill Choices (All)")
- refineBulk: false // Refine Questions — bulk (post-extraction pass / "Refine Questions (All)")
+  fillBulk: false, // Fill Choices — bulk (post-extraction pass / "Fill Choices (All)")
+  refineBulk: false // Refine Questions — bulk (post-extraction pass / "Refine Questions (All)")
 };
 // Which tool keys are per-question (vs. the shared/persisted bulk ones
 // above) — checked by every function below to decide which store to use.
 const _AI_TOOLS_PER_QUESTION_KEYS = {
- refineSingle: 1, // Refine Question (per-question button)
- fillSingle: 1, // Fill Choices (per-question button)
-  addChoice:    1  // ➕ Add Choice (AI) (per-question button)
+  refineSingle: 1, // Refine Question (per-question button)
+  fillSingle: 1, // Fill Choices (per-question button)
+  addChoice: 1 // Add Choice (AI) (per-question button)
 };
 function _aiToolsLoadThinkingSettings() {
   try {
@@ -57,8 +57,8 @@ function _aiToolsLoadThinkingSettings() {
     return Object.assign({}, _AI_TOOLS_BULK_THINKING_DEFAULTS);
   }
 }
-let _aiToolsThinkingBulk = _aiToolsLoadThinkingSettings();     // { fillBulk, refineBulk } — persisted
-let _aiToolsThinkingByQuestion = {};                           // { "<editorKey>_<i>_<toolKey>": true|false } — in-memory only
+let _aiToolsThinkingBulk = _aiToolsLoadThinkingSettings(); // { fillBulk, refineBulk } — persisted
+let _aiToolsThinkingByQuestion = {}; // { "<editorKey>_<i>_<toolKey>": true|false } — in-memory only
 function _aiToolsThinkingByQuestionKey(toolKey, editorKey, i) { return `${editorKey}_${i}_${toolKey}`; }
 function _aiToolsThinkingOn(toolKey, editorKey, i) {
   if (_AI_TOOLS_PER_QUESTION_KEYS[toolKey]) return !!_aiToolsThinkingByQuestion[_aiToolsThinkingByQuestionKey(toolKey, editorKey, i)];
@@ -103,10 +103,10 @@ function _aiToolsSetThinking(toolKey, on, editorKey, i) {
 }
 const _AI_THINKING_LABELS = {
   refineSingle: 'Refine Question',
-  fillSingle:   'Fill Choices',
-  addChoice:    'Add Choice',
-  fillBulk:     'Fill Choices (bulk)',
-  refineBulk:   'Refine Questions (bulk)'
+  fillSingle: 'Fill Choices',
+  addChoice: 'Add Choice',
+  fillBulk: 'Fill Choices (bulk)',
+  refineBulk: 'Refine Questions (bulk)'
 };
 /* Pill-checkbox for one tool. For a BULK toolKey, safe to render many
    times (all copies stay in sync via the querySelectorAll sync above) —
@@ -134,7 +134,7 @@ function _renderAiThinkingToggle(toolKey, variant, extraStyle, editorKey, i) {
     <input type="checkbox" class="ai-thinking-cb" data-tool="${toolKey}"${idAttr} ${on ? 'checked' : ''}
       onchange="_aiToolsSetThinking(${onchangeArgs})">
     <span class="ai-thinking-cb-box"></span>
- <span class="ai-thinking-cb-label">Thinking</span>
+    <span class="ai-thinking-cb-label"> Thinking</span>
   </label>`;
 }
 
@@ -145,7 +145,7 @@ const _aiToolsCustomPromptText = {};
 function _aiToolsKey(editorKey, i) { return editorKey + '_' + i; }
 
 /* ── Per-question AI lock ──
- Refine Question, Fill Choices, Add Choice (AI), and the existing AI
+   Refine Question, Fill Choices, Add Choice (AI), and the existing AI
    Solve button all mutate the SAME question object. Without a lock, firing
    two of them at once on the same question is a real race: e.g. AI Solve
    could read/settle on a fabricated distractor that Fill Choices is still
@@ -183,9 +183,9 @@ function _aiToolsButtonIds(editorKey, i) {
     `aiRefineInstrCaret_${editorKey}_${i}`,
     `aiAddChoiceBtn_${editorKey}_${i}`,
     `aiFillChoicesBtn_${editorKey}_${i}`,
-    `cqAiSolveBtn_${editorKey}_${i}`,   // now available in every editor, not just 'cq'
+    `cqAiSolveBtn_${editorKey}_${i}`, // now available in every editor, not just 'cq'
     `aiSolveSrcCaret_${editorKey}_${i}`, // the ▾ source picker toggle next to it
- `aiReextractImageBtn_${editorKey}_${i}`, // Re-extract Image (currently only rendered in 'cq')
+    `aiReextractImageBtn_${editorKey}_${i}`, // Re-extract Image (currently only rendered in 'cq')
     `aiReextractInstrCaret_${editorKey}_${i}` // its ▾ custom-instructions caret
   ];
 }
@@ -196,7 +196,7 @@ function _aiToolsButtonIds(editorKey, i) {
    used in _renderAiRefineTools/_renderAiChoiceTools/renderCQPreview) so the
    correct button still shows its highlight + spinner after a mid-run
    rebuild — e.g. the editor re-renders because the user opened and closed
- Manage APIs while this action was still running. Without baking this
+    Manage APIs while this action was still running. Without baking this
    into the template too, only the imperative DOM insert would show it, and
    that's wiped out the moment the button's HTML gets replaced wholesale. */
 function _aiToolsActionIsActive(editorKey, i, action) {
@@ -217,10 +217,10 @@ function _aiToolsSyncButtons(editorKey, i, busy, action) {
 
   // Which button id corresponds to which action name.
   const idMap = {
-    refine:      `aiRefineBtn_${editorKey}_${i}`,
-    addChoice:   `aiAddChoiceBtn_${editorKey}_${i}`,
+    refine: `aiRefineBtn_${editorKey}_${i}`,
+    addChoice: `aiAddChoiceBtn_${editorKey}_${i}`,
     fillChoices: `aiFillChoicesBtn_${editorKey}_${i}`,
-    solve:       `cqAiSolveBtn_${editorKey}_${i}`,
+    solve: `cqAiSolveBtn_${editorKey}_${i}`,
     reextractImage: `aiReextractImageBtn_${editorKey}_${i}`
   };
   const activeId = action && idMap[action];
@@ -239,10 +239,10 @@ function _aiToolsSyncButtons(editorKey, i, busy, action) {
   // every other feature's Stop button on this card (only one of these four
   // can ever be running at once per question, thanks to the busy lock).
   const stopIdMap = {
-    refine:      `aiRefineStopBtn_${editorKey}_${i}`,
-    addChoice:   `aiAddChoiceStopBtn_${editorKey}_${i}`,
+    refine: `aiRefineStopBtn_${editorKey}_${i}`,
+    addChoice: `aiAddChoiceStopBtn_${editorKey}_${i}`,
     fillChoices: `aiFillChoicesStopBtn_${editorKey}_${i}`,
-    solve:       `cqAiSolveStopBtn_${editorKey}_${i}`,
+    solve: `cqAiSolveStopBtn_${editorKey}_${i}`,
     reextractImage: `aiReextractStopBtn_${editorKey}_${i}`
   };
   Object.values(stopIdMap).forEach(id => {
@@ -269,7 +269,7 @@ function _aiToolsStatusEl(editorKey, i) {
 /* Cached (see js/dom-utils.js) so any status box driven by a per-question
    AI tool can restore its content immediately if the question's card gets
    rebuilt mid-run (e.g. the editor re-renders because the user switched
- API keys via Manage APIs while the tool was still working) — without
+   API keys via Manage APIs while the tool was still working) — without
    this, the freshly-rendered card would show a blank status box (just the
    Stop button, since that part is already driven by live busy state) until
    the in-flight request happens to finish. Takes the DOM id directly so it
@@ -289,7 +289,7 @@ function _aiToolsLoadingHTML(label) {
     <div class="cq-spinner" style="width:12px;height:12px;border-width:2px;"></div> ${label}</div>`;
 }
 function _aiToolsErrorHTML(msg) {
- return `<div class="cq-status warning" style="font-size:.75rem;padding:5px 10px;">${escapeHtml(msg)}</div>`;
+  return `<div class="cq-status warning" style="font-size:.75rem;padding:5px 10px;"> ${escapeHtml(msg)}</div>`;
 }
 /* Every AI tool call shares the same active Gemini key used everywhere else
    in the app (extraction, AI Solve, explanations) — if none is configured
@@ -297,7 +297,7 @@ function _aiToolsErrorHTML(msg) {
 function _aiToolsRequireKey(editorKey, i) {
   const apiKey = getActiveApiKey();
   if (!apiKey) {
- _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Add a Gemini API key (API Keys) to use AI tools.'));
+    _aiToolsSetStatus(editorKey, i, _aiToolsErrorHTML('Add a Gemini API key ( API Keys) to use AI tools.'));
     return null;
   }
   return apiKey;
@@ -309,7 +309,7 @@ function _aiCustomPromptChanged(editorKey, i, val) {
 }
 function _aiRefineInstrCaretLabel(editorKey, i) {
   const draft = (_aiToolsCustomPromptText[_aiToolsKey(editorKey, i)] || '').trim();
- return draft ? 'Instructions •' : 'Instructions';
+  return draft ? ' Instructions •' : ' Instructions';
 }
 /* Strips ```json fences (Gemini sometimes adds them despite the mime type
    request) before parsing — same tolerant pattern used elsewhere in the app.
@@ -346,7 +346,7 @@ function _aiToolsCaseContext(questions, q) {
   return { textBlock, imagePart };
 }
 
-/* Renders the "AI Solve" + "Refine Question" toolbar, each with its
+/* Renders the " AI Solve" + " Refine Question" toolbar, each with its
    own ▾ caret opening a popover scoped to THAT action only — AI Solve's
    caret picks the source to solve from; Refine's caret holds the custom
    instructions used only when refining. Keeping both as the same
@@ -367,7 +367,7 @@ function _renderAiRefineTools(editorKey, i) {
         <button class="cq-edit-reask-btn${_aiToolsBtnActiveClass(editorKey, i, 'solve')}" type="button" id="cqAiSolveBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
           title="Ask AI to solve this question using the source chosen below"
           onclick="aiSolveQuestion('${editorKey}', ${i})"
- style="background:var(--correct-bg);color:var(--correct-fg);border-color:var(--green-pale-border);border-top-right-radius:0;border-bottom-right-radius:0;">${_aiToolsBtnSpinnerHTML(editorKey, i, 'solve')}AI Solve</button>
+          style="background:var(--correct-bg);color:var(--correct-fg);border-color:var(--green-pale-border);border-top-right-radius:0;border-bottom-right-radius:0;">${_aiToolsBtnSpinnerHTML(editorKey, i, 'solve')} AI Solve</button>
         <button class="cq-edit-reask-btn" type="button" id="aiSolveSrcCaret_${editorKey}_${i}" ${busy ? 'disabled' : ''}
           title="Choose what AI Solve should rely on: general AI knowledge, or a specific source"
           onclick="_toggleAiSourcePicker('${editorKey}', ${i})"
@@ -381,7 +381,7 @@ function _renderAiRefineTools(editorKey, i) {
           <button class="cq-edit-reask-btn${_aiToolsBtnActiveClass(editorKey, i, 'refine')}" type="button" id="aiRefineBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
             title="Use AI to rewrite this question with clear, exam-style phrasing and no grammar mistakes or typos"
             onclick="aiRefineQuestion('${editorKey}', ${i})"
- style="background:var(--violet-pale);color:var(--violet-dark);border-color:var(--violet-border);border-top-right-radius:0;border-bottom-right-radius:0;">${_aiToolsBtnSpinnerHTML(editorKey, i, 'refine')}Refine Question</button>
+            style="background:var(--violet-pale);color:var(--violet-dark);border-color:var(--violet-border);border-top-right-radius:0;border-bottom-right-radius:0;">${_aiToolsBtnSpinnerHTML(editorKey, i, 'refine')} Refine Question</button>
           <button class="cq-edit-reask-btn" type="button" id="aiRefineInstrCaret_${editorKey}_${i}" ${busy ? 'disabled' : ''}
             title="Optional custom instructions used only when refining this question"
             onclick="_toggleAiRefineInstrPicker('${editorKey}', ${i})"
@@ -410,7 +410,7 @@ function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
       <button class="cq-edit-reask-btn${_aiToolsBtnActiveClass(editorKey, i, 'addChoice')}" type="button" id="aiAddChoiceBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
         title="Let AI write one more plausible answer choice for this question"
         onclick="aiAddChoice('${editorKey}', ${i})"
- style="background:var(--correct-bg);color:var(--correct-fg);border-color:var(--green-pale-border);">${_aiToolsBtnSpinnerHTML(editorKey, i, 'addChoice')}Add Choice (AI)</button>
+        style="background:var(--correct-bg);color:var(--correct-fg);border-color:var(--green-pale-border);">${_aiToolsBtnSpinnerHTML(editorKey, i, 'addChoice')} Add Choice (AI)</button>
       ${_renderAiThinkingToggle('addChoice', 'green', undefined, editorKey, i)}
       </div>
       <button class="ai-tool-stop-btn" type="button" id="aiAddChoiceStopBtn_${editorKey}_${i}"
@@ -422,7 +422,7 @@ function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
       <button class="cq-edit-reask-btn${_aiToolsBtnActiveClass(editorKey, i, 'fillChoices')}" type="button" id="aiFillChoicesBtn_${editorKey}_${i}" ${busy ? 'disabled' : ''}
         title="Let AI fill in the remaining choices (up to 4 total)"
         onclick="aiFillChoices('${editorKey}', ${i})"
- style="background:var(--unanswered-bg);color:var(--unanswered-fg);border-color:var(--amber-strong);">${_aiToolsBtnSpinnerHTML(editorKey, i, 'fillChoices')}Fill Choices (AI)</button>
+        style="background:var(--unanswered-bg);color:var(--unanswered-fg);border-color:var(--amber-strong);">${_aiToolsBtnSpinnerHTML(editorKey, i, 'fillChoices')} Fill Choices (AI)</button>
       ${_renderAiThinkingToggle('fillSingle', 'amber', undefined, editorKey, i)}
       </div>
       <button class="ai-tool-stop-btn" type="button" id="aiFillChoicesStopBtn_${editorKey}_${i}"
@@ -441,7 +441,7 @@ function _renderAiChoiceTools(editorKey, i, optCount, nextKey) {
    overrides the default rules above where the two genuinely conflict on
    that specific point; everything else still applies. */
 /* Shared refine-prompt caller — builds the same prompt/rules used by the
- per-question "Refine Question" button, but as a standalone function so
+   per-question " Refine Question" button, but as a standalone function so
    the bulk post-extraction pass (cqBulkRefineQuestions) can reuse it without
    needing an editor/card in the DOM. Returns the refined question string,
    or throws on failure. */
@@ -491,7 +491,7 @@ Respond ONLY with a JSON object: {"question": "the refined question text"}. No m
       // unpredictably eat most of the budget, leaving too little for the
       // actual answer and truncating it mid-string. Off by default reclaims
       // the whole budget for the real output and is also faster; the user
- // can opt back into thinking per-tool via the Thinking checkbox
+      // can opt back into thinking per-tool via the Thinking checkbox
       // (see _aiToolsGenConfigExtra) if they'd rather trade that for a
       // chance at higher quality.
       ..._aiToolsGenConfigExtra(toolKey || 'refineSingle', editorKey, i)
@@ -525,7 +525,7 @@ async function aiRefineQuestion(editorKey, i) {
   const token = { cancelled: false };
   _aiToolsCancelToken[key] = token;
   _aiToolsSetBusy(editorKey, i, true, 'refine');
- _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('Refining question…'));
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(' Refining question…'));
 
   try {
     q.question = await _aiRefineQuestionCall(apiKey, questions, q, custom, token, 'refineSingle', editorKey, i);
@@ -601,7 +601,7 @@ Respond ONLY with a JSON object: {"choices": [${Array(count).fill('"..."').join(
       // reasoning pass, so it's off by default, freeing the full token
       // budget for the actual answer instead of risking it being squeezed
       // out and truncated. Each caller (Fill Choices single/bulk, Add
- // Choice) passes its own toolKey, so the user's Thinking choice
+      // Choice) passes its own toolKey, so the user's Thinking choice
       // for one of those never affects the others.
       ..._aiToolsGenConfigExtra(toolKey || 'fillSingle', editorKey, i)
     }
@@ -663,7 +663,7 @@ async function aiFillChoices(editorKey, i) {
   const token = { cancelled: false };
   _aiToolsCancelToken[_key] = token;
   _aiToolsSetBusy(editorKey, i, true, 'fillChoices');
- _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(`Filling ${missing.length} more choice${missing.length !== 1 ? 's' : ''}…`));
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(` Filling ${missing.length} more choice${missing.length !== 1 ? 's' : ''}…`));
 
   try {
     const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, missing.length, token, 'fillSingle', editorKey, i);
@@ -723,7 +723,7 @@ async function aiAddChoice(editorKey, i) {
   const token = { cancelled: false };
   _aiToolsCancelToken[_key] = token;
   _aiToolsSetBusy(editorKey, i, true, 'addChoice');
- _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML('AI is writing a new choice…'));
+  _aiToolsSetStatus(editorKey, i, _aiToolsLoadingHTML(' AI is writing a new choice…'));
 
   try {
     const newVals = await _aiGenerateDistractors(apiKey, questions, q, optEntries, 1, token, 'addChoice', editorKey, i);
@@ -873,7 +873,7 @@ function _cqProgressStatusHTML(message, percent) {
 
    Because getActiveApiKey() always reads the currently-active key fresh,
    any loop that re-reads it right after a checkpoint will automatically
- pick up a different key if the user opened Manage APIs while paused. */
+   pick up a different key if the user opened Manage APIs while paused. */
 function _cqActiveGenBtn() {
   return document.getElementById('cqGenerateBtn') || document.getElementById('cqLectureGenBtn');
 }
@@ -955,9 +955,9 @@ async function _cqEnterPause(statusEl, message) {
   cqPauseSkipRequested = false;
   cqIsPaused = true;
 
-  const pauseBtn  = document.getElementById('cqPauseBtn');
+  const pauseBtn = document.getElementById('cqPauseBtn');
   const resumeBtn = document.getElementById('cqResumeBtn');
-  if (pauseBtn)  pauseBtn.style.display  = 'none';
+  if (pauseBtn) pauseBtn.style.display = 'none';
   if (resumeBtn) resumeBtn.style.display = 'inline-flex';
   const genBtn = _cqActiveGenBtn();
   if (genBtn) genBtn.textContent = '⏸️ Paused';
@@ -1001,7 +1001,7 @@ async function cqCheckPause(statusEl) {
   }
   if (cqPauseRequested) {
     return _cqEnterPause(statusEl,
- `⏸️ Paused — everything done so far is safe. Open Manage APIs to switch keys, then press ▶️ Resume to continue right where this left off.`);
+      `⏸️ Paused — everything done so far is safe. Open Manage APIs to switch keys, then press ▶️ Resume to continue right where this left off.`);
   }
   return getActiveApiKey();
 }
@@ -1017,6 +1017,6 @@ async function cqCheckPause(statusEl) {
 async function cqFallbackPauseForRateLimit(statusEl, whatLabel) {
   const what = whatLabel ? ` for ${escapeHtml(whatLabel)}` : '';
   return _cqEnterPause(statusEl,
- `⏸️ Paused automatically — Gemini kept rate-limiting (429) repeatedly while trying to finish${what}, so this stepped back to before it instead of waiting indefinitely. Nothing is lost — switch your API key (Manage APIs) and press ▶️ Resume to retry it.`);
+    `⏸️ Paused automatically — Gemini kept rate-limiting (429) repeatedly while trying to finish${what}, so this stepped back to before it instead of waiting indefinitely. Nothing is lost — switch your API key ( Manage APIs) and press ▶️ Resume to retry it.`);
 }
 

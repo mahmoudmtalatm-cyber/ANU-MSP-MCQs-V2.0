@@ -13,7 +13,7 @@
 
    That breaks the moment the container hosting those nodes gets
    re-rendered WHILE the flow is still running in the background — e.g.
- opening the API Key Manager mid-run and switching keys (see
+   opening the API Key Manager mid-run and switching keys (see
    useApiKey() in ai-features.js), which immediately re-renders the
    custom quiz modal even though it's still open behind the manager.
    Re-rendering replaces the live DOM nodes with fresh ones that happen

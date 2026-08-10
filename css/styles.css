@@ -217,16 +217,25 @@
     /* ── ICONS ──
        Small inline-SVG glyphs used throughout in place of emoji, for a
        calmer, more professional chrome. */
-    .hicon, .bicon, .ticon, .nicon, .ficon {
+    .hicon, .bicon, .ticon, .nicon, .ficon, .micon, .sicon {
       fill: none; stroke: currentColor; stroke-width: 2;
       stroke-linecap: round; stroke-linejoin: round;
       flex-shrink: 0;
+      vertical-align: -3px;
     }
     .hicon { width: 19px; height: 19px; }
     .bicon { width: 15px; height: 15px; }
     .ticon { width: 21px; height: 21px; }
     .nicon { width: 16px; height: 16px; }
     .ficon { width: 15px; height: 15px; }
+    /* .micon / .sicon: same line-icon language, used for icons injected by
+       JS into buttons, tabs and badges across the modals (admin, community,
+       backup, PDF export, etc.) so every screen — not just the home screen —
+       shares one consistent icon system instead of emoji. */
+    .micon { width: 16px; height: 16px; margin-right: 2px; }
+    .sicon { width: 13px; height: 13px; margin-right: 1px; }
+    .micon.spin, .sicon.spin, .hicon.spin { animation: iconspin 1s linear infinite; }
+    @keyframes iconspin { to { transform: rotate(360deg); } }
 
     /* ── QUIZ HEADER (quiz + results screens) ── */
     .header {
@@ -1428,7 +1437,7 @@
   background: var(--bg-card); padding: 14px; min-height: 220px;
   max-height: 540px; overflow-y: auto;
 }
-/* Curriculum tab reuses the admin "📤 Publish Quizzes" destination
+/* Curriculum tab reuses the admin "Publish Quizzes" destination
    picker's own .curr-section/.curr-item-row/.curr-breadcrumb components
    (see adminPublishTargetPickerHtml in js/admin-panel.js) — stripped of
    its own boxed background/border/padding here since .pdx-tab-content
@@ -1731,7 +1740,7 @@
 
 /* Desktop collapse toggle in the sidebar header, and the slim pill shown in
    its place once collapsed — lets the whole folder column be hidden/shown
-   on demand above the ~720px breakpoint (below it, the existing "📁 Browse
+   on demand above the ~720px breakpoint (below it, the existing "Browse
    Folders" drawer toggle already covers the same need). */
 .cq-coll-collapse-btn {
   border: none; border-radius: 6px; background: var(--border-soft-2); color: var(--text-muted);
@@ -1882,7 +1891,7 @@
 
 /* Below ~720px there isn't room for a fixed sidebar column beside the quiz
    list, so the tree becomes a collapsible drawer: hidden by default, opened
-   with the "📁 Browse Folders" toggle, and rendered as a full-width overlay
+   with the "Browse Folders" toggle, and rendered as a full-width overlay
    card above the quiz list rather than a side column. */
 @media (max-width: 720px) {
   .cq-coll-layout { display: block; }
@@ -1945,7 +1954,7 @@
   cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: background .15s;
 }
 .ai-tool-stop-btn:hover { background: var(--red-deep); }
-/* Compact "🧠 Thinking" pill-checkbox — one independent instance per AI
+/* Compact "Thinking" pill-checkbox — one independent instance per AI
    tool (Refine Question, Fill Choices, Add Choice, and their bulk
    counterparts). Off (grey) by default; violet + filled when the user has
    opted that specific tool into Gemini's reasoning pass. Every rendered
@@ -2351,7 +2360,8 @@
 .community-empty {
   text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: .9rem;
 }
-.community-empty .ce-icon { font-size: 2rem; margin-bottom: 8px; }
+.community-empty .ce-icon { margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.community-empty .ce-icon .hicon { width: 40px; height: 40px; margin-right: 0; }
 
 /* ── COMMUNITY SEARCH & FILTER BAR ── */
 .comm-filter-bar {
@@ -2753,7 +2763,7 @@
 .admin-multi-quiz-remove:hover { background: var(--red-pale); }
 
 .admin-quiz-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
-/* "🤖 My Custom Quizzes" — the collections folder tree (.cq-coll-layout) owns
+/* "My Custom Quizzes" — the collections folder tree (.cq-coll-layout) owns
    its own height/scrolling (sidebar is sticky+scrollable, the quiz list just
    grows and the surrounding .admin-body scrolls), so this variant drops the
    old fixed max-height/overflow box instead of nesting scroll areas. */
@@ -2779,7 +2789,7 @@
   border-color: var(--accent-dark); background: var(--accent-dark); color: #fff;
 }
 /* Compact icon-only "move to folder" button on each admin publish-source
-   card — same job as the custom-quiz modal's "📁 Move" button, sized to
+   card — same job as the custom-quiz modal's "Move" button, sized to
    match this card's more compact, icon-driven design language instead of
    reusing that button's text label. */
 .admin-quiz-move-btn {
@@ -3234,7 +3244,7 @@ button.apikey-view-btn { background: var(--surface-2-hover); color: var(--text-m
   .cq-split-q-row { padding: 8px 10px; gap: 8px; }
   .cq-scissors-btn { width: 26px; height: 26px; font-size: .95rem; }
 
-  /* 🧠 Thinking toggles: same shrink treatment as the other small AI-tool
+  /* Thinking toggles: same shrink treatment as the other small AI-tool
      controls above, plus its button+toggle group (see ai-question-tools.js
      / ai-features.js) is already allowed to wrap internally, so on very
      narrow phones the toggle drops cleanly under its own button instead of
