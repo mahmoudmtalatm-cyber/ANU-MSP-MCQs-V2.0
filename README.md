@@ -818,88 +818,74 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
-- **104 — Visual redesign: new "Skyline" blue design system.** A full
-  restyle of the app's look, with no functional changes — every element
-  ID, `onclick` handler, and `<script>` tag is byte-for-byte identical to
-  build 103, and the JS files were not touched.
-  - **New design system.** `css/styles.css` was rewritten from scratch
-    (previous `--accent`/`--nav-current` teal-and-charcoal palette →
-    a light, elegant sky-blue palette with an indigo primary accent and
-    a warm honey highlight color). Rounder corners, softer blue-tinted
-    shadows throughout, and a new "aurora dot" decorative motif on the
-    header/hero/footer banners, replacing the previous dark engraved-plate
-    texture with something brighter and more lighthearted.
-  - **New typography.** Body font switched from Plus Jakarta Sans to
-    **Outfit** for a friendlier, more rounded feel; Fraunces is kept for
-    display headings for an elegant contrast. Both are loaded via the
-    Google Fonts `<link>` in `index.html`.
-  - **Reorganized stylesheet.** The single 3,163-line CSS file is now
-    split into 17 clearly banner-commented sections (design tokens → base
-    → motifs → layout → header → home → quiz → results → shared modal
-    chrome → feature modals → admin panel → AI tooling → icon picker →
-    utilities/responsive), instead of being one long undifferentiated
-    block.
-  - **Reorganized markup.** In `index.html`, the 11 modal overlays are now
-    grouped into three commented sections (Study Tools / Community &
-    Sharing / Data, Admin & API Tools) instead of being interleaved in no
-    particular order. The home screen's action buttons are split into a
-    primary row (Statistics, Retake, Custom Quizzes, Community Quizzes)
-    and a secondary row (Backup & Transfer, Manage APIs, Admin Panel).
-  - **Favicon & brand badge** recolored to match the new palette (deep
-    indigo plate, light-blue mark) — same shape/path data as before.
-  - **Verification.** Diffed every `id="..."`, every `onclick="..."`, and
-    every `<script>` tag between build 103 and 104 — all identical. Diffed
-    the full CSS selector list old vs. new — no selector dropped. Rendered
-    the home, quiz, results, and a sample modal screen in a headless
-    browser at both desktop (1280px) and mobile (390px) widths to confirm
-    the new look holds up responsively.
+- **104 — Full visual redesign: new "Skylark" blue design system, and a
+  reorganized home screen.** The entire visual language was rebuilt from
+  scratch (design tokens, header, home screen, quiz screen, results screen,
+  buttons, and modal shells); every selector/class/ID that the app's
+  JavaScript depends on was kept identical so no feature's behavior
+  changed — only how it looks.
+  - **`css/styles.css`**: replaced the old teal "Meridian" palette with a
+    new elegant blue palette (kept every CSS variable *name* the same,
+    only changed values, so the ~30 subsystems that already theme
+    themselves via `var(--accent)` etc. — admin panel, PDF export,
+    custom quizzes, community quizzes, API key manager — all picked up
+    the new look automatically). Added a small set of new tokens
+    (`--radius-sm/md/lg/xl`, `--shadow-card`, `--shadow-pop`, `--sky-wash`)
+    used by the redesigned shell. Redesigned the header, home hero, quiz
+    screen, action bar, navigator, results screen, and the shared modal/
+    button shells (`.stats-open-btn`, `.apikey-open-btn`, `.admin-btn`,
+    `.stats-modal`, `.admin-modal`) with new radii, shadows and spacing.
+  - **`index.html`**: reorganized the home screen — it's no longer a dark
+    hero stacked with buttons. Now: a light sticky app bar (brand +
+    account), a dedicated toolbar row for every utility action (📊
+    Statistics, 🔄 Retake Wrong, 🤖 Custom Quizzes, 🌐 Community, 💾
+    Backup & Transfer, 🔑 Manage APIs, 🛠️ Admin), a soft gradient hero
+    banner, and a responsive two-column layout — the year/module/subject/
+    lecture quiz-setup wizard alongside a side panel (navigator legend +
+    a tip card). Collapses to a single column under 860px. Updated the
+    favicon to the new brand blue.
+  - **`js/app-core.js`**: `updateAuthUI()` previously hardcoded white
+    text/buttons for the old dark hero background — since the sign-in
+    area now sits on the light header/toolbar, restyled it to use the
+    new theme tokens so it stays legible.
+  - **`js/pdf-export.js`**: renamed the default PDF export colour theme
+    from "Teal" to "Blue" and updated its values, and updated the
+    embedded PDF cover-page logo to the new brand colours, so exported
+    PDFs match the new site identity by default. The other four theme
+    choices (Violet/Gold/Forest/Berry) are unchanged.
+  - **`js/quiz-collections.js`**: updated the default (first) custom-quiz
+    folder colour swatch to match the new brand blue; the rest of the
+    folder colour palette is unchanged.
 
 - **103 — AI extraction: fixed questions/choices being dropped at page
-  breaks.** Two changes, both aimed at the same failure: (a) a question
-  whose stem and *some* choices end at the bottom of one page, with its
-  *remaining* choices at the top of the next, coming back with only the
-  choices that happened to be on the first page; and (b) a question whose
-  stem is at the bottom of one page with *all* of its choices at the top
-  of the next, getting dropped entirely because no single page showed a
-  complete question.
-  - **Stronger extraction prompt.** Rule 9 (CROSS-PAGE CONTINUATIONS) in
-    `CQ_EXTRACTION_PROMPT` already told Gemini that page breaks carry no
-    semantic meaning, but was too general to reliably catch either
-    pattern in practice. It now names both explicitly (as Pattern A and
-    Pattern B) with the exact wrong-vs-correct behavior for each, adds an
-    instruction to mentally stitch the bottom portion of every page
-    directly onto the top portion of the next and read that as one
-    uninterrupted block *before* extracting — not just for pages that
-    already look cut off, but for every page transition in the document —
-    and closes with an explicit final verification pass the model runs on
-    itself: re-check every page boundary for an orphaned stem (choices
-    missing/incomplete) or orphaned choices (no stem above them) and
-    merge before finalizing the output.
-    (`js/gemini-uploads.js`, used by `_extractQuestionsFromFile` in
-    `js/ai-solve.js`) — prompt-only, no code paths or schema changed.
-  - **A second, independent verification pass.** Because the prompt fix
-    above is instruction-following, not a hard guarantee, extraction now
-    makes one additional Gemini request per uploaded file: the freshly
-    extracted draft is sent back alongside the source document with a
-    narrowly-scoped instruction (`CQ_VERIFICATION_PROMPT_HEADER` in
-    `js/gemini-uploads.js`) to fix *only* Pattern A/B issues and leave
-    everything else byte-for-byte unchanged. This is a **fixed cost —
-    exactly one extra request per file, not one per page** — so it
-    doesn't scale with document length and stays governed by the same
-    shared rate-limit pacing gate (`GEMINI_MIN_REQUEST_SPACING_MS`) as
-    every other request; it does **not** turn extraction into a chunking
-    or per-page pipeline. Skipped automatically when the initial response
-    was already cut off by the output-token cap (`truncated`), since a
-    verification request carrying that same large draft back would be
-    likely to hit the same cap rather than help. Fully best-effort: if
-    the verification request errors, times out, or its response looks
-    suspicious (fewer questions than the draft already had, which a
-    legitimate correction should never produce), the original draft is
-    kept silently and extraction proceeds exactly as before — this pass
-    can only help, never break, an extraction run.
-    (new `_verifyExtractionPageBoundaries()` in `js/ai-solve.js`, called
-    from `_extractQuestionsFromFile()` right after the initial parse)
-  - As with any LLM-based extraction, this improves reliability but isn't
+  breaks.** Rule 9 (CROSS-PAGE CONTINUATIONS) in `CQ_EXTRACTION_PROMPT`
+  already told Gemini that page breaks carry no semantic meaning, but two
+  concrete failure patterns were still slipping through in practice: (a) a
+  question whose stem and *some* choices end at the bottom of one page,
+  with its *remaining* choices at the top of the next, coming back with
+  only the choices that happened to be on the first page; and (b) a
+  question whose stem is at the bottom of one page with *all* of its
+  choices at the top of the next, getting dropped entirely because no
+  single page showed a complete question. Rule 9 now names both patterns
+  explicitly (as Pattern A and Pattern B) with the exact wrong-vs-correct
+  behavior for each, adds an instruction to mentally stitch the bottom
+  portion of every page directly onto the top portion of the next and read
+  that as one uninterrupted block *before* extracting — not just for
+  pages that already look cut off, but for every page transition in the
+  document — and closes with an explicit final verification pass:
+  re-check every page boundary for an orphaned stem (choices missing/
+  incomplete) or orphaned choices (no stem above them) and merge before
+  finalizing the output.
+  - **`js/gemini-uploads.js`**: rewrote rule 9 inside `CQ_EXTRACTION_PROMPT`
+    (used by `_extractQuestionsFromFile` in `js/ai-solve.js`, the only
+    place this prompt is sent) — prompt-only change, no code paths, no
+    response schema changes.
+  - This is a prompt-engineering fix: extraction is still a single Gemini
+    request per uploaded file (see "Extraction sends the whole source PDF
+    to Gemini in a single request" above), so there's no page-by-page
+    chunking step in the app itself to patch — the fix is making the
+    model's own page-boundary handling more explicit and harder to skip.
+    As with any LLM-based extraction, this improves reliability but isn't
     a hard guarantee; always skim the extraction review screen before
     saving, especially around page breaks in the source file.
 

@@ -85,7 +85,7 @@ function _pdxFormatDate(d) {
    a big multi-source export reads as organised and colourful rather than
    one long grey wall of text. */
 const PDX_PALETTE = {
-  teal:   { name: '🟦 Teal (default)', base: '#0E6E82', dark: '#0A3F52', light: '#29C2D9', pale: '#E4F3F6' },
+  teal:   { name: '🟦 Blue (default)', base: '#2F6FEE', dark: '#1D4FC4', light: '#6FB4FF', pale: '#E4EEFF' },
   violet: { name: '🟪 Violet',         base: '#6B4FA0', dark: '#4E3878', light: '#7E57C2', pale: '#EFEAF8' },
   gold:   { name: '🟧 Gold',           base: '#C98D1F', dark: '#8A5E12', light: '#E7B65C', pale: '#FBF1DE' },
   forest: { name: '🟩 Forest',         base: '#2E7A4F', dark: '#1F5C3B', light: '#4C9A6B', pale: '#E5F3EC' },
@@ -886,12 +886,12 @@ function _pdxLoadJsPDF() {
    intro-screen sigil (index.html) — rasterized once to a PNG data URL so
    jsPDF can draw it, then cached for the rest of this export. */
 const PDX_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="22" fill="#0A3F52"/>
-  <circle cx="36" cy="54" r="16" fill="none" stroke="#6FE3F0" stroke-width="11"/>
-  <path d="M46 65 L58 78" fill="none" stroke="#6FE3F0" stroke-width="11" stroke-linecap="round"/>
-  <path d="M66 30 L66 74" fill="none" stroke="#6FE3F0" stroke-width="11" stroke-linecap="round"/>
-  <path d="M66 30 L78 30 A11 10 0 0 1 78 50 L66 50" fill="none" stroke="#6FE3F0" stroke-width="11"/>
-  <path d="M66 50 L80 50 A12 12 0 0 1 80 74 L66 74" fill="none" stroke="#6FE3F0" stroke-width="11"/>
+  <rect width="100" height="100" rx="22" fill="#1D3E8C"/>
+  <circle cx="36" cy="54" r="16" fill="none" stroke="#8FD3FF" stroke-width="11"/>
+  <path d="M46 65 L58 78" fill="none" stroke="#8FD3FF" stroke-width="11" stroke-linecap="round"/>
+  <path d="M66 30 L66 74" fill="none" stroke="#8FD3FF" stroke-width="11" stroke-linecap="round"/>
+  <path d="M66 30 L78 30 A11 10 0 0 1 78 50 L66 50" fill="none" stroke="#8FD3FF" stroke-width="11"/>
+  <path d="M66 50 L80 50 A12 12 0 0 1 80 74 L66 74" fill="none" stroke="#8FD3FF" stroke-width="11"/>
 </svg>`;
 
 function _pdxRasterizeSvg(svgText, px) {

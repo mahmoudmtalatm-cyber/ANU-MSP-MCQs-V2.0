@@ -30,7 +30,7 @@
 ══════════════════════════════════════════════════════════ */
 
 const CQ_UNCATEGORIZED = '__uncategorized__';
-const CQ_COLLECTION_COLORS = ['#0E6E82', '#7E57C2', '#4C9A6B', '#D99A45', '#B23A3A', '#B8934A', '#2E8FA3', '#66808F'];
+const CQ_COLLECTION_COLORS = ['#2F6FEE', '#7E57C2', '#4C9A6B', '#D99A45', '#B23A3A', '#F0A63A', '#3E8DEE', '#66808F'];
 const CQ_COLLECTION_ICONS = ['📁', '🗂️', '📚', '🧬', '💊', '🫀', '🧠', '🩺', '🔬', '🧪', '🎓', '⭐', '🔥', '🎯', '✅', '📊', '📌', '🧩'];
 
 let cqActiveCollectionId = null;         // null = "All Quizzes"; CQ_UNCATEGORIZED; or a collection id
