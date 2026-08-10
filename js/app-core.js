@@ -234,18 +234,18 @@ function updateAuthUI(user) {
   if (adminBtn) adminBtn.classList.toggle('hidden', !isAdminUser(user));
 
   if (user) {
-    // Logged-in state — styled for the light header/toolbar surfaces
+    // Logged-in state
     const loggedInHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
         <img src="${user.photoURL}"
-             style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border-soft);"
+             style="width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.6);"
              onerror="this.style.display='none'" />
-        <span style="color:var(--text-main);font-size:.85rem;font-weight:700;">
+        <span style="color:white;font-size:.85rem;font-weight:700;">
           ${user.displayName ? user.displayName.split(' ')[0] : 'User'}
         </span>
         <button onclick="fbSignOut()"
-                style="background:var(--surface-2);border:1.5px solid var(--border-soft);
-                       color:var(--text-muted);padding:6px 13px;border-radius:999px;cursor:pointer;
+                style="background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.4);
+                       color:white;padding:5px 12px;border-radius:6px;cursor:pointer;
                        font-weight:700;font-size:.78rem;font-family:var(--font);">
           Sign out
         </button>
@@ -253,13 +253,13 @@ function updateAuthUI(user) {
     if (homeArea) homeArea.innerHTML = loggedInHTML;
     if (quizArea) quizArea.innerHTML = loggedInHTML;
   } else {
-    // Logged-out state — styled for the light header/toolbar surfaces
+    // Logged-out state
     const signInHTML = `
       <button onclick="fbSignIn()"
-              style="background:var(--bg-card);color:var(--text-main);border:1.5px solid var(--border-soft);padding:8px 16px;
-                     border-radius:999px;cursor:pointer;font-weight:800;font-size:.85rem;
+              style="background:white;color:var(--accent);border:none;padding:8px 16px;
+                     border-radius:8px;cursor:pointer;font-weight:800;font-size:.85rem;
                      display:flex;align-items:center;gap:7px;font-family:var(--font);
-                     box-shadow:0 1px 2px rgba(20,55,110,.06);">
+                     box-shadow:0 2px 8px rgba(0,0,0,.15);">
         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
              style="width:17px;height:17px;" />
         Sign in with Google

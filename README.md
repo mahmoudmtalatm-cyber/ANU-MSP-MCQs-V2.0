@@ -818,45 +818,6 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
-- **104 — Full visual redesign: new "Skylark" blue design system, and a
-  reorganized home screen.** The entire visual language was rebuilt from
-  scratch (design tokens, header, home screen, quiz screen, results screen,
-  buttons, and modal shells); every selector/class/ID that the app's
-  JavaScript depends on was kept identical so no feature's behavior
-  changed — only how it looks.
-  - **`css/styles.css`**: replaced the old teal "Meridian" palette with a
-    new elegant blue palette (kept every CSS variable *name* the same,
-    only changed values, so the ~30 subsystems that already theme
-    themselves via `var(--accent)` etc. — admin panel, PDF export,
-    custom quizzes, community quizzes, API key manager — all picked up
-    the new look automatically). Added a small set of new tokens
-    (`--radius-sm/md/lg/xl`, `--shadow-card`, `--shadow-pop`, `--sky-wash`)
-    used by the redesigned shell. Redesigned the header, home hero, quiz
-    screen, action bar, navigator, results screen, and the shared modal/
-    button shells (`.stats-open-btn`, `.apikey-open-btn`, `.admin-btn`,
-    `.stats-modal`, `.admin-modal`) with new radii, shadows and spacing.
-  - **`index.html`**: reorganized the home screen — it's no longer a dark
-    hero stacked with buttons. Now: a light sticky app bar (brand +
-    account), a dedicated toolbar row for every utility action (📊
-    Statistics, 🔄 Retake Wrong, 🤖 Custom Quizzes, 🌐 Community, 💾
-    Backup & Transfer, 🔑 Manage APIs, 🛠️ Admin), a soft gradient hero
-    banner, and a responsive two-column layout — the year/module/subject/
-    lecture quiz-setup wizard alongside a side panel (navigator legend +
-    a tip card). Collapses to a single column under 860px. Updated the
-    favicon to the new brand blue.
-  - **`js/app-core.js`**: `updateAuthUI()` previously hardcoded white
-    text/buttons for the old dark hero background — since the sign-in
-    area now sits on the light header/toolbar, restyled it to use the
-    new theme tokens so it stays legible.
-  - **`js/pdf-export.js`**: renamed the default PDF export colour theme
-    from "Teal" to "Blue" and updated its values, and updated the
-    embedded PDF cover-page logo to the new brand colours, so exported
-    PDFs match the new site identity by default. The other four theme
-    choices (Violet/Gold/Forest/Berry) are unchanged.
-  - **`js/quiz-collections.js`**: updated the default (first) custom-quiz
-    folder colour swatch to match the new brand blue; the rest of the
-    folder colour palette is unchanged.
-
 - **103 — AI extraction: fixed questions/choices being dropped at page
   breaks.** Rule 9 (CROSS-PAGE CONTINUATIONS) in `CQ_EXTRACTION_PROMPT`
   already told Gemini that page breaks carry no semantic meaning, but two
