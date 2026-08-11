@@ -467,19 +467,12 @@
 
     /* Quick-access toolbar — icon tiles, not stacked full-width buttons.
        On screens too narrow to show every tile at once, the row scrolls
-       horizontally rather than wrapping or reordering the tiles;
-       scroll-snap keeps tiles aligned to the edge as you swipe so a tile
-       is never left half-visible.
-
-       --toolbar-fade is the single source of truth for how wide the edge
-       mask fades tiles out (below); js/toolbar-carousel.js reads the same
-       custom property so the "resting" scroll position it computes always
-       lines up exactly with where the mask stops fading — a tile never
-       settles half-faded. It scales down on narrow screens via the
-       clamp() so the fade stays proportional instead of eating an
-       oversized chunk of a small viewport. */
+       horizontally rather than wrapping or reordering the tiles. There is
+       no scroll-snap here on purpose — tiles are free to stop at any
+       scroll position instead of being pulled to a fixed "resting" point,
+       and there's no edge fade either, so a tile stays fully visible and
+       fully opaque right up to the moment it scrolls out of view. */
     .toolbar-wrap {
-      --toolbar-fade: clamp(18px, 6vw, 32px);
       position: relative;
     }
     .toolbar {
@@ -487,11 +480,9 @@
       padding: 14px 22px; margin-top: -20px; position: relative; z-index: 2;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
-      scroll-snap-type: x proximity;
     }
     .toolbar::-webkit-scrollbar { display: none; }
     .tool-btn {
-      scroll-snap-align: start;
       flex: 0 0 auto;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 7px;
@@ -510,45 +501,33 @@
        measured that the tiles genuinely don't fit side by side. The row
        is quietly padded out with cloned tiles before and after the real
        set, then recentered, so scrolling in either direction feels like
-       turning an endless wheel: a tile fades out on one edge right as its
-       twin fades in on the other. Nothing here ever runs on screens where
-       everything already fits. */
+       turning an endless wheel: once a tile scrolls fully past one edge,
+       an identical copy of it is already waiting to carry on from the
+       other. Nothing here ever runs on screens where everything already
+       fits. */
     .toolbar.toolbar--loop {
-      -webkit-mask-image: linear-gradient(90deg,
-        transparent 0, #000 var(--toolbar-fade),
-        #000 calc(100% - var(--toolbar-fade)), transparent 100%);
-      mask-image: linear-gradient(90deg,
-        transparent 0, #000 var(--toolbar-fade),
-        #000 calc(100% - var(--toolbar-fade)), transparent 100%);
-      /* Inset the snap "resting" positions by the same distance the mask
-         fades — so a tile only ever comes to rest once it's fully clear
-         of the fade, on either side, instead of settling half-hidden
-         under it. js/toolbar-carousel.js mirrors this exact inset when it
-         computes the initial (non-gesture) scroll position, so the very
-         first frame already matches where a swipe would naturally snap. */
-      scroll-padding-inline: var(--toolbar-fade);
-      /* Kept gentle ("proximity") rather than "mandatory" on purpose — a
-         mandatory snap actively fights a fast fling and the loop's own
-         rewind jump, which is what caused scrolling to stutter, reverse,
-         or stall. scroll-behavior is deliberately left at its default
-         (instant) too: "smooth" would apply to the loop's rewind jump as
-         well, animating it visibly and colliding with whatever momentum
-         the rider's own scroll gesture still had. */
-      scroll-snap-type: x proximity;
+      /* No scroll-behavior override here on purpose: "smooth" would also
+         apply to the loop's own rewind jump (see js/toolbar-carousel.js),
+         animating it visibly and colliding with whatever momentum the
+         rider's own scroll gesture still had. */
     }
     /* Cloned tiles are purely visual filler for the loop illusion — kept
        out of the tab order and out of assistive-tech announcements, since
        the real, focusable copy of each tool is always in the DOM too. */
     .toolbar.toolbar--loop .tool-btn[aria-hidden="true"] { cursor: pointer; }
 
-    /* Scroll-position indicator — a slim, elegant "how far through the
-       wheel am I" pill under the toolbar. Invisible and inert until
+    /* Scroll-position indicator — a short, centered pill under the
+       toolbar tracking how far through the wheel the rider currently is.
+       Deliberately much narrower than the toolbar itself (a thin dash,
+       not a full-width bar) so it reads as a subtle progress cue rather
+       than a second scrollbar. Invisible and inert until
        js/toolbar-carousel.js confirms the toolbar is actually scrollable
        (.toolbar-wrap--scrollable), and always hidden at the desktop
        breakpoint where the toolbar never scrolls at all. */
     .toolbar-indicator {
+      width: min(72px, 28vw);
       height: 4px;
-      margin: 0 22px 10px;
+      margin: 0 auto 10px;
       opacity: 0;
       transform: translateY(-2px);
       pointer-events: none;
@@ -574,10 +553,11 @@
       box-shadow: 0 0 8px var(--accent-soft);
       transition: left .18s ease-out, width .18s ease-out;
     }
-    /* Suspended for exactly the frame the loop rewinds in, mirroring how
-       .toolbar itself suspends scroll-snap-type for that frame — without
-       this the thumb would visibly streak across the whole track on every
-       lap boundary instead of jumping invisibly like the tiles do. */
+    /* Suspended for exactly the frame the thumb wraps from one edge of
+       the track to the other (a full lap boundary), so it disappears off
+       one side and reappears on the other — the same instant "reappears
+       from the other side" illusion the tiles get from their clones —
+       instead of visibly streaking all the way across the track. */
     .toolbar-indicator__thumb.toolbar-indicator__thumb--jump { transition: none; }
 
     .tool-btn .ticon { color: var(--accent); }
@@ -1230,7 +1210,6 @@
       .topbar { padding: 12px 16px; }
       .home-hero { padding: 30px 16px 30px; }
       .toolbar { padding: 12px 16px; margin-top: -18px; }
-      .toolbar-indicator { margin: 0 16px 10px; }
       .tool-btn { width: 80px; padding: 12px 4px; }
       .card { padding: 22px 16px 26px; }
       .subject-grid { grid-template-columns: repeat(4, 1fr); gap: 7px; }

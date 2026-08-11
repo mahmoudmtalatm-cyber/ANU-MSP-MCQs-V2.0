@@ -10,15 +10,15 @@
    into an endless wheel instead of a plain scrollbar-style overflow:
      • the real tiles are padded out with one hidden copy of the set
        before them and one after, so there's always more row on either
-       side to scroll into
-     • an edge mask fades each tile out smoothly as it nears the side of
-       the bar, rather than clipping it mid-tile — and the "resting"
-       scroll positions are inset by that same fade width, so a swipe
-       always settles on a tile that's fully clear of the fade, never
-       half-hidden under it
-     • a slim indicator pill under the toolbar tracks how far through the
-       current lap the rider is, so the fade doesn't leave them guessing
-       whether there's more to scroll
+       side to scroll into — tiles stay fully visible and fully opaque
+       right up to the edge, and there's no scroll-snap either, so the
+       row is free to stop at any position rather than being pulled to
+       fixed "resting" points
+     • a short, centered indicator pill under the toolbar tracks how far
+       through the current lap the rider is; when that position wraps
+       past the end of a lap it jumps straight to the other side rather
+       than sliding across, the same instant "reappears from the other
+       side" illusion the tiles themselves get from their clones
      • once the rider scrolls a full lap past either padding copy, the
        scroll position is silently rewound by exactly one lap — since the
        pattern repeats identically, the jump is invisible and the wheel
@@ -53,18 +53,6 @@
     return parseFloat(cs.columnGap || cs.gap) || 10;
   }
 
-  // The edge-mask fade width, read from the same custom property the CSS
-  // uses (--toolbar-fade, set on .toolbar-wrap) so the two never drift
-  // apart. It's a clamp() in CSS and therefore genuinely responsive —
-  // re-reading it live (instead of caching a px number) keeps the resting
-  // position and the indicator correct across resizes and orientation
-  // changes, not just at load.
-  function fadeWidth() {
-    const raw = getComputedStyle(wrap).getPropertyValue('--toolbar-fade');
-    const px = parseFloat(raw);
-    return Number.isFinite(px) ? px : 0;
-  }
-
   // Width the tiles need to sit side by side, independent of whatever is
   // currently in the DOM (clones or not) — always measured from the
   // original tiles, so this is a stable, single source of truth.
@@ -94,16 +82,15 @@
      ──────────────────────────────────────────────────────────────────── */
   const Indicator = (function () {
     const thumb = document.getElementById('toolbarIndicatorThumb');
-    if (!thumb) return { show() {}, hide() {}, update() {}, freeze() {}, unfreeze() {} };
+    if (!thumb) return { show() {}, hide() {}, update() {} };
+
+    let lastProgress = null;
 
     function show() { wrap.classList.add('toolbar-wrap--scrollable'); }
-    function hide() { wrap.classList.remove('toolbar-wrap--scrollable'); }
-
-    // Suspended for exactly the frame the loop rewinds in, so the thumb
-    // jumps invisibly with the tiles instead of visibly sliding across
-    // the whole track.
-    function freeze() { thumb.classList.add('toolbar-indicator__thumb--jump'); }
-    function unfreeze() { thumb.classList.remove('toolbar-indicator__thumb--jump'); }
+    function hide() {
+      wrap.classList.remove('toolbar-wrap--scrollable');
+      lastProgress = null;
+    }
 
     function update() {
       if (!looping || setWidth <= 0) return;
@@ -111,14 +98,30 @@
       // Position within the current lap, independent of which of the
       // three (lead / real / trail) copies the rider is physically over —
       // the pattern repeats identically, so this is a stable 0..1 value
-      // even mid-rewind.
+      // that wraps from ~1 back to ~0 (or back again) once per lap.
       const progress = (((toolbar.scrollLeft - setWidth) % setWidth) + setWidth) % setWidth / setWidth;
+
+      // A lap wrap shows up as a large jump in progress between two
+      // consecutive updates (a gradual scroll only ever moves it a
+      // little). Suspending the transition for exactly that one update
+      // makes the thumb disappear off one edge of the track and
+      // reappear on the other instantly, instead of visibly sliding all
+      // the way across — mirroring how a tile's clone carries it
+      // seamlessly from one edge to the other.
+      const wrapped = lastProgress !== null && Math.abs(progress - lastProgress) > 0.5;
+      if (wrapped) thumb.classList.add('toolbar-indicator__thumb--jump');
+
       const leftPct = progress * (100 - widthPct);
       thumb.style.width = widthPct + '%';
       thumb.style.left = leftPct + '%';
+      lastProgress = progress;
+
+      if (wrapped) {
+        requestAnimationFrame(() => thumb.classList.remove('toolbar-indicator__thumb--jump'));
+      }
     }
 
-    return { show, hide, update, freeze, unfreeze };
+    return { show, hide, update };
   })();
 
   function buildLoop() {
@@ -145,12 +148,8 @@
     toolbar.appendChild(after);
     toolbar.classList.add('toolbar--loop');
 
-    // Land on the real (middle) lap, inset by the fade width on the
-    // leading edge — the mirror image of the same inset the CSS applies
-    // via scroll-padding-inline for gesture-driven snapping — so the
-    // very first frame already rests exactly where a swipe would settle:
-    // fully past the fade, never half-hidden under it.
-    toolbar.scrollLeft = setWidth - fadeWidth();
+    // Land on the real (middle) lap.
+    toolbar.scrollLeft = setWidth;
     toolbar.addEventListener('scroll', onScroll, { passive: true });
 
     Indicator.show();
@@ -164,18 +163,9 @@
       pendingFrame = null;
       if (toolbar.scrollLeft > 0 && toolbar.scrollLeft < setWidth * 2) return;
 
-      // Scroll snapping is deliberately gentle (see .toolbar--loop in
-      // styles.css), but it can still try to "help" mid-correction —
-      // and on a fast fling, momentum scrolling can keep delivering
-      // scroll events for a moment after we've already rewound once.
-      // Suspending snap for the one frame the jump happens in, and
-      // resolving the *exact* number of laps crossed (not just one)
-      // rather than assuming a single lap, keeps the correction a single
-      // clean, instant jump no matter how hard or fast the rider scrolls.
-      const prevSnap = toolbar.style.scrollSnapType;
-      toolbar.style.scrollSnapType = 'none';
-      Indicator.freeze();
-
+      // Resolve the *exact* number of laps crossed (not just one) so a
+      // fast fling still lands in a single clean, instant jump no matter
+      // how hard or fast the rider scrolls.
       if (toolbar.scrollLeft <= 0) {
         const laps = Math.floor((setWidth - toolbar.scrollLeft) / setWidth) + 1;
         toolbar.scrollLeft += setWidth * laps;
@@ -184,11 +174,6 @@
         toolbar.scrollLeft -= setWidth * laps;
       }
       Indicator.update();
-
-      requestAnimationFrame(() => {
-        toolbar.style.scrollSnapType = prevSnap || '';
-        Indicator.unfreeze();
-      });
     });
   }
 
@@ -219,11 +204,11 @@
     } else if (looping) {
       // Already looping across a resize (e.g. a rotating tablet that
       // still doesn't fit) — re-measure the lap width, re-land on the
-      // fade-clear resting point for the new size, and refresh the
+      // start of the middle lap for the new size, and refresh the
       // indicator's proportions, rather than tearing the whole loop down
       // and rebuilding it.
       setWidth = naturalContentWidth() + toolbarGap();
-      toolbar.scrollLeft = setWidth - fadeWidth();
+      toolbar.scrollLeft = setWidth;
       Indicator.update();
     } else {
       buildLoop();
