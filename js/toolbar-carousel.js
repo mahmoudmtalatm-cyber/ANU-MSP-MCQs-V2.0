@@ -92,9 +92,21 @@
     function show() { wrap.classList.add('toolbar-wrap--scrollable'); }
     function hide() { wrap.classList.remove('toolbar-wrap--scrollable'); }
 
+    // How much of the natural viewport-share width the thumb actually
+    // renders at. 1 would make the thumb represent the true proportion
+    // of one lap currently visible (a wide block); scaling it down turns
+    // the same, still scroll-accurate thumb into a short moving line
+    // instead — only the thumb shrinks, the track it travels along is
+    // untouched. Bounded between MIN/MAX so it stays legible on both a
+    // narrow phone track and a wide tablet one.
+    const THUMB_LENGTH_SCALE = 0.4;
+    const THUMB_MIN_PCT = 10;
+    const THUMB_MAX_PCT = 32;
+
     function update() {
       if (!looping || setWidth <= 0) return;
-      const widthPct = Math.max(0, Math.min(100, (availableWidth() / setWidth) * 100));
+      const viewportSharePct = Math.max(0, Math.min(100, (availableWidth() / setWidth) * 100));
+      const widthPct = Math.max(THUMB_MIN_PCT, Math.min(THUMB_MAX_PCT, viewportSharePct * THUMB_LENGTH_SCALE));
       // Where the visible window's leading edge sits within the current
       // lap, as a 0..100 position along the track. Wraps from ~100 back
       // to ~0 once per lap, same as the underlying scroll position does —

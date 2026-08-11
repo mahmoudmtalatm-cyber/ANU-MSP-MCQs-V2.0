@@ -565,11 +565,14 @@
          "flows off one edge, already waiting on the other" illusion. */
     }
     /* Keeps the primary segment from thinning into an imperceptible
-       hairline on very long laps (many tiles / wide viewport). Only the
-       primary segment gets this floor — the wrap segment below must
-       still be able to reach a true, invisible 0 while there's nothing
-       to show at the opposite edge. */
-    #toolbarIndicatorThumb { min-width: 22px; }
+       hairline on very small tracks (narrow phones). js/toolbar-carousel.js
+       already clamps the thumb's own percentage width to a short,
+       line-like range (see THUMB_MIN_PCT/THUMB_MAX_PCT there); this is
+       just a hard pixel floor under that for the smallest viewports.
+       Only the primary segment gets this floor — the wrap segment below
+       must still be able to reach a true, invisible 0 while there's
+       nothing to show at the opposite edge. */
+    #toolbarIndicatorThumb { min-width: 12px; }
     /* The wraparound segment: whatever portion of the band has scrolled
        past the end of the current lap reappears here, pinned to the
        start of the track, exactly like a tile's own clone reappearing on
