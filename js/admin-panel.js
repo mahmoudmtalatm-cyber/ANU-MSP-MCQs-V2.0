@@ -1098,7 +1098,7 @@ function adminPublishTargetPickerHtml() {
           <div class="curr-item-sub">${Object.keys(curriculum[y] || {}).length} module(s)</div>
         </div>
         <span class="curr-item-arrow">▶</span>
-      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">${myScope.type === 'all' ? 'No years yet — add one in <svg class="sicon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Manage Curriculum first.' : 'No years within your curriculum access.'}</div>`;
+      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">${myScope.type === 'all' ? 'No years yet — add one in <svg class="sicon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Manage Curriculum first.' : 'No years within your curriculum access.'}</div>`;
 
   } else if (!adminPubTargetModule) {
     const mods = Object.keys(curriculum[adminPubTargetYear] || {}).filter(m => scopeModuleAccess(myScope, adminPubTargetYear, m) !== 'none');
@@ -1181,7 +1181,7 @@ function renderAdminAssignForm() {
         <span>Publish "${escapeHtml(single.title)}" (${qCount} q) to:</span>
         <button class="admin-remove-btn" style="background:var(--violet-pale);color:var(--violet-dark);border:1.5px solid var(--violet-mid-border);"
           onclick="adminToggleEditBeforePublish()">
-          ${adminEditMode === 'publish' ? '✖ Close Editor' : ' Edit Before Publishing'}
+          ${adminEditMode === 'publish' ? '✖ Close Editor' : '<svg class="sicon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit Before Publishing'}
         </button>
       </div>
       <div id="adminEditorArea"></div>`;

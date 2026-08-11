@@ -838,7 +838,7 @@ function _renderAdminAssignedListHTML() {
       return `
         <div class="admin-publish-here-gap ${active ? 'admin-publish-here-active' : ''}" onclick="${onclick}" title="Publish the new quiz here">
           <span class="admin-publish-here-line"></span>
-          <span class="admin-publish-here-btn">${active ? ' Publishing Here ✓' : ' Publish Here'}</span>
+          <span class="admin-publish-here-btn">${active ? '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Publishing Here ✓' : '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Publish Here'}</span>
           <span class="admin-publish-here-line"></span>
         </div>`;
     };
@@ -858,7 +858,7 @@ function _renderAdminAssignedListHTML() {
     sec.innerHTML += `
       <div style="font-size:.76rem;color:var(--text-muted);font-weight:600;margin-top:8px;">
         Need to edit, reorder, copy/move, or delete one of these? Head to
-        <span style="color:var(--accent);cursor:pointer;font-weight:800;" onclick="adminJumpToCurriculumQuizzes()"><svg class="sicon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Manage Curriculum</span>.
+        <span style="color:var(--accent);cursor:pointer;font-weight:800;" onclick="adminJumpToCurriculumQuizzes()"><svg class="sicon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Manage Curriculum</span>.
       </div>`;
     return;
   }

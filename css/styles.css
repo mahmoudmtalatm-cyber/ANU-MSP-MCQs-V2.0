@@ -658,6 +658,31 @@
     .shuffle-btn .sicon { flex-shrink: 0; }
     .shuffle-btn-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+    /* Elegant custom checkbox inside the Shuffle button — an explicit,
+       always-visible on/off indicator (empty box vs. filled + check),
+       so the button's active/inactive state reads at a glance and isn't
+       carried by border/background color alone. */
+    .shuffle-checkbox {
+      width: 18px; height: 18px; flex-shrink: 0; box-sizing: border-box;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--border-soft); border-radius: 5px;
+      background: var(--bg-card);
+      transition: background .18s, border-color .18s;
+    }
+    .shuffle-check-icon {
+      width: 12px; height: 12px;
+      fill: none; stroke: #fff; stroke-width: 3;
+      stroke-linecap: round; stroke-linejoin: round;
+      opacity: 0; transform: scale(.4);
+      transition: opacity .15s ease, transform .15s cubic-bezier(.2,.9,.3,1.3);
+    }
+    .shuffle-btn[aria-checked="true"] .shuffle-checkbox {
+      background: var(--accent); border-color: var(--accent);
+    }
+    .shuffle-btn[aria-checked="true"] .shuffle-check-icon {
+      opacity: 1; transform: scale(1);
+    }
+
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 7px;
       border: none; border-radius: 10px; cursor: pointer;
@@ -2944,10 +2969,12 @@
   flex: 1; height: 1px; background: var(--border-soft-2);
 }
 .admin-publish-here-btn {
+  display: inline-flex; align-items: center; gap: 4px;
   font-size: .7rem; font-weight: 800; color: var(--accent-dark); background: #EAF4FF;
   border: 1.5px dashed var(--border-soft); border-radius: 20px; padding: 3px 10px;
   white-space: nowrap; transition: all .12s;
 }
+.admin-publish-here-btn .sicon { width: 11px; height: 11px; margin-right: 0; }
 .admin-publish-here-gap:hover .admin-publish-here-btn { border-style: solid; background: #DCEEFF; }
 .admin-publish-here-gap.admin-publish-here-active .admin-publish-here-btn {
   background: var(--accent-dark); color: #fff; border-style: solid; border-color: var(--accent-dark);
