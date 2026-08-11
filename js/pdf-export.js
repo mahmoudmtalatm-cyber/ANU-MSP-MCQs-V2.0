@@ -380,6 +380,10 @@ function _pdxRenderCurriculumTab() {
     } else {
       const selectedHere = lectures.filter(l => _pdxSelCurriculum.has(`${_pdxCurrSubject}::${l}`)).length;
       html += `<div class="pdx-lecture-list-header">Lectures <span class="backup-quiz-count" id="pdxSubjectSelectedBadge">${selectedHere}</span></div>
+      <div style="display:flex;gap:8px;margin:6px 0 8px;">
+        <button type="button" style="flex:1;padding:6px;border-radius:6px;border:1.5px solid var(--accent);background:var(--surface-2-hover);color:var(--accent);font-weight:700;cursor:pointer;font-size:.8rem;" onclick="pdxToggleWholeSubject('${escapeHtml(_pdxCurrYear)}', '${escapeHtml(_pdxCurrModule)}', '${escapeHtml(_pdxCurrSubject)}', true)">☑ Select All</button>
+        <button type="button" style="flex:1;padding:6px;border-radius:6px;border:1.5px solid var(--border-soft);background:var(--surface-2);color:var(--text-muted);font-weight:700;cursor:pointer;font-size:.8rem;" onclick="pdxToggleWholeSubject('${escapeHtml(_pdxCurrYear)}', '${escapeHtml(_pdxCurrModule)}', '${escapeHtml(_pdxCurrSubject)}', false)">☐ Clear All</button>
+      </div>
       <div class="pdx-lecture-list">`;
       lectures.forEach(lname => {
         const qCount = subjects[_pdxCurrSubject].lectures[lname].length;

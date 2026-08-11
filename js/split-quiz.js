@@ -411,7 +411,7 @@ async function executeSplitQuiz(targetMode) {
     chunks = _computeEqualChunks(total, cqSplitState.chunkSize);
   } else if (cqSplitState.mode === 'visual') {
     const rawChunks = _getVisualChunksFromCuts(total); // 0-based inclusive
-    if (!rawChunks.length) { alert('No cuts defined yet. Click the <svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> scissors between questions to split.'); return; }
+    if (!rawChunks.length) { alert('No cuts defined yet. Click the scissors between questions to split.'); return; }
     const labels = cqSplitState.visualPartLabels || {};
     chunks = rawChunks.map(c => ({
       start: c.start + 1,
@@ -529,7 +529,7 @@ async function executeSplitQuiz(targetMode) {
       cqSplitState = null;
       renderAdminAssignedList();
       if (selectedSubject === subject) selectSubject(subject);
-      alert(`<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Published ${newLectures.length} new lecture${newLectures.length !== 1 ? 's' : ''} from "${baseTitle}" to ${subjects[subject].label || subject}, replacing the original lecture.`);
+      alert(`Published ${newLectures.length} new lecture${newLectures.length !== 1 ? 's' : ''} from "${baseTitle}" to ${subjects[subject].label || subject}, replacing the original lecture.`);
     } catch (e) {
       _setSplitPanelBusy(panelKey, false);
       alert('Failed to split & publish: ' + (e.message || e));
@@ -566,7 +566,7 @@ async function executeSplitQuiz(targetMode) {
 
     cqSplitState = null;
     _renderAdminAssignedListHTML();
-    alert(`<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Created ${newCustomQuizzes.length} split quiz${newCustomQuizzes.length !== 1 ? 'zes' : ''} from "${baseTitle}".\n\nThese were NOT published directly to students — they've been added to your Custom Quizzes, where you can review and publish each one individually when ready.`);
+    alert(`Created ${newCustomQuizzes.length} split quiz${newCustomQuizzes.length !== 1 ? 'zes' : ''} from "${baseTitle}".\n\nThese were NOT published directly to students — they've been added to your Custom Quizzes, where you can review and publish each one individually when ready.`);
     return;
   }
 

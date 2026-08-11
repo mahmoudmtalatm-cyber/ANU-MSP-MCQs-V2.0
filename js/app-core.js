@@ -873,7 +873,7 @@ function toggleMark() {
 function updateMarkBtn() {
   const btn = document.getElementById('markBtn');
   btn.classList.toggle('is-marked', markedSet.has(currentIndex));
-  btn.textContent = markedSet.has(currentIndex) ? '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" style="fill:currentColor;stroke:none;"/></svg> Unmark' : '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" style="fill:currentColor;stroke:none;"/></svg> Mark / Unmark';
+  btn.innerHTML = markedSet.has(currentIndex) ? '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" style="fill:currentColor;stroke:none;"/></svg> Unmark' : '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" style="fill:currentColor;stroke:none;"/></svg> Mark / Unmark';
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1372,7 +1372,7 @@ function _makeHistoryItem(h) {
   const wrongCount = (h.wrongQuestions || []).length;
   const retakeBtn = document.createElement('button');
   retakeBtn.style.cssText = 'display:block;width:100%;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:white;font-weight:700;cursor:pointer;font-size:.8rem;opacity:' + (wrongCount > 0 ? '1' : '.4') + ';';
-  retakeBtn.textContent = `<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retake ${wrongCount} wrong Q${wrongCount !== 1 ? 's' : ''}`;
+  retakeBtn.innerHTML = `<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retake ${wrongCount} wrong Q${wrongCount !== 1 ? 's' : ''}`;
   retakeBtn.disabled = wrongCount === 0;
   retakeBtn.onclick = (e) => { e.stopPropagation(); retakeSingleQuiz(h); };
   item.appendChild(retakeBtn);
@@ -1525,7 +1525,7 @@ function _renderCurriculumFlow(container, tree) {
   crumb.className = 'flow-breadcrumb';
   const allLink = document.createElement('span');
   allLink.className = 'flow-crumb' + (!_statsFlow.year ? ' active' : '');
-  allLink.textContent = '<svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> All Years';
+  allLink.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> All Years';
   allLink.onclick = () => { _statsFlow.year = null; _statsFlow.module = null; _statsFlow.openSubject = null; renderStatsModal(); };
   crumb.appendChild(allLink);
   if (_statsFlow.year) {
@@ -1736,7 +1736,7 @@ function renderStatsModal() {
   /* — Reset — */
   const rb = document.createElement('button');
   rb.className = 'stats-reset-btn';
-  rb.textContent = '<svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>  Reset All Statistics';
+  rb.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>  Reset All Statistics';
   rb.onclick = resetStats;
   body.appendChild(rb);
 }
@@ -1824,7 +1824,7 @@ function renderRetakeSelector() {
   const retakeBtn = document.createElement('button');
   retakeBtn.className = 'btn btn-primary';
   retakeBtn.style.marginTop = '12px';
-  retakeBtn.textContent = '<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retake Selected Wrong Questions';
+  retakeBtn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retake Selected Wrong Questions';
   retakeBtn.onclick = async () => {
     const checked = [...document.querySelectorAll('#retakeBody input[type=checkbox]:checked')];
     if (!checked.length) return alert('Please select at least one quiz.');
