@@ -546,18 +546,28 @@
     .toolbar-indicator__thumb {
       position: absolute;
       top: 0; left: 0; height: 100%;
-      min-width: 22px;
       border-radius: inherit;
       background: linear-gradient(90deg, var(--accent), var(--accent-glow));
       box-shadow: 0 0 8px var(--accent-soft);
-      transition: left .18s ease-out, width .18s ease-out;
+      /* No left/width transition here on purpose: js/toolbar-carousel.js
+         recalculates both segments on every scroll event, so the thumb
+         is meant to track the gesture in exact lockstep. Easing it would
+         make the primary segment visibly slide backward across the
+         whole track the instant a lap wraps, instead of the intended
+         "flows off one edge, already waiting on the other" illusion. */
     }
-    /* Suspended for exactly the frame the thumb wraps from one edge of
-       the track to the other (a full lap boundary), so it disappears off
-       one side and reappears on the other — the same instant "reappears
-       from the other side" illusion the tiles get from their clones —
-       instead of visibly streaking all the way across the track. */
-    .toolbar-indicator__thumb.toolbar-indicator__thumb--jump { transition: none; }
+    /* Keeps the primary segment from thinning into an imperceptible
+       hairline on very long laps (many tiles / wide viewport). Only the
+       primary segment gets this floor — the wrap segment below must
+       still be able to reach a true, invisible 0 while there's nothing
+       to show at the opposite edge. */
+    #toolbarIndicatorThumb { min-width: 22px; }
+    /* The wraparound segment: whatever portion of the band has scrolled
+       past the end of the current lap reappears here, pinned to the
+       start of the track, exactly like a tile's own clone reappearing on
+       the opposite edge. Zero width (and therefore invisible) whenever
+       the primary segment alone covers the visible window. */
+    .toolbar-indicator__thumb--wrap { width: 0; }
 
     .tool-btn .ticon { color: var(--accent); }
     .tool-btn:hover {

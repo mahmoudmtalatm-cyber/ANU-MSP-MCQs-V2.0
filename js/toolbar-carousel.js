@@ -15,10 +15,13 @@
        row is free to stop at any position rather than being pulled to
        fixed "resting" points
      • a short, centered indicator pill under the toolbar tracks how far
-       through the current lap the rider is; when that position wraps
-       past the end of a lap it jumps straight to the other side rather
-       than sliding across, the same instant "reappears from the other
-       side" illusion the tiles themselves get from their clones
+       through the current lap the rider is as two segments rather than
+       one: once the visible window scrolls past the end of a lap, the
+       overflow is drawn as a second segment already waiting at the
+       opposite edge, so the band appears to flow off one side and in
+       from the other in lockstep with the scroll gesture — the same
+       "reappears from the other side" illusion the tiles themselves get
+       from their clones, but continuous rather than a discrete jump
      • once the rider scrolls a full lap past either padding copy, the
        scroll position is silently rewound by exactly one lap — since the
        pattern repeats identically, the jump is invisible and the wheel
@@ -75,49 +78,42 @@
 
   /* ────────────────────────────────────────────────────────────────────
      SCROLL-POSITION INDICATOR
-     A slim pill under the toolbar that mirrors how far through one lap
-     the rider has scrolled. Entirely optional visually — if the markup
-     isn't present (e.g. an older cached page shell) everything above
-     still works fine, this module just quietly does nothing.
+     A slim, two-segment pill under the toolbar that mirrors how far
+     through one lap the rider has scrolled. Entirely optional visually —
+     if the markup isn't present (e.g. an older cached page shell)
+     everything above still works fine, this module just quietly does
+     nothing.
      ──────────────────────────────────────────────────────────────────── */
   const Indicator = (function () {
     const thumb = document.getElementById('toolbarIndicatorThumb');
+    const wrapThumb = document.getElementById('toolbarIndicatorThumbWrap');
     if (!thumb) return { show() {}, hide() {}, update() {} };
 
-    let lastProgress = null;
-
     function show() { wrap.classList.add('toolbar-wrap--scrollable'); }
-    function hide() {
-      wrap.classList.remove('toolbar-wrap--scrollable');
-      lastProgress = null;
-    }
+    function hide() { wrap.classList.remove('toolbar-wrap--scrollable'); }
 
     function update() {
       if (!looping || setWidth <= 0) return;
       const widthPct = Math.max(0, Math.min(100, (availableWidth() / setWidth) * 100));
-      // Position within the current lap, independent of which of the
-      // three (lead / real / trail) copies the rider is physically over —
-      // the pattern repeats identically, so this is a stable 0..1 value
-      // that wraps from ~1 back to ~0 (or back again) once per lap.
-      const progress = (((toolbar.scrollLeft - setWidth) % setWidth) + setWidth) % setWidth / setWidth;
+      // Where the visible window's leading edge sits within the current
+      // lap, as a 0..100 position along the track. Wraps from ~100 back
+      // to ~0 once per lap, same as the underlying scroll position does —
+      // that wrap is handled below by splitting the band across the two
+      // segments, not by suppressing it.
+      const startPct = (((toolbar.scrollLeft - setWidth) % setWidth) + setWidth) % setWidth / setWidth * 100;
 
-      // A lap wrap shows up as a large jump in progress between two
-      // consecutive updates (a gradual scroll only ever moves it a
-      // little). Suspending the transition for exactly that one update
-      // makes the thumb disappear off one edge of the track and
-      // reappear on the other instantly, instead of visibly sliding all
-      // the way across — mirroring how a tile's clone carries it
-      // seamlessly from one edge to the other.
-      const wrapped = lastProgress !== null && Math.abs(progress - lastProgress) > 0.5;
-      if (wrapped) thumb.classList.add('toolbar-indicator__thumb--jump');
-
-      const leftPct = progress * (100 - widthPct);
-      thumb.style.width = widthPct + '%';
-      thumb.style.left = leftPct + '%';
-      lastProgress = progress;
-
-      if (wrapped) {
-        requestAnimationFrame(() => thumb.classList.remove('toolbar-indicator__thumb--jump'));
+      // The band normally fits as a single segment. Once it would run
+      // past the right edge of the track, the overflow is drawn as a
+      // second segment starting fresh from the left edge instead — so
+      // the same band appears to flow off one side and in from the other
+      // in lockstep with the actual scroll position, rather than a
+      // single thumb having to jump between the two edges.
+      const overflow = Math.max(0, startPct + widthPct - 100);
+      thumb.style.left = startPct + '%';
+      thumb.style.width = (widthPct - overflow) + '%';
+      if (wrapThumb) {
+        wrapThumb.style.left = '0%';
+        wrapThumb.style.width = overflow + '%';
       }
     }
 
