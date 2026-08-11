@@ -50,14 +50,35 @@ function _aiSolveGetChoice(editorKey, i) {
   return _aiSolveSourceChoice[key] || _aiSolveDefaultChoice(editorKey);
 }
 
-function _aiSolveSourceShortLabel(editorKey, i) {
+// Icon markup for the per-question "solve using…" short label. Kept
+// separate from the plain-text label below: callers HTML-escape the label
+// before rendering it (it may contain a user-typed library source name),
+// and escaping raw SVG markup along with it would turn the icon into
+// visible "<svg ...>" text instead of rendering it.
+function _aiSolveSourceShortIcon(editorKey, i) {
   const choice = _aiSolveGetChoice(editorKey, i);
-  if (choice.type === 'bulk') return '<svg class="sicon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> ' + _aiSolveBulkSourceLabel(editorKey);
+  if (choice.type === 'bulk') return '<svg class="sicon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
   if (choice.type === 'lib') {
     const src = _aiSourceLibrary.find(s => s.id === choice.id);
-    if (src) return '<svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ' + src.label;
+    if (src) return '<svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
   }
-  return '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg> AI knowledge';
+  return '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>';
+}
+// Plain-text label to go with the icon above. Always run through
+// escapeHtml() at the call site — a library source's label is admin-typed
+// free text, not trusted markup.
+function _aiSolveSourceShortLabel(editorKey, i) {
+  const choice = _aiSolveGetChoice(editorKey, i);
+  if (choice.type === 'bulk') return _aiSolveBulkSourceLabel(editorKey);
+  if (choice.type === 'lib') {
+    const src = _aiSourceLibrary.find(s => s.id === choice.id);
+    if (src) return src.label;
+  }
+  return 'AI knowledge';
+}
+// Convenience helper: icon + escaped label, ready to drop into innerHTML.
+function _aiSolveSourceShortHTML(editorKey, i) {
+  return `${_aiSolveSourceShortIcon(editorKey, i)} ${escapeHtml(_aiSolveSourceShortLabel(editorKey, i))}`;
 }
 
 // Shared open/close logic for every per-question "button + ▾ caret +
@@ -133,7 +154,7 @@ function _renderAiSourcePickerHTML(editorKey, i) {
 function _aiSolvePickSource(editorKey, i, type, id) {
   _aiSolveSourceChoice[_aiToolsKey(editorKey, i)] = (type === 'lib') ? { type, id } : { type };
   const btn = document.getElementById(`aiSolveSrcCaret_${editorKey}_${i}`);
-  if (btn) btn.innerHTML = escapeHtml(_aiSolveSourceShortLabel(editorKey, i)) + ' ▾';
+  if (btn) btn.innerHTML = _aiSolveSourceShortHTML(editorKey, i) + ' ▾';
   const picker = document.getElementById(`aiSourcePicker_${editorKey}_${i}`);
   if (picker) picker.style.display = 'none';
 }
@@ -257,7 +278,7 @@ function _aiSourceLibraryRemove(id, editorKey, i) {
     if (_aiSolveSourceChoice[k].type === 'lib' && _aiSolveSourceChoice[k].id === id) delete _aiSolveSourceChoice[k];
   });
   const btn = document.getElementById(`aiSolveSrcCaret_${editorKey}_${i}`);
-  if (btn) btn.innerHTML = escapeHtml(_aiSolveSourceShortLabel(editorKey, i)) + ' ▾';
+  if (btn) btn.innerHTML = _aiSolveSourceShortHTML(editorKey, i) + ' ▾';
   const picker = document.getElementById(`aiSourcePicker_${editorKey}_${i}`);
   if (picker) { picker.innerHTML = _renderAiSourcePickerHTML(editorKey, i); }
 }

@@ -628,30 +628,32 @@
     }
     .q-count-badge.hidden { opacity: 0; pointer-events: none; }
 
-    /* Options row: duration + shuffle */
+    /* Options row: duration + shuffle — both fields share the same
+       label-above-control structure (.option-field) and the control
+       itself shares the exact padding/border/radius as the number input
+       below, so the Minutes field and the Shuffle button always line up
+       at an identical height, on every screen size. */
     .options-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
     .option-field {
       flex: 1 1 130px; display: flex; flex-direction: column; gap: 6px;
     }
     .option-field-label { font-size: .76rem; font-weight: 700; color: var(--text-muted); }
-    .shuffle-toggle {
-      flex: 1 1 180px; display: flex; align-items: center; gap: 10px; cursor: pointer;
-      background: var(--surface-2); border: 1.5px solid var(--border-soft);
-      border-radius: 10px; padding: 12px 14px;
+    .shuffle-btn {
+      width: 100%; height: 100%; box-sizing: border-box;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border-soft); border-radius: 10px;
+      font-family: var(--font); font-size: .87rem; font-weight: 600;
+      color: var(--text-main); background: var(--surface-2);
+      cursor: pointer; transition: border-color .2s, box-shadow .2s, background .2s, color .2s;
     }
-    .shuffle-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
-    .shuffle-track {
-      width: 36px; height: 20px; border-radius: 999px; background: var(--border);
-      position: relative; flex-shrink: 0; transition: background .2s;
+    .shuffle-btn:hover { border-color: var(--accent); }
+    .shuffle-btn:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+    .shuffle-btn[aria-checked="true"] {
+      border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark);
     }
-    .shuffle-track::after {
-      content: ''; position: absolute; top: 2px; left: 2px;
-      width: 16px; height: 16px; border-radius: 50%; background: #fff;
-      box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s;
-    }
-    .shuffle-toggle input:checked + .shuffle-track { background: var(--accent); }
-    .shuffle-toggle input:checked + .shuffle-track::after { transform: translateX(16px); }
-    .shuffle-label { font-size: .87rem; font-weight: 600; color: var(--text-main); }
+    .shuffle-btn .sicon { flex-shrink: 0; }
+    .shuffle-btn-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 7px;

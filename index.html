@@ -318,8 +318,8 @@
             <div class="lecture-empty">— Choose a subject first —</div>
           </div>
           <div class="lecture-actions">
-            <button class="btn chip-btn chip-btn-ghost" onclick="selectAllLectures()">Select all</button>
-            <button class="btn chip-btn chip-btn-ghost" onclick="clearAllLectures()">Clear</button>
+            <button class="btn chip-btn chip-btn-ghost" onclick="selectAllLectures()">☑ Select all</button>
+            <button class="btn chip-btn chip-btn-ghost" onclick="clearAllLectures()">☐ Clear</button>
             <div class="q-count-badge hidden" id="qCountBadge">
               <span id="qCountText">0 questions</span>
             </div>
@@ -336,11 +336,13 @@
               <span class="option-field-label">Minutes</span>
               <input type="number" id="timeInput" value="10" min="1" max="120" />
             </label>
-            <label class="shuffle-toggle">
-              <input type="checkbox" id="shuffleToggle" />
-              <span class="shuffle-track" aria-hidden="true"></span>
-              <span class="shuffle-label">Shuffle questions</span>
-            </label>
+            <div class="option-field">
+              <span class="option-field-label">Shuffle</span>
+              <button type="button" class="shuffle-btn" id="shuffleToggle" role="switch" aria-checked="false" onclick="toggleShuffle()">
+                <svg class="sicon" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                <span class="shuffle-btn-label">Shuffle questions</span>
+              </button>
+            </div>
           </div>
         </div>
 

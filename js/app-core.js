@@ -653,9 +653,25 @@ function startRetakeQuiz(questionsArray, ctx) {
   startTimer();
 }
 
+// Toggle button for "Shuffle questions" (Step 5 of the quiz builder). A
+// real <button> — not a checkbox — so it can sit flush inside a
+// button-styled box the same height as the Minutes input; state is tracked
+// via aria-checked/aria-pressed (see isShuffleEnabled()) rather than
+// .checked, since it isn't a form control.
+function toggleShuffle() {
+  const btn = document.getElementById('shuffleToggle');
+  if (!btn) return;
+  const next = btn.getAttribute('aria-checked') !== 'true';
+  btn.setAttribute('aria-checked', String(next));
+}
+function isShuffleEnabled() {
+  const btn = document.getElementById('shuffleToggle');
+  return !!btn && btn.getAttribute('aria-checked') === 'true';
+}
+
 function startQuiz() {
   const mins = parseInt(document.getElementById('timeInput').value, 10);
-  const shuffle = document.getElementById('shuffleToggle').checked;
+  const shuffle = isShuffleEnabled();
 
   let combined = [], totalLecCount = 0;
   const involvedSubjects = [];
@@ -1392,16 +1408,40 @@ function _makeHistoryItem(h) {
    components/source fields saveQuizStats() now writes).
 ══════════════════════════════════════════════════════════ */
 
-// Bucket label for anything with no Year/Module: custom quizzes, community
+// Metadata for each "Other Quiz Sources" bucket: custom quizzes, community
 // quizzes, retake sessions with no inherited context, and — for full
 // backward compatibility — any history entry recorded before this feature
-// existed (it simply has no year/module field at all).
-function _otherBucketLabel(h) {
-  if (h.source === 'custom')    return '<svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Custom Quizzes';
-  if (h.source === 'community') return '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Community Quizzes';
-  if (h.source === 'retake')    return '<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retake Sessions';
-  return '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Unspecified (older quizzes)';
+// existed (it simply has no year/module field at all). Icon markup is kept
+// separate from the plain-text label: the label doubles as the grouping
+// key in buildCurriculumStatsTree() and is always HTML-escaped at render
+// time, so concatenating raw SVG into it would (and previously did) turn
+// the icon into visible "<svg ...>" text once escaped.
+const _OTHER_BUCKETS = {
+  custom: {
+    label: 'Custom Quizzes',
+    icon: '<svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg>'
+  },
+  community: {
+    label: 'Community Quizzes',
+    icon: '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>'
+  },
+  retake: {
+    label: 'Retake Sessions',
+    icon: '<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'
+  },
+  unspecified: {
+    label: 'Unspecified (older quizzes)',
+    icon: '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>'
+  }
+};
+function _otherBucketKind(h) {
+  if (h.source === 'custom')    return 'custom';
+  if (h.source === 'community') return 'community';
+  if (h.source === 'retake')    return 'retake';
+  return 'unspecified';
 }
+function _otherBucketLabel(h) { return _OTHER_BUCKETS[_otherBucketKind(h)].label; }
+function _otherBucketIcon(h)  { return _OTHER_BUCKETS[_otherBucketKind(h)].icon; }
 
 function _pctOf(node) { return node.total > 0 ? Math.round(node.correct / node.total * 100) : 0; }
 
@@ -1429,7 +1469,7 @@ function buildCurriculumStatsTree(history) {
       subjNode.entries.push(h);
     } else {
       const label = _otherBucketLabel(h);
-      const node = other[label] || (other[label] = { quizzes: 0, correct: 0, total: 0, entries: [] });
+      const node = other[label] || (other[label] = { quizzes: 0, correct: 0, total: 0, entries: [], icon: _otherBucketIcon(h) });
       bump(node, h);
       node.entries.push(h);
     }
@@ -1479,7 +1519,7 @@ function _makeFlowNode(label, statsNode, isSelected, onClick) {
    scores behind it — this is the "toggle menu named by subject and
    module" from the feature request, reused for every subject inside the
    flowchart AND every non-curriculum bucket (Custom/Community/Retake). */
-function _makeQuizToggleCard(label, node, isOpen, onToggle) {
+function _makeQuizToggleCard(label, node, isOpen, onToggle, icon) {
   const wrap = document.createElement('div');
   wrap.className = 'quiz-toggle-group' + (isOpen ? ' is-open' : '');
 
@@ -1487,9 +1527,13 @@ function _makeQuizToggleCard(label, node, isOpen, onToggle) {
   header.type = 'button';
   header.className = 'quiz-toggle-header';
   const pct = _pctOf(node);
+  // `icon` is trusted, static SVG markup defined in this file (never
+  // user-supplied) and is rendered raw; `label` is user/data-derived text
+  // and always goes through escapeHtml() — the two must never be merged
+  // into one string before escaping, or the icon markup gets escaped too.
   header.innerHTML = `
     <span class="qt-chevron">${isOpen ? '▾' : '▸'}</span>
-    <span class="qt-label">${escapeHtml(label)}</span>
+    <span class="qt-label">${icon || ''} ${escapeHtml(label)}</span>
     <span class="qt-meta">${node.quizzes} quiz${node.quizzes !== 1 ? 'zes' : ''} · <span style="color:${_perfColor(pct)}">${pct}%</span></span>`;
   header.onclick = onToggle;
   wrap.appendChild(header);
@@ -1628,7 +1672,7 @@ function _renderOtherSources(container, other) {
     .forEach(label => {
       const node = other[label];
       const isOpen = _statsFlow.openOther === label;
-      list.appendChild(_makeQuizToggleCard(label, node, isOpen, () => _sfToggleOther(label)));
+      list.appendChild(_makeQuizToggleCard(label, node, isOpen, () => _sfToggleOther(label), node.icon));
     });
   sec.appendChild(list);
   container.appendChild(sec);

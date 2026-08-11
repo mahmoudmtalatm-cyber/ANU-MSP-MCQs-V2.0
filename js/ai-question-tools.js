@@ -371,7 +371,7 @@ function _renderAiRefineTools(editorKey, i) {
         <button class="cq-edit-reask-btn" type="button" id="aiSolveSrcCaret_${editorKey}_${i}" ${busy ? 'disabled' : ''}
           title="Choose what AI Solve should rely on: general AI knowledge, or a specific source"
           onclick="_toggleAiSourcePicker('${editorKey}', ${i})"
-          style="background:#F1F8F4;color:var(--correct-fg);border-color:var(--green-pale-border);border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(_aiSolveSourceShortLabel(editorKey, i))} ▾</button>
+          style="background:#F1F8F4;color:var(--correct-fg);border-color:var(--green-pale-border);border-left:none;border-top-left-radius:0;border-bottom-left-radius:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_aiSolveSourceShortHTML(editorKey, i)} ▾</button>
       </div>
       <button class="ai-tool-stop-btn" type="button" id="cqAiSolveStopBtn_${editorKey}_${i}"
         style="${busy && activeAction === 'solve' ? 'display:inline-block;' : ''}"
