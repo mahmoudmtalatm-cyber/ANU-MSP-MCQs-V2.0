@@ -478,8 +478,8 @@
       scroll-snap-type: x proximity;
     }
     .toolbar::-webkit-scrollbar { display: none; }
-    .tool-btn { scroll-snap-align: start; }
     .tool-btn {
+      scroll-snap-align: start;
       flex: 0 0 auto;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 7px;
@@ -493,6 +493,26 @@
       cursor: pointer; text-align: center; line-height: 1.2;
       transition: border-color .18s, color .18s, transform .15s, box-shadow .18s, background .18s;
     }
+
+    /* "Wheel" mode — added by js/toolbar-carousel.js only once it has
+       measured that the tiles genuinely don't fit side by side. The row
+       is quietly padded out with cloned tiles before and after the real
+       set, then recentered, so scrolling in either direction feels like
+       turning an endless wheel: a tile fades out on one edge right as its
+       twin fades in on the other. Nothing here ever runs on screens where
+       everything already fits. */
+    .toolbar.toolbar--loop {
+      -webkit-mask-image: linear-gradient(90deg,
+        transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+      mask-image: linear-gradient(90deg,
+        transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+    }
+    /* Cloned tiles are purely visual filler for the loop illusion — kept
+       out of the tab order and out of assistive-tech announcements, since
+       the real, focusable copy of each tool is always in the DOM too. */
+    .toolbar.toolbar--loop .tool-btn[aria-hidden="true"] { cursor: pointer; }
     .tool-btn .ticon { color: var(--accent); }
     .tool-btn:hover {
       border-color: var(--accent);
