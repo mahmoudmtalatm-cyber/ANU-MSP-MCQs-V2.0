@@ -187,13 +187,29 @@ function closeCommunityQuizzes() {
   fsLoadingHide();
 }
 
+// Typing in the search box only ever needs the results list (and its
+// count) refreshed — the tabs and the rest of the filter bar don't
+// depend on the search text at all. Routing it through this instead of
+// a full renderCommunityQuizzes() means the search <input> itself is
+// never touched while the person is typing into it, so focus, caret
+// position, and (on mobile) the on-screen keyboard all just stay put.
 function communityOnSearchInput(val) {
   communitySearchQuery = val;
-  document.getElementById('commClearBtn').style.display = val ? 'block' : 'none';
-  window._commSearchFocused = true;
-  const el = document.getElementById('commSearchInput');
-  window._commSearchPos = el ? el.selectionStart : null;
-  renderCommunityQuizzes();
+  const clearBtn = document.getElementById('commClearBtn');
+  if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+  _renderCommunityResultsOnly();
+}
+
+// For search changes that happen programmatically rather than by typing
+// (a tag click, the clear button) — updates the input's own value too,
+// since there's no live keystroke already doing that for us.
+function communitySetSearch(val) {
+  communitySearchQuery = val;
+  const input = document.getElementById('commSearchInput');
+  if (input) input.value = val;
+  const clearBtn = document.getElementById('commClearBtn');
+  if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+  _renderCommunityResultsOnly();
 }
 
 /* Pure filter + sort + derived-filter-options computation, shared between
@@ -242,6 +258,94 @@ function _communityComputeView({ scope, search, yearFilter, moduleFilter, subjec
   return { pool, shared, myShared, allYears, allModules, allSubjects };
 }
 
+// Builds just the result items (or the empty-state block) for the given
+// pool — shared between the full render (tab/filter changes) and the
+// results-only render (search keystrokes) so the two can never drift
+// apart. Also (re)populates window._commQuizCache, which the Start
+// button's startCommunityQuizByIdx(idx) looks items up from by index.
+function _communityBuildListHtml(pool, myUid) {
+  if (!pool.length) {
+    const filtered = communitySearchQuery || communityYearFilter || communityModuleFilter || communitySubjectFilter;
+    return `<div class="community-empty">
+      <div class="ce-icon">${filtered ? '' : (communityTab === 'mine' ? '<svg class="hicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' : '<svg class="hicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>')}</div>
+      ${filtered
+        ? 'No quizzes match your search. Try different keywords or clear the filters.'
+        : communityTab === 'mine'
+          ? 'You haven\'t shared any quizzes yet. Create one and tap the Share button!'
+          : 'No community quizzes yet — be the first to share one!'}
+    </div>`;
+  }
+
+  const _communityQuizzesCache = [];
+  let html = '';
+
+  pool.forEach((item, idx) => {
+    _communityQuizzesCache[idx] = item;
+    const isOwn = item.authorUid === myUid;
+    const date = new Date(item.sharedAt).toLocaleDateString();
+    // Legacy/migrated items may be missing questionCount; fall back to
+    // the actual questions array, then to 0, so Math.max() below can
+    // never receive NaN (which the browser rejects on a number input's
+    // value attribute and logs a console warning for on every render).
+    const qCount = Number.isFinite(item.questionCount)
+      ? item.questionCount
+      : (Array.isArray(item.questions) ? item.questions.length : 0);
+    const catBadge = (item.year || item.subjectLabel)
+      ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
+      : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
+    const tagsHtml = (item.tags && item.tags.length)
+      ? `<div class="comm-tags-row">${item.tags.map(t =>
+          `<span class="comm-tag" onclick="communitySetSearch('${escapeHtml(t)}')" title="Filter by tag">#${escapeHtml(t)}</span>`
+        ).join('')}</div>` : '';
+
+    html += `<div class="community-quiz-item">
+      <div class="community-quiz-header">
+        <div style="flex:1;min-width:0;">
+          <div class="community-quiz-title">${escapeHtml(item.title)}</div>
+          <div class="community-quiz-meta">
+            ${catBadge}
+            ${qCount} question${qCount !== 1 ? 's' : ''}
+            &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${escapeHtml(item.authorName)}
+            ${isOwn ? ' <span class="share-chip">You</span>' : ''}
+            &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${date}
+          </div>
+          ${tagsHtml}
+        </div>
+      </div>
+      <div class="community-quiz-actions">
+        <input type="number" id="cqCommMins_${idx}" value="${Math.max(5, qCount)}" min="1" max="180" title="Duration (minutes)" style="width:64px;padding:7px 8px;border:1.5px solid var(--border-soft);border-radius:6px;font-family:var(--font);font-size:.82rem;background:var(--surface-2);color:var(--text-main);" />
+        <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;">
+          <input type="checkbox" id="cqCommShuffle_${idx}" style="width:14px;height:14px;accent-color:var(--accent);" /> <svg class="sicon" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        </label>
+        <button class="cq-btn" onclick="startCommunityQuizByIdx(${idx})"><svg class="sicon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start</button>
+        <button class="cq-save-mine-btn" onclick="importCommunityQuiz('${escapeHtml(item.id)}')"><svg class="sicon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save to Mine</button>
+        ${isOwn ? `<button class="cq-btn cq-btn-danger" onclick="deleteCommunityQuiz('${escapeHtml(item.id)}')"><svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Unshare</button>` : ''}
+      </div>
+    </div>`;
+  });
+
+  window._commQuizCache = _communityQuizzesCache;
+  return html;
+}
+
+// The light path: recomputes the filtered pool and rewrites only the
+// results list + its count. Used for every search keystroke — see the
+// comment on _commRenderResults (js/dom-utils.js) for why that matters.
+function _renderCommunityResultsOnly() {
+  const myUid = window._currentUser ? window._currentUser.uid : null;
+  const { pool } = _communityComputeView({
+    scope: communityTab, search: communitySearchQuery,
+    yearFilter: communityYearFilter, moduleFilter: communityModuleFilter, subjectFilter: communitySubjectFilter,
+    sort: communitySort,
+  });
+  _commRenderResults({
+    idPrefix: 'comm',
+    listContainerId: 'communityQuizList',
+    resultCount: pool.length,
+    listHtml: _communityBuildListHtml(pool, myUid),
+  });
+}
+
 async function renderCommunityQuizzes(forceReload) {
   const body = document.getElementById('communityQuizBody');
 
@@ -269,8 +373,13 @@ async function renderCommunityQuizzes(forceReload) {
     sort: communitySort,
   });
 
-  // --- Build HTML ---
-  let html = `
+  // --- Build the chrome (tabs + filter bar) and a stable list container.
+  // This full rebuild only ever runs on structural changes — opening the
+  // modal, switching tabs, or changing a dropdown — never on a search
+  // keystroke (see communityOnSearchInput / _renderCommunityResultsOnly
+  // above), so the search <input> itself stays alive and focused while
+  // someone types into it.
+  const html = `
     <div class="community-section-tabs">
       <button class="community-tab-btn ${communityTab === 'browse' ? 'active' : ''}" onclick="communityTab='browse';communitySearchQuery='';communityYearFilter='';communityModuleFilter='';communitySubjectFilter='';renderCommunityQuizzes()"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Browse All (${shared.length})</button>
       <button class="community-tab-btn ${communityTab === 'mine' ? 'active' : ''}" onclick="communityTab='mine';renderCommunityQuizzes()"><svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Shared (${myShared.length})</button>
@@ -279,7 +388,7 @@ async function renderCommunityQuizzes(forceReload) {
       idPrefix: 'comm',
       searchVal: communitySearchQuery,
       searchOninput: 'communityOnSearchInput(this.value)',
-      clearOnclick: "communitySearchQuery='';document.getElementById('commSearchInput').value='';this.style.display='none';renderCommunityQuizzes()",
+      clearOnclick: "communitySetSearch('')",
       yearVal: communityYearFilter,
       yearOnchange: "communityYearFilter=this.value;communityModuleFilter='';communitySubjectFilter='';renderCommunityQuizzes()",
       allYears,
@@ -294,78 +403,10 @@ async function renderCommunityQuizzes(forceReload) {
       sortVal: communitySort,
       sortOnchange: 'communitySort=this.value;renderCommunityQuizzes()',
       resultCount: pool.length
-    })}`;
-
-  if (!pool.length) {
-    html += `<div class="community-empty">
-      <div class="ce-icon">${communitySearchQuery || communityYearFilter || communityModuleFilter || communitySubjectFilter ? '' : (communityTab === 'mine' ? '<svg class="hicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' : '<svg class="hicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>')}</div>
-      ${communitySearchQuery || communityYearFilter || communityModuleFilter || communitySubjectFilter
-        ? 'No quizzes match your search. Try different keywords or clear the filters.'
-        : communityTab === 'mine'
-          ? 'You haven\'t shared any quizzes yet. Create one and tap the Share button!'
-          : 'No community quizzes yet — be the first to share one!'}
-    </div>`;
-  } else {
-    const _communityQuizzesCache = [];
-
-    pool.forEach((item, idx) => {
-      _communityQuizzesCache[idx] = item;
-      const isOwn = item.authorUid === myUid;
-      const date = new Date(item.sharedAt).toLocaleDateString();
-      // Legacy/migrated items may be missing questionCount; fall back to
-      // the actual questions array, then to 0, so Math.max() below can
-      // never receive NaN (which the browser rejects on a number input's
-      // value attribute and logs a console warning for on every render).
-      const qCount = Number.isFinite(item.questionCount)
-        ? item.questionCount
-        : (Array.isArray(item.questions) ? item.questions.length : 0);
-      const catBadge = (item.year || item.subjectLabel)
-        ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
-        : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
-      const tagsHtml = (item.tags && item.tags.length)
-        ? `<div class="comm-tags-row">${item.tags.map(t =>
-            `<span class="comm-tag" onclick="communitySearchQuery='${escapeHtml(t)}';renderCommunityQuizzes()" title="Filter by tag">#${escapeHtml(t)}</span>`
-          ).join('')}</div>` : '';
-
-      html += `<div class="community-quiz-item">
-        <div class="community-quiz-header">
-          <div style="flex:1;min-width:0;">
-            <div class="community-quiz-title">${escapeHtml(item.title)}</div>
-            <div class="community-quiz-meta">
-              ${catBadge}
-              ${qCount} question${qCount !== 1 ? 's' : ''}
-              &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${escapeHtml(item.authorName)}
-              ${isOwn ? ' <span class="share-chip">You</span>' : ''}
-              &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${date}
-            </div>
-            ${tagsHtml}
-          </div>
-        </div>
-        <div class="community-quiz-actions">
-          <input type="number" id="cqCommMins_${idx}" value="${Math.max(5, qCount)}" min="1" max="180" title="Duration (minutes)" style="width:64px;padding:7px 8px;border:1.5px solid var(--border-soft);border-radius:6px;font-family:var(--font);font-size:.82rem;background:var(--surface-2);color:var(--text-main);" />
-          <label style="display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;color:var(--text-muted);cursor:pointer;">
-            <input type="checkbox" id="cqCommShuffle_${idx}" style="width:14px;height:14px;accent-color:var(--accent);" /> <svg class="sicon" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-          </label>
-          <button class="cq-btn" onclick="startCommunityQuizByIdx(${idx})"><svg class="sicon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start</button>
-          <button class="cq-save-mine-btn" onclick="importCommunityQuiz('${escapeHtml(item.id)}')"><svg class="sicon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save to Mine</button>
-          ${isOwn ? `<button class="cq-btn cq-btn-danger" onclick="deleteCommunityQuiz('${escapeHtml(item.id)}')"><svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Unshare</button>` : ''}
-        </div>
-      </div>`;
-    });
-
-    window._commQuizCache = _communityQuizzesCache;
-  }
+    })}
+    <div id="communityQuizList">${_communityBuildListHtml(pool, myUid)}</div>`;
 
   body.innerHTML = html;
-
-  // Restore search input focus/caret if user was typing
-  const searchEl = document.getElementById('commSearchInput');
-  if (searchEl && document.activeElement !== searchEl && window._commSearchFocused) {
-    const pos = window._commSearchPos || searchEl.value.length;
-    searchEl.focus();
-    try { searchEl.setSelectionRange(pos, pos); } catch(e) {}
-    window._commSearchFocused = false;
-  }
 }
 
 async function startCommunityQuizByIdx(idx) {
@@ -478,4 +519,3 @@ async function deleteCommunityQuiz(sharedId) {
     alert('Failed to remove quiz: ' + (e.message || e));
   }
 }
-

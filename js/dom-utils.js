@@ -221,6 +221,41 @@ function _buildCommFilterBarHTML(cfg) {
           </select>
         </div>
       </div>
-      <div class="comm-results-count">${cfg.resultCount} quiz${cfg.resultCount !== 1 ? 'zes' : ''} shown</div>
+      <div class="comm-results-count" id="${p}ResultsCount">${_commResultsCountLabel(cfg.resultCount)}</div>
     </div>`;
+}
+
+/** "N quizzes shown" / "1 quiz shown" — the one place this string is worded. */
+function _commResultsCountLabel(count) {
+  return `${count} quiz${count !== 1 ? 'zes' : ''} shown`;
+}
+
+/**
+ * Re-renders one of the community-quiz browsing screens built on
+ * _buildCommFilterBarHTML without ever touching the filter bar's own
+ * DOM nodes — most importantly the search `<input>` itself.
+ *
+ * Every one of those screens used to rebuild its filter bar (search box
+ * included) from an HTML string on *every keystroke*, because the whole
+ * bar and results list were one `el.innerHTML = …` write. Destroying and
+ * recreating a focused `<input>` on every keystroke doesn't just lose
+ * the caret (each screen was separately patching that back with a
+ * save-position/refocus hack) — on a touch device it also blinks the
+ * on-screen keyboard shut and open again, which reads as the whole
+ * window flickering. Splitting "the chrome" (tabs + filter bar) from
+ * "the results" (the list + its count) and only ever touching the
+ * latter while the person is typing removes the problem at the root:
+ * the input node now simply never goes away.
+ *
+ * @param {Object} opts
+ * @param {string} opts.idPrefix - same idPrefix passed to _buildCommFilterBarHTML
+ * @param {string} opts.listContainerId - id of the element the result items get written into
+ * @param {number} opts.resultCount - current filtered count, for the "N quizzes shown" line
+ * @param {string} opts.listHtml - the results markup (or an empty-state block) for listContainerId
+ */
+function _commRenderResults(opts) {
+  const listEl = document.getElementById(opts.listContainerId);
+  if (listEl) listEl.innerHTML = opts.listHtml;
+  const countEl = document.getElementById(opts.idPrefix + 'ResultsCount');
+  if (countEl) countEl.textContent = _commResultsCountLabel(opts.resultCount);
 }

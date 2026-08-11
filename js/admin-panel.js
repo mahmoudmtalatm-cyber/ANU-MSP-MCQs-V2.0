@@ -492,14 +492,99 @@ function adminSetSourceTab(tab) {
   renderAdminPanel();
 }
 
+// Live typing only rewrites the community results list + count (see
+// _adminCommRenderResultsOnly below) rather than the whole admin panel —
+// see the matching comment on communityOnSearchInput in js/sharing.js
+// for why a full re-render on every keystroke is what was causing the
+// search box (and, here, the entire panel around it) to flicker.
 function adminCommOnSearchInput(val) {
   adminCommSearchQuery = val;
   const clearBtn = document.getElementById('adminCommClearBtn');
   if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
-  window._adminCommSearchFocused = true;
-  const el = document.getElementById('adminCommSearchInput');
-  window._adminCommSearchPos = el ? el.selectionStart : null;
-  renderAdminPanel();
+  _adminCommRenderResultsOnly();
+}
+
+// Programmatic search changes (the clear button) — also syncs the
+// input's own value, since no keystroke is doing that for us here.
+function adminCommSetSearch(val) {
+  adminCommSearchQuery = val;
+  const input = document.getElementById('adminCommSearchInput');
+  if (input) input.value = val;
+  const clearBtn = document.getElementById('adminCommClearBtn');
+  if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+  _adminCommRenderResultsOnly();
+}
+
+/* Pure filter+sort, split out of renderAdminPanel so the light
+   results-only path below can share it instead of duplicating the
+   filtering logic. Assumes adminCommunityCache is already populated —
+   callers that might run before the first load has completed should go
+   through renderAdminPanel() (or _mergeLoadCommunityTab-style guards)
+   instead. */
+function _adminCommComputePool() {
+  const allShared = adminCommunityCache || [];
+  const myUid = window._currentUser ? window._currentUser.uid : null;
+  const myShared = allShared.filter(q => q.authorUid === myUid);
+  let shared = adminCommTab === 'mine' ? myShared : allShared;
+
+  const q = adminCommSearchQuery.toLowerCase().trim();
+  if (q) {
+    shared = shared.filter(item => {
+      const inTitle = (item.title || '').toLowerCase().includes(q);
+      const inAuthor = (item.authorName || '').toLowerCase().includes(q);
+      const inCat = (item.category || '').toLowerCase().includes(q);
+      const inTags = (item.tags || []).some(t => t.includes(q));
+      return inTitle || inAuthor || inCat || inTags;
+    });
+  }
+  if (adminCommYearFilter) shared = shared.filter(item => (item.year || '') === adminCommYearFilter);
+  if (adminCommModuleFilter) shared = shared.filter(item => (item.module || '') === adminCommModuleFilter);
+  if (adminCommSubjectFilter) shared = shared.filter(item => (item.subjectKey || '') === adminCommSubjectFilter);
+
+  if (adminCommSort === 'newest') shared = [...shared].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
+  else if (adminCommSort === 'oldest') shared = [...shared].sort((a, b) => (a.sharedAt || 0) - (b.sharedAt || 0));
+  else if (adminCommSort === 'az') shared = [...shared].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  else if (adminCommSort === 'questions') shared = [...shared].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
+
+  return { shared, allShared, myShared };
+}
+
+function _adminCommBuildListHtml(shared) {
+  const hasFilters = !!(adminCommSearchQuery || adminCommYearFilter || adminCommModuleFilter || adminCommSubjectFilter);
+  if (!shared.length) {
+    const emptyMsg = hasFilters
+      ? 'No quizzes match your search. Try different keywords or clear the filters.'
+      : adminCommTab === 'mine'
+        ? "You haven't shared any quizzes yet."
+        : 'No community quizzes available.';
+    return `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">${emptyMsg}</div>`;
+  }
+  return shared.map(q => {
+    const sel = adminSelectedQuizzes.has(_adminQuizKey('community', q.id));
+    return `
+      <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('community','${q.id}')">
+        <div class="admin-quiz-item-info">
+          <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
+          <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="admin-quiz-item-check">✓</div>
+      </div>`;
+  }).join('');
+}
+
+// Light path: recomputes the pool and rewrites only the results list +
+// count inside the already-rendered Publish/community section — the
+// source tabs, selection bar, and filter bar (including the search
+// <input>) are left completely alone.
+function _adminCommRenderResultsOnly() {
+  if (adminSourceTab !== 'community' || !adminCommunityCache) return;
+  const { shared } = _adminCommComputePool();
+  _commRenderResults({
+    idPrefix: 'adminComm',
+    listContainerId: 'adminQuizList',
+    resultCount: shared.length,
+    listHtml: _adminCommBuildListHtml(shared),
+  });
 }
 
 async function renderAdminPanel() {
@@ -631,9 +716,7 @@ async function renderAdminPanel() {
         return;
       }
     }
-    const allShared = adminCommunityCache;
-    const myUid = window._currentUser ? window._currentUser.uid : null;
-    const myShared = allShared.filter(q => q.authorUid === myUid);
+    const { shared, allShared, myShared } = _adminCommComputePool();
 
     const sectionTabsEl = document.getElementById('adminCommSectionTabs');
     if (sectionTabsEl) {
@@ -642,39 +725,6 @@ async function renderAdminPanel() {
           <button class="community-tab-btn ${adminCommTab === 'browse' ? 'active' : ''}" onclick="adminCommTab='browse';adminCommSearchQuery='';adminCommYearFilter='';adminCommModuleFilter='';adminCommSubjectFilter='';renderAdminPanel()"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Browse All (${allShared.length})</button>
           <button class="community-tab-btn ${adminCommTab === 'mine' ? 'active' : ''}" onclick="adminCommTab='mine';renderAdminPanel()"><svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Shared (${myShared.length})</button>
         </div>`;
-    }
-
-    // --- Filtering (identical logic to renderCommunityQuizzes) ---
-    let shared = adminCommTab === 'mine' ? myShared : allShared;
-
-    const q = adminCommSearchQuery.toLowerCase().trim();
-    if (q) {
-      shared = shared.filter(item => {
-        const inTitle = (item.title || '').toLowerCase().includes(q);
-        const inAuthor = (item.authorName || '').toLowerCase().includes(q);
-        const inCat = (item.category || '').toLowerCase().includes(q);
-        const inTags = (item.tags || []).some(t => t.includes(q));
-        return inTitle || inAuthor || inCat || inTags;
-      });
-    }
-    if (adminCommYearFilter) {
-      shared = shared.filter(item => (item.year || '') === adminCommYearFilter);
-    }
-    if (adminCommModuleFilter) {
-      shared = shared.filter(item => (item.module || '') === adminCommModuleFilter);
-    }
-    if (adminCommSubjectFilter) {
-      shared = shared.filter(item => (item.subjectKey || '') === adminCommSubjectFilter);
-    }
-
-    if (adminCommSort === 'newest') {
-      shared = [...shared].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
-    } else if (adminCommSort === 'oldest') {
-      shared = [...shared].sort((a, b) => (a.sharedAt || 0) - (b.sharedAt || 0));
-    } else if (adminCommSort === 'az') {
-      shared = [...shared].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-    } else if (adminCommSort === 'questions') {
-      shared = [...shared].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
     }
 
     // Build cascading filter options from live curriculum + shared quiz metadata
@@ -686,13 +736,18 @@ async function renderAdminPanel() {
       ? (curriculum[adminCommYearFilter][adminCommModuleFilter] || []).filter(k => subjects[k])
       : [...new Set(allShared.map(i => i.subjectKey).filter(Boolean))];
 
+    // This filter bar (including the search <input>) is only ever
+    // rebuilt here — on structural changes (tab open/switch, dropdown
+    // change) — never on a search keystroke. See adminCommOnSearchInput
+    // / _adminCommRenderResultsOnly above for the light path that keeps
+    // the input itself untouched while someone types.
     const filterBar = document.getElementById('adminCommFilterBar');
     if (filterBar) {
       filterBar.innerHTML = _buildCommFilterBarHTML({
         idPrefix: 'adminComm',
         searchVal: adminCommSearchQuery,
         searchOninput: 'adminCommOnSearchInput(this.value)',
-        clearOnclick: "adminCommSearchQuery='';document.getElementById('adminCommSearchInput').value='';this.style.display='none';renderAdminPanel()",
+        clearOnclick: "adminCommSetSearch('')",
         yearVal: adminCommYearFilter,
         yearOnchange: "adminCommYearFilter=this.value;adminCommModuleFilter='';adminCommSubjectFilter='';renderAdminPanel()",
         allYears,
@@ -711,27 +766,7 @@ async function renderAdminPanel() {
     }
 
     const list = document.getElementById('adminQuizList');
-    const hasFilters = !!(adminCommSearchQuery || adminCommYearFilter || adminCommModuleFilter || adminCommSubjectFilter);
-    if (!shared.length) {
-      const emptyMsg = hasFilters
-        ? 'No quizzes match your search. Try different keywords or clear the filters.'
-        : adminCommTab === 'mine'
-          ? "You haven't shared any quizzes yet."
-          : 'No community quizzes available.';
-      list.innerHTML = `<div style="color:var(--text-muted);font-size:.88rem;padding:10px;">${emptyMsg}</div>`;
-      return;
-    }
-    list.innerHTML = shared.map(q => {
-      const sel = adminSelectedQuizzes.has(_adminQuizKey('community', q.id));
-      return `
-        <div class="admin-quiz-item ${sel ? 'selected' : ''}" onclick="adminSelectQuiz('community','${q.id}')">
-          <div class="admin-quiz-item-info">
-            <div class="admin-quiz-item-title">${escapeHtml(q.title || 'Untitled Quiz')}</div>
-            <div class="admin-quiz-item-meta">by ${escapeHtml(q.authorName || 'Unknown')} · ${(q.questions || []).length} question${(q.questions||[]).length !== 1 ? 's' : ''}</div>
-          </div>
-          <div class="admin-quiz-item-check">✓</div>
-        </div>`;
-    }).join('');
+    if (list) list.innerHTML = _adminCommBuildListHtml(shared);
   }
 }
 
@@ -838,14 +873,110 @@ async function adminDeleteSourceQuiz(sourceId) {
    Requires 'community' permission (enforced by adminSwitchTab and,
    ultimately, by the Firestore rules on sharedQuizzes/{docId}).
 ══════════════════════════════════════════════════════════ */
+// Live typing only rewrites the results list + count (see
+// _commManageRenderResultsOnly below) — the tabs and filter bar
+// (including the search <input> itself) are left alone. See the matching
+// comment on communityOnSearchInput in js/sharing.js for why.
 function commManageOnSearchInput(val) {
   commManageSearchQuery = val;
   const clearBtn = document.getElementById('commManageClearBtn');
   if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
-  window._commManageSearchFocused = true;
-  const el = document.getElementById('commManageSearchInput');
-  window._commManageSearchPos = el ? el.selectionStart : null;
-  renderAdminManageCommunityPanel();
+  _commManageRenderResultsOnly();
+}
+
+// Programmatic search changes (clear button, tag click) — also syncs the
+// input's own value, since no keystroke is doing that for us here.
+function commManageSetSearch(val) {
+  commManageSearchQuery = val;
+  const input = document.getElementById('commManageSearchInput');
+  if (input) input.value = val;
+  const clearBtn = document.getElementById('commManageClearBtn');
+  if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+  _commManageRenderResultsOnly();
+}
+
+function _commManageComputePool() {
+  const myUid = window._currentUser ? window._currentUser.uid : null;
+  const shared = _allSharedQuizzes;
+  const myShared = shared.filter(q => q.authorUid === myUid);
+  let pool = commManageTab === 'mine' ? myShared : shared;
+
+  const q = commManageSearchQuery.toLowerCase().trim();
+  if (q) {
+    pool = pool.filter(item => {
+      const inTitle = (item.title || '').toLowerCase().includes(q);
+      const inAuthor = (item.authorName || '').toLowerCase().includes(q);
+      const inCat = (item.category || '').toLowerCase().includes(q);
+      const inTags = (item.tags || []).some(t => t.includes(q));
+      return inTitle || inAuthor || inCat || inTags;
+    });
+  }
+  if (commManageYearFilter) pool = pool.filter(item => (item.year || '') === commManageYearFilter);
+  if (commManageModuleFilter) pool = pool.filter(item => (item.module || '') === commManageModuleFilter);
+  if (commManageSubjectFilter) pool = pool.filter(item => (item.subjectKey || '') === commManageSubjectFilter);
+
+  if (commManageSort === 'newest') pool = [...pool].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
+  else if (commManageSort === 'oldest') pool = [...pool].sort((a, b) => (a.sharedAt || 0) - (b.sharedAt || 0));
+  else if (commManageSort === 'az') pool = [...pool].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  else if (commManageSort === 'questions') pool = [...pool].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
+
+  return { pool, shared, myShared, myUid };
+}
+
+function _commManageBuildListHtml(pool, myUid) {
+  if (!pool.length) {
+    const filtered = commManageSearchQuery || commManageYearFilter || commManageModuleFilter || commManageSubjectFilter;
+    return `<div class="community-empty">
+      <div class="ce-icon">${filtered ? '' : (commManageTab === 'mine' ? '<svg class="hicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' : '<svg class="hicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>')}</div>
+      ${filtered
+        ? 'No quizzes match your search. Try different keywords or clear the filters.'
+        : commManageTab === 'mine'
+          ? 'You haven\'t shared any quizzes yet.'
+          : 'No community quizzes yet.'}
+    </div>`;
+  }
+  let html = '';
+  pool.forEach(item => {
+    const isOwn = item.authorUid === myUid;
+    const date = new Date(item.sharedAt).toLocaleDateString();
+    const catBadge = (item.year || item.subjectLabel)
+      ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
+      : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
+    const tagsHtml = (item.tags && item.tags.length)
+      ? `<div class="comm-tags-row">${item.tags.map(t =>
+          `<span class="comm-tag" onclick="commManageSetSearch('${escapeHtml(t)}')" title="Filter by tag">#${escapeHtml(t)}</span>`
+        ).join('')}</div>` : '';
+
+    html += `<div class="community-quiz-item">
+      <div class="community-quiz-header">
+        <div style="flex:1;min-width:0;">
+          <div class="community-quiz-title">${escapeHtml(item.title)}</div>
+          <div class="community-quiz-meta">
+            ${catBadge}
+            ${item.questionCount} question${item.questionCount !== 1 ? 's' : ''}
+            &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${escapeHtml(item.authorName)}
+            ${isOwn ? ' <span class="share-chip">You</span>' : ''}
+            &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${date}
+          </div>
+          ${tagsHtml}
+        </div>
+        <button class="admin-remove-btn" onclick="adminDeleteSourceQuiz('${escapeHtml(item.id)}')"><svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete</button>
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+// Light path: recomputes the pool and rewrites only the results list +
+// count. Used for every search keystroke.
+function _commManageRenderResultsOnly() {
+  const { pool, myUid } = _commManageComputePool();
+  _commRenderResults({
+    idPrefix: 'commManage',
+    listContainerId: 'commManageQuizList',
+    resultCount: pool.length,
+    listHtml: _commManageBuildListHtml(pool, myUid),
+  });
 }
 
 async function renderAdminManageCommunityPanel(forceReload) {
@@ -865,42 +996,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
     adminCommunityCache = _allSharedQuizzes; // keep the Publish tab's copy of the cache in sync too
   }
 
-  const myUid = window._currentUser ? window._currentUser.uid : null;
-  const shared = _allSharedQuizzes;
-  const myShared = shared.filter(q => q.authorUid === myUid);
-
-  // --- Filtering (identical logic to renderCommunityQuizzes) ---
-  let pool = commManageTab === 'mine' ? myShared : shared;
-
-  const q = commManageSearchQuery.toLowerCase().trim();
-  if (q) {
-    pool = pool.filter(item => {
-      const inTitle = (item.title || '').toLowerCase().includes(q);
-      const inAuthor = (item.authorName || '').toLowerCase().includes(q);
-      const inCat = (item.category || '').toLowerCase().includes(q);
-      const inTags = (item.tags || []).some(t => t.includes(q));
-      return inTitle || inAuthor || inCat || inTags;
-    });
-  }
-  if (commManageYearFilter) {
-    pool = pool.filter(item => (item.year || '') === commManageYearFilter);
-  }
-  if (commManageModuleFilter) {
-    pool = pool.filter(item => (item.module || '') === commManageModuleFilter);
-  }
-  if (commManageSubjectFilter) {
-    pool = pool.filter(item => (item.subjectKey || '') === commManageSubjectFilter);
-  }
-
-  if (commManageSort === 'newest') {
-    pool = [...pool].sort((a, b) => (b.sharedAt || 0) - (a.sharedAt || 0));
-  } else if (commManageSort === 'oldest') {
-    pool = [...pool].sort((a, b) => (a.sharedAt || 0) - (b.sharedAt || 0));
-  } else if (commManageSort === 'az') {
-    pool = [...pool].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  } else if (commManageSort === 'questions') {
-    pool = [...pool].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
-  }
+  const { pool, shared, myShared, myUid } = _commManageComputePool();
 
   // Build cascading filter options from live curriculum + shared quiz metadata
   const allYears = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
@@ -911,7 +1007,11 @@ async function renderAdminManageCommunityPanel(forceReload) {
     ? (curriculum[commManageYearFilter][commManageModuleFilter] || []).filter(k => subjects[k])
     : [...new Set(shared.map(i => i.subjectKey).filter(Boolean))];
 
-  let html = `
+  // Full chrome rebuild — tabs + filter bar + a stable list container.
+  // Only runs on structural changes (open, tab switch, dropdown change),
+  // never on a search keystroke (see commManageOnSearchInput above), so
+  // the search <input> stays alive and focused while someone types.
+  body.innerHTML = `
     <div class="community-section-tabs">
       <button class="community-tab-btn ${commManageTab === 'browse' ? 'active' : ''}" onclick="commManageTab='browse';commManageSearchQuery='';commManageYearFilter='';commManageModuleFilter='';commManageSubjectFilter='';renderAdminManageCommunityPanel()"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Browse All (${shared.length})</button>
       <button class="community-tab-btn ${commManageTab === 'mine' ? 'active' : ''}" onclick="commManageTab='mine';renderAdminManageCommunityPanel()"><svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Shared (${myShared.length})</button>
@@ -920,7 +1020,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
       idPrefix: 'commManage',
       searchVal: commManageSearchQuery,
       searchOninput: 'commManageOnSearchInput(this.value)',
-      clearOnclick: "commManageSearchQuery='';document.getElementById('commManageSearchInput').value='';this.style.display='none';renderAdminManageCommunityPanel()",
+      clearOnclick: "commManageSetSearch('')",
       yearVal: commManageYearFilter,
       yearOnchange: "commManageYearFilter=this.value;commManageModuleFilter='';commManageSubjectFilter='';renderAdminManageCommunityPanel()",
       allYears,
@@ -935,58 +1035,8 @@ async function renderAdminManageCommunityPanel(forceReload) {
       sortVal: commManageSort,
       sortOnchange: 'commManageSort=this.value;renderAdminManageCommunityPanel()',
       resultCount: pool.length
-    })}`;
-
-  if (!pool.length) {
-    html += `<div class="community-empty">
-      <div class="ce-icon">${commManageSearchQuery || commManageYearFilter || commManageModuleFilter || commManageSubjectFilter ? '' : (commManageTab === 'mine' ? '<svg class="hicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' : '<svg class="hicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>')}</div>
-      ${commManageSearchQuery || commManageYearFilter || commManageModuleFilter || commManageSubjectFilter
-        ? 'No quizzes match your search. Try different keywords or clear the filters.'
-        : commManageTab === 'mine'
-          ? 'You haven\'t shared any quizzes yet.'
-          : 'No community quizzes yet.'}
-    </div>`;
-  } else {
-    pool.forEach(item => {
-      const isOwn = item.authorUid === myUid;
-      const date = new Date(item.sharedAt).toLocaleDateString();
-      const catBadge = (item.year || item.subjectLabel)
-        ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
-        : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
-      const tagsHtml = (item.tags && item.tags.length)
-        ? `<div class="comm-tags-row">${item.tags.map(t =>
-            `<span class="comm-tag" onclick="commManageSearchQuery='${escapeHtml(t)}';renderAdminManageCommunityPanel()" title="Filter by tag">#${escapeHtml(t)}</span>`
-          ).join('')}</div>` : '';
-
-      html += `<div class="community-quiz-item">
-        <div class="community-quiz-header">
-          <div style="flex:1;min-width:0;">
-            <div class="community-quiz-title">${escapeHtml(item.title)}</div>
-            <div class="community-quiz-meta">
-              ${catBadge}
-              ${item.questionCount} question${item.questionCount !== 1 ? 's' : ''}
-              &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${escapeHtml(item.authorName)}
-              ${isOwn ? ' <span class="share-chip">You</span>' : ''}
-              &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${date}
-            </div>
-            ${tagsHtml}
-          </div>
-          <button class="admin-remove-btn" onclick="adminDeleteSourceQuiz('${escapeHtml(item.id)}')"><svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete</button>
-        </div>
-      </div>`;
-    });
-  }
-
-  body.innerHTML = html;
-
-  // Restore search input focus/caret if the admin was mid-typing
-  const searchEl = document.getElementById('commManageSearchInput');
-  if (searchEl && document.activeElement !== searchEl && window._commManageSearchFocused) {
-    const pos = window._commManageSearchPos || searchEl.value.length;
-    searchEl.focus();
-    try { searchEl.setSelectionRange(pos, pos); } catch(e) {}
-    window._commManageSearchFocused = false;
-  }
+    })}
+    <div id="commManageQuizList">${_commManageBuildListHtml(pool, myUid)}</div>`;
 }
 
 /* ── Visual publish-destination picker ──

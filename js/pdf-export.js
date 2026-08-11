@@ -430,6 +430,51 @@ async function _pdxRenderCommunityTab() {
    built on the shared _communityComputeView() (js/sharing.js) so both
    screens filter/sort identically. Only the per-item action differs: a
    select-for-export checkbox here instead of Start/Save/Unshare there. */
+function _pdxCommBuildListHtml(pool) {
+  if (!pool.length) {
+    return `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg></div>No quizzes match.</div>`;
+  }
+  let html = '';
+  pool.forEach(item => {
+    const checked = _pdxSelCommunity.has(item.id);
+    const qCount = Number.isFinite(item.questionCount) ? item.questionCount : (Array.isArray(item.questions) ? item.questions.length : 0);
+    const catBadge = (item.year || item.subjectLabel)
+      ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
+      : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
+    const tagsHtml = (item.tags && item.tags.length)
+      ? `<div class="comm-tags-row">${item.tags.map(t => `<span class="comm-tag" onclick="pdxCommSetSearch('${escapeHtml(t)}')" title="Filter by tag">#${escapeHtml(t)}</span>`).join('')}</div>` : '';
+    html += `<div class="community-quiz-item">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+        <input type="checkbox" style="margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;"
+          ${checked ? 'checked' : ''} onchange="pdxToggleCommunity('${escapeHtml(item.id)}', this.checked)" />
+        <div style="flex:1;min-width:0;">
+          <div class="community-quiz-title">${escapeHtml(item.title)}</div>
+          <div class="community-quiz-meta">${catBadge} ${qCount} question${qCount !== 1 ? 's' : ''} &nbsp;·&nbsp; ${escapeHtml(item.authorName)} &nbsp;·&nbsp; ${new Date(item.sharedAt).toLocaleDateString()}</div>
+          ${tagsHtml}
+        </div>
+      </label>
+    </div>`;
+  });
+  return html;
+}
+
+// Light path: recomputes the pool and rewrites only the results list +
+// count. Used for every search keystroke — the filter bar (including the
+// search <input> itself) is left completely alone.
+function _pdxDrawCommunityResultsOnly() {
+  const { pool } = _communityComputeView({
+    scope: _pdxCommScope, search: _pdxCommSearch,
+    yearFilter: _pdxCommYearFilter, moduleFilter: _pdxCommModuleFilter, subjectFilter: _pdxCommSubjectFilter,
+    sort: _pdxCommSort,
+  });
+  _commRenderResults({
+    idPrefix: 'pdxComm',
+    listContainerId: 'pdxCommQuizList',
+    resultCount: pool.length,
+    listHtml: _pdxCommBuildListHtml(pool),
+  });
+}
+
 function _pdxDrawCommunityList() {
   const el = document.getElementById('pdxTabContent');
   if (!el) return;
@@ -439,7 +484,11 @@ function _pdxDrawCommunityList() {
     sort: _pdxCommSort,
   });
 
-  let html = `
+  // Full chrome rebuild — tabs + filter bar + a stable list container.
+  // Only runs on structural changes (scope/dropdown changes), never on a
+  // search keystroke (see pdxCommSearchInput above), so the search
+  // <input> stays alive and focused while someone types into it.
+  el.innerHTML = `
     <div class="community-section-tabs">
       <button class="community-tab-btn ${_pdxCommScope === 'browse' ? 'active' : ''}" onclick="pdxCommSetScope('browse')"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Browse All (${shared.length})</button>
       <button class="community-tab-btn ${_pdxCommScope === 'mine' ? 'active' : ''}" onclick="pdxCommSetScope('mine')"><svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Shared (${myShared.length})</button>
@@ -448,7 +497,7 @@ function _pdxDrawCommunityList() {
       idPrefix: 'pdxComm',
       searchVal: _pdxCommSearch,
       searchOninput: 'pdxCommSearchInput(this.value)',
-      clearOnclick: "pdxCommSearchInput('')",
+      clearOnclick: "pdxCommSetSearch('')",
       yearVal: _pdxCommYearFilter,
       yearOnchange: 'pdxCommSetYearFilter(this.value)',
       allYears,
@@ -463,52 +512,29 @@ function _pdxDrawCommunityList() {
       sortVal: _pdxCommSort,
       sortOnchange: 'pdxCommSetSort(this.value)',
       resultCount: pool.length
-    })}`;
-
-  if (!pool.length) {
-    html += `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg></div>No quizzes match.</div>`;
-  } else {
-    pool.forEach(item => {
-      const checked = _pdxSelCommunity.has(item.id);
-      const qCount = Number.isFinite(item.questionCount) ? item.questionCount : (Array.isArray(item.questions) ? item.questions.length : 0);
-      const catBadge = (item.year || item.subjectLabel)
-        ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
-        : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
-      const tagsHtml = (item.tags && item.tags.length)
-        ? `<div class="comm-tags-row">${item.tags.map(t => `<span class="comm-tag" onclick="pdxCommSearchInput('${escapeHtml(t)}')" title="Filter by tag">#${escapeHtml(t)}</span>`).join('')}</div>` : '';
-      html += `<div class="community-quiz-item">
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
-          <input type="checkbox" style="margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;"
-            ${checked ? 'checked' : ''} onchange="pdxToggleCommunity('${escapeHtml(item.id)}', this.checked)" />
-          <div style="flex:1;min-width:0;">
-            <div class="community-quiz-title">${escapeHtml(item.title)}</div>
-            <div class="community-quiz-meta">${catBadge} ${qCount} question${qCount !== 1 ? 's' : ''} &nbsp;·&nbsp; ${escapeHtml(item.authorName)} &nbsp;·&nbsp; ${new Date(item.sharedAt).toLocaleDateString()}</div>
-            ${tagsHtml}
-          </div>
-        </label>
-      </div>`;
-    });
-  }
-  el.innerHTML = html;
-
-  const searchEl = document.getElementById('pdxCommSearchInput');
-  if (searchEl && document.activeElement !== searchEl && window._pdxCommSearchFocused) {
-    const pos = window._pdxCommSearchPos || searchEl.value.length;
-    searchEl.focus();
-    try { searchEl.setSelectionRange(pos, pos); } catch (e) {}
-    window._pdxCommSearchFocused = false;
-  }
+    })}
+    <div id="pdxCommQuizList">${_pdxCommBuildListHtml(pool)}</div>`;
 }
 function pdxCommSetScope(scope) {
   _pdxCommScope = scope; _pdxCommSearch = ''; _pdxCommYearFilter = ''; _pdxCommModuleFilter = ''; _pdxCommSubjectFilter = '';
   _pdxDrawCommunityList();
 }
+// Live typing — only the results list + count get touched (see
+// _pdxDrawCommunityResultsOnly below and the matching comment on
+// communityOnSearchInput in js/sharing.js). The search <input> is left
+// alone, so it never loses focus mid-keystroke.
 function pdxCommSearchInput(v) {
   _pdxCommSearch = v;
-  window._pdxCommSearchFocused = true;
-  const el = document.getElementById('pdxCommSearchInput');
-  window._pdxCommSearchPos = el ? el.selectionStart : null;
-  _pdxDrawCommunityList();
+  _pdxDrawCommunityResultsOnly();
+}
+
+// Programmatic search changes (clear button, tag click) — also syncs the
+// input's own value, since no keystroke is doing that for us here.
+function pdxCommSetSearch(v) {
+  _pdxCommSearch = v;
+  const input = document.getElementById('pdxCommSearchInput');
+  if (input) input.value = v;
+  _pdxDrawCommunityResultsOnly();
 }
 function pdxCommSetYearFilter(v) { _pdxCommYearFilter = v; _pdxCommModuleFilter = ''; _pdxCommSubjectFilter = ''; _pdxDrawCommunityList(); }
 function pdxCommSetModuleFilter(v) { _pdxCommModuleFilter = v; _pdxCommSubjectFilter = ''; _pdxDrawCommunityList(); }

@@ -200,18 +200,25 @@ async function _mergeLoadCommunityTab() {
   _renderMergeCommunityList();
 }
 
+// Typing only ever needs the results list refreshed — see the matching
+// comment on communityOnSearchInput (js/sharing.js) for why this (rather
+// than a full _renderMergeCommunityList()) is what keeps the search box
+// itself from flickering on every keystroke.
 function mergeCommOnSearchInput(val) {
   mergeCommSearch = val;
-  window._mergeCommSearchFocused = true;
-  const el = document.getElementById('mergeCommSearchInput');
-  window._mergeCommSearchPos = el ? el.selectionStart : null;
-  _renderMergeCommunityList();
+  _renderMergeCommunityResultsOnly();
 }
 
-function _renderMergeCommunityList() {
-  const el = document.getElementById('mergeTabContent');
-  if (!el) return;
+// Programmatic search changes (currently just the clear button) — also
+// syncs the input's own value, since there's no keystroke doing that.
+function mergeCommSetSearch(val) {
+  mergeCommSearch = val;
+  const input = document.getElementById('mergeCommSearchInput');
+  if (input) input.value = val;
+  _renderMergeCommunityResultsOnly();
+}
 
+function _mergeCommComputePool() {
   const myUid = window._currentUser ? window._currentUser.uid : null;
   const shared = _allSharedQuizzes;
   const myShared = shared.filter(q => q.authorUid === myUid);
@@ -236,6 +243,62 @@ function _renderMergeCommunityList() {
   else if (mergeCommSort === 'az') pool = [...pool].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   else if (mergeCommSort === 'questions') pool = [...pool].sort((a, b) => (b.questionCount || 0) - (a.questionCount || 0));
 
+  return { pool, shared, myShared, myUid };
+}
+
+function _mergeCommBuildListHtml(pool, myUid) {
+  if (!pool.length) {
+    return `<div class="community-empty">
+      <div class="ce-icon">${mergeCommSearch || mergeCommYearFilter || mergeCommModuleFilter || mergeCommSubjectFilter ? '' : '<svg class="hicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>'}</div>
+      No quizzes match.
+    </div>`;
+  }
+  let html = '';
+  pool.forEach(item => {
+    const isOwn = item.authorUid === myUid;
+    const date = new Date(item.sharedAt).toLocaleDateString();
+    const catBadge = (item.year || item.subjectLabel)
+      ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
+      : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
+    const checked = mergeSelectedCommunity.has(item.id);
+    html += `<div class="community-quiz-item">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+        <input type="checkbox" style="margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;"
+          ${checked ? 'checked' : ''} onchange="mergeToggleCommunity('${escapeHtml(item.id)}', this.checked)" />
+        <div style="flex:1;min-width:0;">
+          <div class="community-quiz-title">${escapeHtml(item.title)}</div>
+          <div class="community-quiz-meta">
+            ${catBadge}
+            ${item.questionCount} question${item.questionCount !== 1 ? 's' : ''}
+            &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${escapeHtml(item.authorName)}
+            ${isOwn ? ' <span class="share-chip">You</span>' : ''}
+            &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${date}
+          </div>
+        </div>
+      </label>
+    </div>`;
+  });
+  return html;
+}
+
+// Light path: recomputes the pool and rewrites only the results list +
+// count. Used for every search keystroke.
+function _renderMergeCommunityResultsOnly() {
+  const { pool, myUid } = _mergeCommComputePool();
+  _commRenderResults({
+    idPrefix: 'mergeComm',
+    listContainerId: 'mergeCommQuizList',
+    resultCount: pool.length,
+    listHtml: _mergeCommBuildListHtml(pool, myUid),
+  });
+}
+
+function _renderMergeCommunityList() {
+  const el = document.getElementById('mergeTabContent');
+  if (!el) return;
+
+  const { pool, shared, myShared, myUid } = _mergeCommComputePool();
+
   const allYears = Object.keys(curriculum).filter(y => Object.keys(curriculum[y] || {}).length > 0);
   const allModules = mergeCommYearFilter
     ? Object.keys(curriculum[mergeCommYearFilter] || {})
@@ -244,7 +307,11 @@ function _renderMergeCommunityList() {
     ? (curriculum[mergeCommYearFilter][mergeCommModuleFilter] || []).filter(k => subjects[k])
     : [...new Set(shared.map(i => i.subjectKey).filter(Boolean))];
 
-  let html = `
+  // Full chrome rebuild — tabs + filter bar + a stable list container.
+  // Only runs on structural changes (open, tab switch, dropdown change),
+  // never on a search keystroke (see mergeCommOnSearchInput above), so
+  // the search <input> stays alive and focused while someone types.
+  el.innerHTML = `
     <div class="community-section-tabs">
       <button class="community-tab-btn ${mergeCommTab === 'browse' ? 'active' : ''}" onclick="mergeCommTab='browse';mergeCommSearch='';mergeCommYearFilter='';mergeCommModuleFilter='';mergeCommSubjectFilter='';_renderMergeCommunityList()"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Browse All (${shared.length})</button>
       <button class="community-tab-btn ${mergeCommTab === 'mine' ? 'active' : ''}" onclick="mergeCommTab='mine';_renderMergeCommunityList()"><svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Shared (${myShared.length})</button>
@@ -253,7 +320,7 @@ function _renderMergeCommunityList() {
       idPrefix: 'mergeComm',
       searchVal: mergeCommSearch,
       searchOninput: 'mergeCommOnSearchInput(this.value)',
-      clearOnclick: "mergeCommSearch='';document.getElementById('mergeCommSearchInput').value='';_renderMergeCommunityList()",
+      clearOnclick: "mergeCommSetSearch('')",
       yearVal: mergeCommYearFilter,
       yearOnchange: "mergeCommYearFilter=this.value;mergeCommModuleFilter='';mergeCommSubjectFilter='';_renderMergeCommunityList()",
       allYears,
@@ -268,49 +335,8 @@ function _renderMergeCommunityList() {
       sortVal: mergeCommSort,
       sortOnchange: 'mergeCommSort=this.value;_renderMergeCommunityList()',
       resultCount: pool.length
-    })}`;
-
-  if (!pool.length) {
-    html += `<div class="community-empty">
-      <div class="ce-icon">${mergeCommSearch || mergeCommYearFilter || mergeCommModuleFilter || mergeCommSubjectFilter ? '' : '<svg class="hicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>'}</div>
-      No quizzes match.
-    </div>`;
-  } else {
-    pool.forEach(item => {
-      const isOwn = item.authorUid === myUid;
-      const date = new Date(item.sharedAt).toLocaleDateString();
-      const catBadge = (item.year || item.subjectLabel)
-        ? `<span class="comm-cat-badge">${[item.year, item.module, item.subjectLabel].filter(Boolean).map(escapeHtml).join(' › ')}</span>`
-        : (item.category ? `<span class="comm-cat-badge">${escapeHtml(item.category)}</span>` : '');
-      const checked = mergeSelectedCommunity.has(item.id);
-      html += `<div class="community-quiz-item">
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
-          <input type="checkbox" style="margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;"
-            ${checked ? 'checked' : ''} onchange="mergeToggleCommunity('${escapeHtml(item.id)}', this.checked)" />
-          <div style="flex:1;min-width:0;">
-            <div class="community-quiz-title">${escapeHtml(item.title)}</div>
-            <div class="community-quiz-meta">
-              ${catBadge}
-              ${item.questionCount} question${item.questionCount !== 1 ? 's' : ''}
-              &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${escapeHtml(item.authorName)}
-              ${isOwn ? ' <span class="share-chip">You</span>' : ''}
-              &nbsp;&middot;&nbsp; <svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${date}
-            </div>
-          </div>
-        </label>
-      </div>`;
-    });
-  }
-
-  el.innerHTML = html;
-
-  const searchEl = document.getElementById('mergeCommSearchInput');
-  if (searchEl && document.activeElement !== searchEl && window._mergeCommSearchFocused) {
-    const pos = window._mergeCommSearchPos || searchEl.value.length;
-    searchEl.focus();
-    try { searchEl.setSelectionRange(pos, pos); } catch(e) {}
-    window._mergeCommSearchFocused = false;
-  }
+    })}
+    <div id="mergeCommQuizList">${_mergeCommBuildListHtml(pool, myUid)}</div>`;
 }
 
 function mergeToggleCommunity(id, checked) {
@@ -319,50 +345,70 @@ function mergeToggleCommunity(id, checked) {
 }
 
 /* ── Custom quizzes tab ── */
+// Same split as the community tab above: typing only rewrites the
+// results list + count, never the search box itself.
 function mergeCustomOnSearchInput(val) {
   mergeCustomSearch = val;
-  _renderMergeCustomTab();
+  _renderMergeCustomResultsOnly();
 }
 
-function _renderMergeCustomTab() {
-  const el = document.getElementById('mergeTabContent');
-  if (!el) return;
-
+function _mergeCustomComputeList() {
   // Can't merge a saved quiz into itself while editing it.
   const excludeId = (mergeEditorKey === 'customQuiz' && !cqCreatingNew) ? cqEditingQuizId : null;
   let quizzes = loadCustomQuizzes().filter(q => q.id !== excludeId && (q.questions || []).length);
 
   const s = mergeCustomSearch.toLowerCase().trim();
   if (s) quizzes = quizzes.filter(q => (q.title || '').toLowerCase().includes(s));
+  return quizzes;
+}
 
-  let html = `<div class="comm-filter-bar">
+function _mergeCustomBuildListHtml(quizzes) {
+  if (!quizzes.length) {
+    return `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>No custom quizzes to merge from.</div>`;
+  }
+  let html = '';
+  quizzes.forEach(q => {
+    const checked = mergeSelectedCustom.has(q.id);
+    html += `<div class="cq-quiz-item">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;flex:1;">
+        <input type="checkbox" style="margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;"
+          ${checked ? 'checked' : ''} onchange="mergeToggleCustom('${escapeHtml(q.id)}', this.checked)" />
+        <div>
+          <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
+          <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} &middot; created ${new Date(q.createdAt).toLocaleDateString()}</div>
+          ${_quizCollectionChipHTML(q, loadQuizCollections()) ? `<div style="margin-top:4px;">${_quizCollectionChipHTML(q, loadQuizCollections())}</div>` : ''}
+        </div>
+      </label>
+    </div>`;
+  });
+  return html;
+}
+
+function _renderMergeCustomResultsOnly() {
+  const quizzes = _mergeCustomComputeList();
+  _commRenderResults({
+    idPrefix: 'mergeCustom',
+    listContainerId: 'mergeCustomQuizList',
+    resultCount: quizzes.length,
+    listHtml: _mergeCustomBuildListHtml(quizzes),
+  });
+}
+
+function _renderMergeCustomTab() {
+  const el = document.getElementById('mergeTabContent');
+  if (!el) return;
+
+  const quizzes = _mergeCustomComputeList();
+
+  el.innerHTML = `<div class="comm-filter-bar">
     <div class="comm-search-wrap">
       <span class="comm-search-icon"><svg class="hicon" style="width:14px;height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-      <input class="comm-search-input" type="text" placeholder="Search your custom quizzes…"
+      <input class="comm-search-input" id="mergeCustomSearchInput" type="text" placeholder="Search your custom quizzes…"
              value="${escapeHtml(mergeCustomSearch)}" oninput="mergeCustomOnSearchInput(this.value)" />
     </div>
-    <div class="comm-results-count">${quizzes.length} quiz${quizzes.length !== 1 ? 'zes' : ''} shown</div>
-  </div>`;
-
-  if (!quizzes.length) {
-    html += `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>No custom quizzes to merge from.</div>`;
-  } else {
-    quizzes.forEach(q => {
-      const checked = mergeSelectedCustom.has(q.id);
-      html += `<div class="cq-quiz-item">
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;flex:1;">
-          <input type="checkbox" style="margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;"
-            ${checked ? 'checked' : ''} onchange="mergeToggleCustom('${escapeHtml(q.id)}', this.checked)" />
-          <div>
-            <div class="cq-quiz-name">${escapeHtml(q.title)}</div>
-            <div class="cq-quiz-meta">${q.questions.length} question${q.questions.length !== 1 ? 's' : ''} &middot; created ${new Date(q.createdAt).toLocaleDateString()}</div>
-            ${_quizCollectionChipHTML(q, loadQuizCollections()) ? `<div style="margin-top:4px;">${_quizCollectionChipHTML(q, loadQuizCollections())}</div>` : ''}
-          </div>
-        </label>
-      </div>`;
-    });
-  }
-  el.innerHTML = html;
+    <div class="comm-results-count" id="mergeCustomResultsCount">${_commResultsCountLabel(quizzes.length)}</div>
+  </div>
+  <div id="mergeCustomQuizList">${_mergeCustomBuildListHtml(quizzes)}</div>`;
 }
 
 function mergeToggleCustom(id, checked) {
@@ -551,4 +597,3 @@ async function confirmMergeSelectedQuizzes() {
     _mergeUpdateFooter();
   }
 }
-
