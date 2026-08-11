@@ -234,35 +234,25 @@ function updateAuthUI(user) {
   if (adminBtn) adminBtn.classList.toggle('hidden', !isAdminUser(user));
 
   if (user) {
-    // Logged-in state
+    // Logged-in state. Markup relies on the .auth-* classes in
+    // css/styles.css (rather than inline styles) so the responsive rules
+    // that compact this control on small screens live in one place.
+    const firstName = user.displayName ? user.displayName.split(' ')[0] : 'User';
     const loggedInHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <img src="${user.photoURL}"
-             style="width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.6);"
+      <div class="auth-signedin">
+        <img class="auth-avatar" src="${user.photoURL}" alt=""
              onerror="this.style.display='none'" />
-        <span style="color:white;font-size:.85rem;font-weight:700;">
-          ${user.displayName ? user.displayName.split(' ')[0] : 'User'}
-        </span>
-        <button onclick="fbSignOut()"
-                style="background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.4);
-                       color:white;padding:5px 12px;border-radius:6px;cursor:pointer;
-                       font-weight:700;font-size:.78rem;font-family:var(--font);">
-          Sign out
-        </button>
+        <span class="auth-name" title="${firstName}">${firstName}</span>
+        <button class="auth-signout-btn" onclick="fbSignOut()">Sign out</button>
       </div>`;
     if (homeArea) homeArea.innerHTML = loggedInHTML;
     if (quizArea) quizArea.innerHTML = loggedInHTML;
   } else {
     // Logged-out state
     const signInHTML = `
-      <button onclick="fbSignIn()"
-              style="background:white;color:var(--accent);border:none;padding:8px 16px;
-                     border-radius:8px;cursor:pointer;font-weight:800;font-size:.85rem;
-                     display:flex;align-items:center;gap:7px;font-family:var(--font);
-                     box-shadow:0 2px 8px rgba(0,0,0,.15);">
-        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-             style="width:17px;height:17px;" />
-        Sign in with Google
+      <button class="auth-signin-btn" onclick="fbSignIn()" aria-label="Sign in with Google">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" />
+        <span class="auth-signin-text">Sign in with Google</span>
       </button>`;
     if (homeArea) homeArea.innerHTML = signInHTML;
     if (quizArea) quizArea.innerHTML = signInHTML;

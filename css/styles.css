@@ -288,10 +288,15 @@
       font-family: var(--font);
       background: var(--bg-main);
       color: var(--text-main);
+      /* Safety net: no matter how tight a viewport gets, nothing (a badge,
+         a button, a pill) is ever allowed to push the page into horizontal
+         scroll. Every bar below is built to fit on its own, but this keeps
+         layout mistakes contained instead of letting content spill off-screen. */
+      overflow-x: hidden;
     }
 
     /* ── LAYOUT ── */
-    #app { display: flex; flex-direction: column; min-height: 100vh; background: var(--bg-main); }
+    #app { display: flex; flex-direction: column; min-height: 100vh; background: var(--bg-main); max-width: 100vw; }
 
     /* ── ICONS ──
        Small inline-SVG glyphs used throughout in place of emoji, for a
@@ -316,14 +321,20 @@
     .micon.spin, .sicon.spin, .hicon.spin { animation: iconspin 1s linear infinite; }
     @keyframes iconspin { to { transform: rotate(360deg); } }
 
-    /* ── QUIZ HEADER (quiz + results screens) ── */
+    /* ── QUIZ HEADER (quiz + results screens) ──
+       Same responsive strategy as .topbar above: the title shrinks with
+       clamp(), the auth control compacts itself first, and wrapping to a
+       second row is only a last-resort safety net — the left-to-right,
+       top-to-bottom order of title → auth → timer never changes. */
     .header {
       background: linear-gradient(120deg, var(--nav-current) 0%, var(--accent-dark) 55%, var(--accent) 100%);
       color: #fff;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 24px;
+      flex-wrap: wrap;
+      row-gap: 8px;
+      padding: 10px 24px;
       min-height: 64px;
       flex-shrink: 0;
       box-shadow: 0 4px 18px rgba(16,32,72,.22);
@@ -332,10 +343,16 @@
       gap: 14px;
     }
     .header-title {
-      font-size: 1.08rem; font-weight: 700; letter-spacing: .1px;
+      font-size: clamp(.86rem, 3.2vw, 1.08rem); font-weight: 700; letter-spacing: .1px;
       display: flex; align-items: center; gap: 10px;
       font-family: var(--font-display);
+      min-width: 0; flex-shrink: 1;
     }
+    .header-title-text {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    }
+    #authAreaQuiz { min-width: 0; flex-shrink: 1; }
+    .timer { flex-shrink: 0; }
     /* Brand mark — identical badge (rounded-square plate + cyan ring +
        magnifying-glass/"D" mark) as the tab favicon, the loading screen,
        and the PDF export header/cover; see --brand-badge-bg /
@@ -390,23 +407,41 @@
     /* ── HOME SCREEN ── */
     #home { flex: 1; display: flex; flex-direction: column; }
 
-    /* Top identity bar */
+    /* Top identity bar
+       ──────────────────────────────────────────────────────────
+       Responsive strategy (kept identical across every screen size,
+       so the bar never "reorganizes" — only scales down):
+         1. Brand mark + title shrink smoothly with clamp() instead of
+            jumping between fixed sizes.
+         2. The right-side controls (sign-in / user pill / Admin) each
+            compact their own label text before anything is allowed to
+            overflow — see .auth-signin-btn / .admin-btn below.
+         3. flex-wrap is a last-resort safety net: if a very long user
+            name still can't fit, the right-side group drops to its own
+            full-width row *underneath* the brand, still right-aligned,
+            never off-screen and never reshuffled. */
     .topbar {
       background: var(--nav-current);
       color: #fff;
       display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap;
+      row-gap: 10px;
       gap: 14px;
       padding: 14px 22px;
     }
-    .topbar-brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
-    .topbar-brand .brand-mark { width: 32px; height: 32px; }
+    .topbar-brand { display: flex; align-items: center; gap: 11px; min-width: 0; flex-shrink: 1; }
+    .topbar-brand .brand-mark { width: clamp(24px, 7vw, 32px); height: clamp(24px, 7vw, 32px); flex-shrink: 0; }
     .topbar-word { display: flex; min-width: 0; }
     .topbar-title {
-      font-family: var(--font-display); font-size: 1.05rem; font-weight: 600;
+      font-family: var(--font-display); font-weight: 600;
+      font-size: clamp(.86rem, 3.2vw, 1.05rem);
       letter-spacing: .2px; color: #fff; line-height: 1.15;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .topbar-right {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end;
+      flex: 1 1 auto; min-width: 0;
+    }
     .topbar-right .stats-open-btn { margin-top: 0; }
 
     /* Hero band — short, confident, and no longer a wall of buttons */
@@ -430,14 +465,20 @@
     }
     .home-hero p { font-size: .98rem; opacity: .85; margin-top: 10px; letter-spacing: .1px; }
 
-    /* Quick-access toolbar — icon tiles, not stacked full-width buttons */
+    /* Quick-access toolbar — icon tiles, not stacked full-width buttons.
+       On screens too narrow to show every tile at once, the row scrolls
+       horizontally rather than wrapping or reordering the tiles;
+       scroll-snap keeps tiles aligned to the edge as you swipe so a tile
+       is never left half-visible. */
     .toolbar {
       display: flex; gap: 10px; overflow-x: auto;
       padding: 14px 22px; margin-top: -20px; position: relative; z-index: 2;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
+      scroll-snap-type: x proximity;
     }
     .toolbar::-webkit-scrollbar { display: none; }
+    .tool-btn { scroll-snap-align: start; }
     .tool-btn {
       flex: 0 0 auto;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1101,7 +1142,7 @@
       .topbar { padding: 12px 16px; }
       .home-hero { padding: 30px 16px 30px; }
       .toolbar { padding: 12px 16px; margin-top: -18px; }
-      .tool-btn { width: 82px; padding: 12px 4px; }
+      .tool-btn { width: 80px; padding: 12px 4px; }
       .card { padding: 22px 16px 26px; }
       .subject-grid { grid-template-columns: repeat(4, 1fr); gap: 7px; }
       .subject-btn { padding: 10px 4px; font-size: .7rem; min-width: 0; word-break: break-word; }
@@ -1113,11 +1154,14 @@
       .results-header { padding: 14px 16px; }
       .results-body { padding: 12px 14px; }
       .r-content { padding: 12px 14px; }
-      .header-title { font-size: .95rem; }
       .home-hero h1 { font-size: 1.35rem; }
     }
     @media (min-width: 601px) and (max-width: 900px) {
       .subject-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 380px) {
+      .tool-btn { width: 72px; padding: 10px 3px; font-size: .68rem; }
+      .tool-btn .ticon { width: 19px; height: 19px; }
     }
     
           /* ── STATS MODAL ── */
@@ -2846,10 +2890,61 @@
   background: rgba(255,255,255,.12); border: 1.5px solid rgba(255,255,255,.4);
   color: #fff; padding: 7px 14px; border-radius: 999px;
   font-family: var(--font); font-size: .82rem; font-weight: 700;
-  cursor: pointer; margin-top: 0;
+  cursor: pointer; margin-top: 0; flex-shrink: 0;
   transition: background .18s, border-color .18s, transform .15s;
 }
 .admin-btn:hover { background: rgba(255,255,255,.22); border-color: rgba(255,255,255,.7); transform: translateY(-1px); }
+/* Below ~400px the "Admin" word is dropped and the icon alone carries the
+   button — the badge keeps its position and tap target, it just gets
+   quieter instead of forcing the bar to wrap or spilling off-screen. */
+.admin-btn .btn-label { white-space: nowrap; }
+@media (max-width: 400px) {
+  .admin-btn { padding: 7px 10px; }
+  .admin-btn .btn-label { display: none; }
+}
+
+/* ── AUTH CONTROL (Google sign-in / signed-in user pill) ──
+   Shared markup+styles for #authAreaHome and #authAreaQuiz, rendered
+   from js/app-core.js. Kept as real classes (not inline styles) so the
+   responsive rules below are the single source of truth for how this
+   control compacts on small screens. */
+.auth-signedin { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.auth-avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,.6); object-fit: cover;
+}
+.auth-name {
+  color: #fff; font-size: .85rem; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 120px;
+}
+.auth-signout-btn {
+  background: rgba(255,255,255,.2); border: 1.5px solid rgba(255,255,255,.4);
+  color: #fff; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  font-weight: 700; font-size: .78rem; font-family: var(--font);
+  flex-shrink: 0; white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.auth-signout-btn:hover { background: rgba(255,255,255,.3); }
+.auth-signin-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: #fff; color: var(--accent); border: none;
+  padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  font-weight: 800; font-size: .85rem; font-family: var(--font);
+  box-shadow: 0 2px 8px rgba(0,0,0,.15); flex-shrink: 0;
+  transition: transform .15s, box-shadow .15s;
+}
+.auth-signin-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+.auth-signin-btn img { width: 17px; height: 17px; flex-shrink: 0; }
+.auth-signin-text { white-space: nowrap; }
+/* Same idea as .admin-btn: the label text is the first thing to go, so
+   the sign-in control shrinks to a compact icon-only button rather than
+   being clipped or pushed past the edge of the screen. */
+@media (max-width: 480px) {
+  .auth-signin-btn { padding: 8px 10px; }
+  .auth-signin-text { display: none; }
+  .auth-name { max-width: 64px; }
+}
 
 .admin-overlay {
   position: fixed; inset: 0; z-index: 13000;
