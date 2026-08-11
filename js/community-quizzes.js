@@ -62,7 +62,7 @@ function _mergeUpdateFooter() {
   const countEl = document.getElementById('mergeFooterCount');
   const btnEl = document.getElementById('mergeConfirmBtn');
   if (countEl) countEl.textContent = `${total} question set${total !== 1 ? 's' : ''} selected`;
-  if (btnEl) { btnEl.disabled = !total; btnEl.textContent = total ? ` Merge ${total} Selected` : ' Merge Selected'; }
+  if (btnEl) { btnEl.disabled = !total; btnEl.textContent = total ? `<svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> Merge ${total} Selected` : '<svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> Merge Selected'; }
 }
 
 function renderMergePicker() {
@@ -83,7 +83,7 @@ function renderMergePicker() {
     </div>
     <div style="display:flex;gap:8px;">
       <button class="cq-btn cq-btn-secondary" onclick="closeMergePicker()">✖ Cancel</button>
-      <button class="cq-btn" id="mergeConfirmBtn" ${!total ? 'disabled' : ''} onclick="confirmMergeSelectedQuizzes()">${total ? ` Merge ${total} Selected` : ' Merge Selected'}</button>
+      <button class="cq-btn" id="mergeConfirmBtn" ${!total ? 'disabled' : ''} onclick="confirmMergeSelectedQuizzes()">${total ? `<svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> Merge ${total} Selected` : '<svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> Merge Selected'}</button>
     </div>
   </div>`;
 
@@ -253,7 +253,7 @@ function _renderMergeCommunityList() {
     </div>
     <div class="comm-filter-bar">
       <div class="comm-search-wrap">
-        <span class="comm-search-icon"></span>
+        <span class="comm-search-icon"><svg class="hicon" style="width:14px;height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
         <input class="comm-search-input" id="mergeCommSearchInput" type="text"
                placeholder="Search by title, author, category or tag…"
                value="${searchVal}" oninput="mergeCommOnSearchInput(this.value)" />
@@ -276,10 +276,10 @@ function _renderMergeCommunityList() {
           }).join('')}
         </select>
         <select class="comm-filter-select" onchange="mergeCommSort=this.value;_renderMergeCommunityList()">
-          <option value="newest" ${mergeCommSort==='newest'?'selected':''}> Newest</option>
-          <option value="oldest" ${mergeCommSort==='oldest'?'selected':''}> Oldest</option>
-          <option value="az" ${mergeCommSort==='az'?'selected':''}> A → Z</option>
-          <option value="questions" ${mergeCommSort==='questions'?'selected':''}> Most Questions</option>
+          <option value="newest" ${mergeCommSort==='newest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Newest</option>
+          <option value="oldest" ${mergeCommSort==='oldest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Oldest</option>
+          <option value="az"     ${mergeCommSort==='az'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M4 7V4h9M4 4l5 16M15 4h5M15 10h5M15 16h5"/></svg> A → Z</option>
+          <option value="questions" ${mergeCommSort==='questions'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Most Questions</option>
         </select>
       </div>
       <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
@@ -352,7 +352,7 @@ function _renderMergeCustomTab() {
 
   let html = `<div class="comm-filter-bar">
     <div class="comm-search-wrap">
-      <span class="comm-search-icon"></span>
+      <span class="comm-search-icon"><svg class="hicon" style="width:14px;height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
       <input class="comm-search-input" type="text" placeholder="Search your custom quizzes…"
              value="${escapeHtml(mergeCustomSearch)}" oninput="mergeCustomOnSearchInput(this.value)" />
     </div>
@@ -360,7 +360,7 @@ function _renderMergeCustomTab() {
   </div>`;
 
   if (!quizzes.length) {
-    html += `<div class="community-empty"><div class="ce-icon"></div>No custom quizzes to merge from.</div>`;
+    html += `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>No custom quizzes to merge from.</div>`;
   } else {
     quizzes.forEach(q => {
       const checked = mergeSelectedCustom.has(q.id);
@@ -423,7 +423,7 @@ function _renderMergeCurriculumTab() {
   if (mergeCurrSubject && subjects[mergeCurrSubject]) {
     const lectures = Object.keys(subjects[mergeCurrSubject].lectures || {});
     if (!lectures.length) {
-      html += `<div class="community-empty"><div class="ce-icon"></div>No lectures in this subject yet.</div>`;
+      html += `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>No lectures in this subject yet.</div>`;
     } else {
       lectures.forEach(lname => {
         const qCount = subjects[mergeCurrSubject].lectures[lname].length;
@@ -442,7 +442,7 @@ function _renderMergeCurriculumTab() {
       });
     }
   } else {
-    html += `<div class="community-empty"><div class="ce-icon"></div>Select a year, module and subject to see its lectures.</div>`;
+    html += `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>Select a year, module and subject to see its lectures.</div>`;
   }
 
   el.innerHTML = html;
@@ -494,7 +494,7 @@ function _renderMergeSourceBadge(q) {
   return `<span title="Merged in from this quiz — not yet saved"
       style="background:#ECEFF1;color:#455A64;font-size:.68rem;font-weight:700;
         border-radius:20px;padding:2px 8px;white-space:nowrap;border:1.5px solid #B0BEC5;">
-       ${escapeHtml(q._mergeSourceLabel)}</span>`;
+      <svg class="sicon" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg> ${escapeHtml(q._mergeSourceLabel)}</span>`;
 }
 
 /* Removes editor-only fields that should never be persisted, called right
@@ -511,7 +511,7 @@ async function confirmMergeSelectedQuizzes() {
   if (!total) return;
 
   const btn = document.getElementById('mergeConfirmBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Merging…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Merging…'; }
 
   try {
     let appended = [];

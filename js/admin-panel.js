@@ -244,7 +244,7 @@ function renderAdminManagePanel() {
   let rows = `
     <div class="admin-quiz-item" style="cursor:default;">
       <div class="admin-quiz-item-info">
-        <div class="admin-quiz-item-title"> ${escapeHtml(SUPER_ADMIN_EMAIL)}</div>
+        <div class="admin-quiz-item-title"><svg class="micon" viewBox="0 0 24 24"><path d="M2 20h20M4 20l-1-9 5 4 4-7 4 7 5-4-1 9"/></svg> ${escapeHtml(SUPER_ADMIN_EMAIL)}</div>
         <div class="admin-quiz-item-meta">Super Admin — full access, permanent, cannot be removed</div>
       </div>
     </div>`;
@@ -259,7 +259,7 @@ function renderAdminManagePanel() {
       const perms = Array.isArray(info.permissions) ? info.permissions : [];
       const permLabel = perms.map(p => ADMIN_PERMISSION_LABELS[p] || p).join(' · ') || '—';
       const scopeChip = perms.includes('curriculum')
-        ? ` · ${escapeHtml(curriculumScopeSummary(info.curriculumScope || { type: 'all' }))}`
+        ? ` · <svg class="sicon" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${escapeHtml(curriculumScopeSummary(info.curriculumScope || { type: 'all' }))}`
         : '';
       const isAncestor = !isSuperAdmin(user) && isInAssignerChain(actingEmailLower, email);
       const exceedsPerms = !isSuperAdmin(user) && (
@@ -309,7 +309,7 @@ function renderAdminManagePanel() {
       <div class="admin-status" id="adminManageStatus"></div>
 
       ${isSuperAdmin(user) ? `
-      <h3 style="margin:26px 0 10px;font-size:1rem;"> Maintenance — inline image storage</h3>
+      <h3 style="margin:26px 0 10px;font-size:1rem;"><svg class="sicon" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Maintenance — inline image storage</h3>
       <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px;line-height:1.4;">
         Images are now stored inline, right on each question, instead of as separate hosted files. Content shared or
         published before this change may still point at one of those old files. Run these one at a time, in order.
@@ -326,7 +326,7 @@ function renderAdminManagePanel() {
       <div style="border:1.5px solid #ccc;border-radius:10px;padding:12px;">
         <div style="font-weight:600;font-size:.9rem;margin-bottom:4px;">Step 2 — Clean up old storage</div>
         <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:10px;">
-           Only run this after Step 1 shows nothing left to migrate. Permanently deletes every old separately-hosted
+          <svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Only run this after Step 1 shows nothing left to migrate. Permanently deletes every old separately-hosted
           image file and its tracking record — there's no undo. Anything not yet migrated will lose its image.
         </div>
         <button class="admin-assign-btn" id="adminSweepImagesBtn" onclick="adminSweepLegacyImagesUI()" style="background:#b23b3b;"><svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete old image storage</button>
@@ -359,7 +359,7 @@ async function adminMigrateLegacyImagesUI() {
     for (const subject of Object.keys(currManifest)) {
       for (const lectureId of Object.keys(currManifest[subject] || {})) {
         scanned++;
-        if (statusEl) statusEl.innerHTML = `<div class="cq-status info">⏳ Curriculum: ${scanned} scanned, ${migrated} migrated…</div>`;
+        if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Curriculum: ${scanned} scanned, ${migrated} migrated…</div>`;
         try {
           const resp = await fetch(`${_MAINT_WORKER_BASE}/curriculum/${subject}/${lectureId}.json`);
           if (!resp.ok) continue;
@@ -379,7 +379,7 @@ async function adminMigrateLegacyImagesUI() {
     const commManifest = await fetchCommunityManifest();
     for (const quizId of Object.keys(commManifest)) {
       scanned++;
-      if (statusEl) statusEl.innerHTML = `<div class="cq-status info">⏳ Community: ${scanned} scanned, ${migrated} migrated…</div>`;
+      if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Community: ${scanned} scanned, ${migrated} migrated…</div>`;
       try {
         const resp = await fetch(`${_MAINT_WORKER_BASE}/community/${quizId}.json`);
         if (!resp.ok) continue;
@@ -397,11 +397,11 @@ async function adminMigrateLegacyImagesUI() {
 
     if (statusEl) {
       statusEl.innerHTML = migrated
-        ? `<div class="cq-status success"> Done — ${scanned} scanned, ${migrated} migrated to inline storage${failed ? `, ${failed} failed (see browser console)` : ''}.</div>`
-        : `<div class="cq-status success"> Done — ${scanned} scanned, nothing left to migrate${failed ? `, ${failed} failed (see browser console)` : ''}.</div>`;
+        ? `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Done — ${scanned} scanned, ${migrated} migrated to inline storage${failed ? `, <svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${failed} failed (see browser console)` : ''}.</div>`
+        : `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Done — ${scanned} scanned, nothing left to migrate${failed ? `, <svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${failed} failed (see browser console)` : ''}.</div>`;
     }
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> ${escapeHtml(e.message || String(e))}</div>`;
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -421,7 +421,7 @@ async function adminSweepLegacyImagesUI() {
   const statusEl = document.getElementById('adminSweepImagesStatus');
   const btn = document.getElementById('adminSweepImagesBtn');
   if (btn) btn.disabled = true;
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status info">⏳ Sweeping old image storage…</div>`;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Sweeping old image storage…</div>`;
 
   try {
     const idToken = await window._currentUser.getIdToken();
@@ -434,9 +434,9 @@ async function adminSweepLegacyImagesUI() {
     const ownerNote = result.docsWithNoKnownOwner
       ? ` (${result.docsWithNoKnownOwner} record${result.docsWithNoKnownOwner === 1 ? '' : 's'} had no recoverable file location and were only cleared)`
       : '';
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> Swept ${result.refcountDocsSwept} record${result.refcountDocsSwept === 1 ? '' : 's'} — deleted ${result.objectsDeleted} old image file${result.objectsDeleted === 1 ? '' : 's'}${ownerNote}.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Swept ${result.refcountDocsSwept} record${result.refcountDocsSwept === 1 ? '' : 's'} — deleted ${result.objectsDeleted} old image file${result.objectsDeleted === 1 ? '' : 's'}${ownerNote}.</div>`;
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> ${escapeHtml(e.message || String(e))}</div>`;
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -453,15 +453,15 @@ async function adminAssignAdminUI() {
 
   const btn = document.getElementById('adminAddAdminBtn');
   if (btn) btn.disabled = true;
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status info">⏳ Adding admin…</div>`;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status info"><svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Adding admin…</div>`;
 
   try {
     await assignAdmin(window._currentUser, email, perms, adminNewAdminScope);
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> ${escapeHtml(email.trim().toLowerCase())} added as admin.</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> ${escapeHtml(email.trim().toLowerCase())} added as admin.</div>`;
     resetAdminNewAdminFormState();
     setTimeout(() => renderAdminManagePanel(), 600);
   } catch (e) {
-    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"> ${escapeHtml(e.message || String(e))}</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="cq-status error"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> ${escapeHtml(e.message || String(e))}</div>`;
     if (btn) btn.disabled = false;
   }
 }
@@ -560,15 +560,15 @@ async function renderAdminPanel() {
             </div>
             <div class="cq-move-wrap">
               <button class="admin-quiz-move-btn" data-move-btn="${q.id}"
-                      onclick="event.stopPropagation(); cqToggleQuizMoveMenu('${q.id}')" title="Move to a folder"></button>
+                      onclick="event.stopPropagation(); cqToggleQuizMoveMenu('${q.id}')" title="Move to a folder"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
               ${moveOpen ? _renderQuizMoveMenuHTML(q) : ''}
             </div>
             <div class="admin-quiz-item-check">✓</div>
           </div>`;
       }).join('') : `
         <div class="empty-state" style="padding:16px 12px;">
-          <div class="empty-icon"></div>
-          No quizzes in this folder yet — drag a quiz here, or use its Move button.
+          <div class="empty-icon"><svg class="hicon" style="width:36px;height:36px;" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+          No quizzes in this folder yet — drag a quiz here, or use its <svg class="sicon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Move button.
         </div>`;
 
       listHtml = `<div class="cq-coll-layout ${cqSidebarCollapsed ? 'cq-coll-sidebar-collapsed' : ''}">
@@ -580,7 +580,7 @@ async function renderAdminPanel() {
       </div>`;
     }
   } else {
-    listHtml = `<div style="text-align:center;padding:20px;color:var(--text-muted);">⏳ Loading community quizzes…</div>`;
+    listHtml = `<div style="text-align:center;padding:20px;color:var(--text-muted);"><svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Loading community quizzes…</div>`;
   }
 
   const sourceTabsHtml = `
@@ -627,7 +627,7 @@ async function renderAdminPanel() {
         _allSharedQuizzes = shared; // keep the browse overlay's in-memory copy in sync too
       } catch (e) {
         document.getElementById('adminQuizList').innerHTML =
-          `<div style="text-align:center;padding:16px;color:var(--wrong-fg);"> Failed to load community quizzes.</div>`;
+          `<div style="text-align:center;padding:16px;color:var(--wrong-fg);"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Failed to load community quizzes.</div>`;
         return;
       }
     }
@@ -694,7 +694,7 @@ async function renderAdminPanel() {
       filterBar.innerHTML = `
         <div class="comm-filter-bar">
           <div class="comm-search-wrap">
-            <span class="comm-search-icon"></span>
+            <span class="comm-search-icon"><svg class="hicon" style="width:14px;height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
             <input class="comm-search-input" id="adminCommSearchInput" type="text"
                    placeholder="Search by title, author, category or tag…"
                    value="${searchVal}"
@@ -726,10 +726,10 @@ async function renderAdminPanel() {
             </select>
             <select class="comm-filter-select" id="adminCommSortSelect"
                     onchange="adminCommSort=this.value;renderAdminPanel()">
-              <option value="newest" ${adminCommSort==='newest'?'selected':''}> Newest</option>
-              <option value="oldest" ${adminCommSort==='oldest'?'selected':''}> Oldest</option>
-              <option value="az" ${adminCommSort==='az'?'selected':''}> A → Z</option>
-              <option value="questions" ${adminCommSort==='questions'?'selected':''}> Most Questions</option>
+              <option value="newest" ${adminCommSort==='newest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Newest</option>
+              <option value="oldest" ${adminCommSort==='oldest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Oldest</option>
+              <option value="az"     ${adminCommSort==='az'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M4 7V4h9M4 4l5 16M15 4h5M15 10h5M15 16h5"/></svg> A → Z</option>
+              <option value="questions" ${adminCommSort==='questions'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Most Questions</option>
             </select>
           </div>
           <div class="comm-results-count">${shared.length} quiz${shared.length !== 1 ? 'zes' : ''} shown</div>
@@ -948,7 +948,7 @@ async function renderAdminManageCommunityPanel(forceReload) {
 
     <div class="comm-filter-bar">
       <div class="comm-search-wrap">
-        <span class="comm-search-icon"></span>
+        <span class="comm-search-icon"><svg class="hicon" style="width:14px;height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
         <input class="comm-search-input" id="commManageSearchInput" type="text"
                placeholder="Search by title, author, category or tag…"
                value="${searchVal}"
@@ -980,10 +980,10 @@ async function renderAdminManageCommunityPanel(forceReload) {
         </select>
         <select class="comm-filter-select" id="commManageSortSelect"
                 onchange="commManageSort=this.value;renderAdminManageCommunityPanel()">
-          <option value="newest" ${commManageSort==='newest'?'selected':''}> Newest</option>
-          <option value="oldest" ${commManageSort==='oldest'?'selected':''}> Oldest</option>
-          <option value="az" ${commManageSort==='az'?'selected':''}> A → Z</option>
-          <option value="questions" ${commManageSort==='questions'?'selected':''}> Most Questions</option>
+          <option value="newest" ${commManageSort==='newest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Newest</option>
+          <option value="oldest" ${commManageSort==='oldest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Oldest</option>
+          <option value="az"     ${commManageSort==='az'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M4 7V4h9M4 4l5 16M15 4h5M15 10h5M15 16h5"/></svg> A → Z</option>
+          <option value="questions" ${commManageSort==='questions'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Most Questions</option>
         </select>
       </div>
       <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
@@ -1042,17 +1042,17 @@ async function renderAdminManageCommunityPanel(forceReload) {
 }
 
 /* ── Visual publish-destination picker ──
-   Same click-through card style used by the " Manage Curriculum" browser
+   Same click-through card style used by the "<svg class="sicon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Manage Curriculum" browser
    (_moduleIcon, .curr-item-row, .curr-back-btn, etc.) so picking where a
    quiz goes is a direct, visual "tap the right box" action. Uses its own
    adminPubTargetYear/Module/Subject state — entirely separate from the
    Curriculum tab's adminTargetYear/Module/Subject — so browsing here never
    affects, and is never affected by, wherever the admin last was in
-    Manage Curriculum. Picking a new subject always simply replaces
+   <svg class="sicon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Manage Curriculum. Picking a new subject always simply replaces
    whatever was previously chosen. */
 function adminAssignBreadcrumbHtml() {
   let html = `<div class="curr-breadcrumb">`;
-  html += `<span class="curr-crumb ${!adminPubTargetYear ? 'active' : ''}" onclick="adminOnYearChange('')"> Years</span>`;
+  html += `<span class="curr-crumb ${!adminPubTargetYear ? 'active' : ''}" onclick="adminOnYearChange('')"><svg class="micon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Years</span>`;
   if (adminPubTargetYear) {
     html += `<span class="curr-crumb-sep">›</span><span class="curr-crumb ${!adminPubTargetModule ? 'active' : ''}" onclick="adminOnModuleChange('')">${escapeHtml(adminPubTargetYear)}</span>`;
   }
@@ -1068,7 +1068,7 @@ function adminAssignBreadcrumbHtml() {
 
 function adminPublishTargetPickerHtml() {
   let html = `<div class="curr-section admin-publish-picker">`;
-  html += `<div class="curr-section-title" style="margin-bottom:8px;"> Publish Destination</div>`;
+  html += `<div class="curr-section-title" style="margin-bottom:8px;"><svg class="micon" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Publish Destination</div>`;
   html += adminAssignBreadcrumbHtml();
 
   if (adminPubTargetSubject) {
@@ -1094,11 +1094,11 @@ function adminPublishTargetPickerHtml() {
     html += years.length ? years.map(y => `
       <div class="curr-item-row curr-item-open" onclick="adminOnYearChange('${escapeHtml(y)}')">
         <div style="flex:1;">
-          <div class="curr-item-name"> ${escapeHtml(y)}</div>
+          <div class="curr-item-name"><svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${escapeHtml(y)}</div>
           <div class="curr-item-sub">${Object.keys(curriculum[y] || {}).length} module(s)</div>
         </div>
         <span class="curr-item-arrow">▶</span>
-      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">${myScope.type === 'all' ? 'No years yet — add one in Manage Curriculum first.' : 'No years within your curriculum access.'}</div>`;
+      </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">${myScope.type === 'all' ? 'No years yet — add one in <svg class="sicon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Manage Curriculum first.' : 'No years within your curriculum access.'}</div>`;
 
   } else if (!adminPubTargetModule) {
     const mods = Object.keys(curriculum[adminPubTargetYear] || {}).filter(m => scopeModuleAccess(myScope, adminPubTargetYear, m) !== 'none');
@@ -1116,7 +1116,7 @@ function adminPublishTargetPickerHtml() {
     html += subs.length ? subs.map(s => `
       <div class="curr-item-row curr-item-open" onclick="adminOnSubjectChange('${escapeHtml(s)}')">
         <div style="flex:1;">
-          <div class="curr-item-name">${escapeHtml(subjects[s].icon || '')} ${escapeHtml(subjects[s].label || s)}</div>
+          <div class="curr-item-name">${escapeHtml(subjects[s].icon || '📘')} ${escapeHtml(subjects[s].label || s)}</div>
         </div>
         <span class="curr-item-arrow">▶</span>
       </div>`).join('') : `<div style="color:var(--text-muted);font-size:.82rem;">No subjects yet in ${escapeHtml(adminPubTargetModule)}.</div>`;
@@ -1125,7 +1125,7 @@ function adminPublishTargetPickerHtml() {
     html += `
       <div class="curr-item-row admin-publish-target-selected">
         <div style="flex:1;">
-          <div class="curr-item-name"> ${escapeHtml(subjects[adminPubTargetSubject].icon || '')} ${escapeHtml(subjects[adminPubTargetSubject].label || adminPubTargetSubject)}</div>
+          <div class="curr-item-name"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> ${escapeHtml(subjects[adminPubTargetSubject].icon || '📘')} ${escapeHtml(subjects[adminPubTargetSubject].label || adminPubTargetSubject)}</div>
           <div class="curr-item-sub">${escapeHtml(adminPubTargetYear)} → ${escapeHtml(adminPubTargetModule)}</div>
         </div>
       </div>`;
@@ -1197,7 +1197,7 @@ function renderAdminAssignForm() {
           <div class="admin-multi-quiz-row">
             <div class="admin-multi-quiz-info">
               <span class="admin-multi-quiz-title">${escapeHtml(q.title)}</span>
-              <span class="admin-multi-quiz-meta">${(q.questions || []).length} q · ${q.sourceType === 'custom' ? ' custom' : ' community'}</span>
+              <span class="admin-multi-quiz-meta">${(q.questions || []).length} q · ${q.sourceType === 'custom' ? '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> custom' : '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> community'}</span>
             </div>
             <button class="admin-multi-quiz-remove" title="Remove from batch"
               onclick="adminRemoveSelectedQuiz('${_adminQuizKey(q.sourceType, q.sourceId)}')">✕</button>
@@ -1224,7 +1224,7 @@ function renderAdminAssignForm() {
 
       <button class="admin-assign-btn" id="adminPublishBtn" onclick="adminPublishQuiz()" style="margin-top:14px;"
         ${(!adminPubTargetYear || !adminPubTargetModule || !adminPubTargetSubject) ? 'disabled' : ''}>
-         Publish ${count > 1 ? count + ' Quizzes' : ''} to Question Bank
+        <svg class="sicon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Publish ${count > 1 ? count + ' Quizzes' : ''} to Question Bank
       </button>
       <div class="admin-status" id="adminStatus"></div>
     </div>

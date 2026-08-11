@@ -32,7 +32,7 @@
      nothing until someone actually sends/scans.
 
    Build 71 fix:
-   - P2P send/receive (including " Scan QR", which immediately calls
+   - P2P send/receive (including "<svg class="sicon" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Scan QR", which immediately calls
      startReceive() once a code is found) failed for every signed-OUT user
      with Firestore's raw "Missing or insufficient permissions" — the
      p2pSignaling collection required `request.auth != null` in
@@ -83,7 +83,7 @@
      purely a visual pass.
 
    Drop #100 — "Export to PDF" card added:
-   - A third `.backup-card` (" Export to PDF") sits below Export/Import,
+   - A third `.backup-card` ("<svg class="sicon" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Export to PDF") sits below Export/Import,
      opening the new `pdfExportOverlay` modal (see js/pdf-export.js) — a
      full source picker (curriculum lectures, community quizzes, custom
      quizzes) plus text/image size + colour theme controls, a live decoy
@@ -133,7 +133,7 @@ async function renderBackupTransferModal() {
 
     <div class="backup-card">
       <div class="backup-card-header">
-        <span class="backup-card-icon"></span>
+        <span class="backup-card-icon"><svg class="hicon" style="width:22px;height:22px;" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
         <div>
           <div class="backup-card-title">Export / Import</div>
           <div class="backup-card-subtitle">A file you keep — works everywhere, no connection needed</div>
@@ -144,8 +144,8 @@ async function renderBackupTransferModal() {
         <div class="backup-field-group">
           <div class="backup-field-label">What to include</div>
           <div class="backup-toggle-group">
-            <label class="backup-toggle-chip"><input type="checkbox" id="backupIncludeQuizzes" checked><span> Custom quizzes</span></label>
-            <label class="backup-toggle-chip"><input type="checkbox" id="backupIncludeStats" checked><span> Stats / history</span></label>
+            <label class="backup-toggle-chip"><input type="checkbox" id="backupIncludeQuizzes" checked><span><svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Custom quizzes</span></label>
+            <label class="backup-toggle-chip"><input type="checkbox" id="backupIncludeStats" checked><span><svg class="sicon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Stats / history</span></label>
           </div>
           <div id="backupQuizPicker" class="backup-quiz-picker" ${quizzes.length ? '' : 'style="display:none;"'}>
             <div class="backup-quiz-picker-header">
@@ -174,7 +174,7 @@ async function renderBackupTransferModal() {
 
     <div class="backup-card">
       <div class="backup-card-header">
-        <span class="backup-card-icon"></span>
+        <span class="backup-card-icon"><svg class="hicon" style="width:22px;height:22px;" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
         <div>
           <div class="backup-card-title">Export to PDF</div>
           <div class="backup-card-subtitle">A stylish printable booklet — pick any curriculum lectures, community quizzes, or custom quizzes</div>
@@ -235,7 +235,7 @@ function _backupProgressHTML(message) {
 }
 function _backupResultHTML(ok, message) {
   return `<div class="backup-result-bar ${ok ? 'ok' : 'fail'}">
-    <span class="backup-result-icon">${ok ? '' : ''}</span>
+    <span class="backup-result-icon">${ok ? '<svg class="hicon" style="width:17px;height:17px;" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' : '<svg class="hicon" style="width:17px;height:17px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'}</span>
     <span class="backup-result-msg">${message}</span>
   </div>`;
 }
@@ -387,11 +387,11 @@ async function _backupConfirmImportFlow(payload, statusEl) {
         <div class="backup-mode-row">
           <label class="backup-mode-opt">
             <input type="radio" name="backupImportMode" value="merge" checked>
-            <span> Merge with what's already on this device <em>(recommended)</em></span>
+            <span><svg class="sicon" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg> Merge with what's already on this device <em>(recommended)</em></span>
           </label>
           <label class="backup-mode-opt">
             <input type="radio" name="backupImportMode" value="replace">
-            <span> Delete this device's existing data first, then load this backup</span>
+            <span><svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete this device's existing data first, then load this backup</span>
           </label>
         </div>
         <div class="backup-confirm-actions">
@@ -461,7 +461,7 @@ async function _backupRenderReminderNote() {
   const body = document.getElementById('backupBody');
   const note = document.createElement('div');
   note.className = 'backup-reminder-note';
-  note.innerHTML = ` It's been a while since your last backup — worth taking a minute to export or transfer a copy.`;
+  note.innerHTML = `<svg class="sicon" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg> It's been a while since your last backup — worth taking a minute to export or transfer a copy.`;
   body.prepend(note);
 }
 
@@ -471,7 +471,7 @@ async function checkBackupReminderBadge() {
     const { shouldShowBackupReminder } = await import('./local-store.js');
     const btn = document.querySelector('[onclick="openBackupTransfer()"]');
     if (btn && (await shouldShowBackupReminder())) {
-      btn.innerHTML = '&nbsp; Backup &amp; Transfer <span style="opacity:.7;font-size:.8em;">●</span>';
+      btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>&nbsp; Backup &amp; Transfer <span style="opacity:.7;font-size:.8em;">●</span>';
     }
   } catch (e) { /* non-critical, fail silently */ }
 }

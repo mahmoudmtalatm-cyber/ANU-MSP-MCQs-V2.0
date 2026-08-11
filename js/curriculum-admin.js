@@ -269,15 +269,15 @@ async function adminAddYear() {
   const status = document.getElementById('currYearStatus');
   const name   = (input?.value || '').trim();
   const icon   = (iconIn?.value || '').trim() || _numberEmoji(Object.keys(curriculum).length + 1);
-  if (!name)          { status.textContent = 'Please enter a year name.'; status.className = 'curr-status err'; return; }
-  if (curriculum[name]) { status.textContent = `"${name}" already exists.`; status.className = 'curr-status err'; return; }
+  if (!name)          { status.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Please enter a year name.'; status.className = 'curr-status err'; return; }
+  if (curriculum[name]) { status.textContent = `<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> "${name}" already exists.`; status.className = 'curr-status err'; return; }
   curriculum[name] = {};
   yearIconMap[name] = icon;
   addCustomIcon(icon);
   buildYearGrid();
-  status.textContent = '⏳ Saving…'; status.className = 'curr-status';
+  status.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Saving…'; void 0; status.className = 'curr-status';
   await saveCurriculumStructure();
-  status.textContent = `Year "${name}" added! You can now add modules to it.`;
+  status.textContent = `<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Year "${name}" added! You can now add modules to it.`;
   status.className = 'curr-status ok';
   input.value = '';
   selectIconForField('currNewYearIcon', _numberEmoji(Object.keys(curriculum).length + 1));
@@ -304,17 +304,17 @@ async function adminAddModule() {
   const yr  = adminTargetYear;
   const mod = (input?.value || '').trim();
   const icon = (iconIn?.value || '').trim() || '📚';
-  if (!yr)  { status.textContent = 'Select a year first.'; status.className = 'curr-status err'; return; }
-  if (!mod) { status.textContent = 'Enter a module name.'; status.className = 'curr-status err'; return; }
-  if (!curriculum[yr]) { status.textContent = 'Year not found.'; status.className = 'curr-status err'; return; }
-  if (curriculum[yr][mod]) { status.textContent = `Module "${mod}" already exists in ${yr}.`; status.className = 'curr-status err'; return; }
+  if (!yr)  { status.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Select a year first.'; status.className = 'curr-status err'; return; }
+  if (!mod) { status.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Enter a module name.'; status.className = 'curr-status err'; return; }
+  if (!curriculum[yr]) { status.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Year not found.'; status.className = 'curr-status err'; return; }
+  if (curriculum[yr][mod]) { status.textContent = `<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Module "${mod}" already exists in ${yr}.`; status.className = 'curr-status err'; return; }
   curriculum[yr][mod] = [];
   if (!moduleIconMap[yr]) moduleIconMap[yr] = {};
   moduleIconMap[yr][mod] = icon;
   buildYearGrid();
-  status.textContent = '⏳ Saving…'; status.className = 'curr-status';
+  status.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Saving…'; void 0; status.className = 'curr-status';
   await saveCurriculumStructure();
-  status.textContent = `Module "${mod}" added to ${yr}!`;
+  status.textContent = `<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Module "${mod}" added to ${yr}!`;
   status.className = 'curr-status ok';
   input.value = '';
   setTimeout(() => renderAdminCurriculumPanel(), 400);
@@ -349,19 +349,19 @@ async function adminAddSubject() {
   const label = (labelIn?.value || '').trim();
   const icon  = (iconIn?.value  || '').trim() || '📘';
   const key   = (keyIn?.value   || '').trim();
-  if (!yr)    { status.textContent = 'Select a year.';          status.className = 'curr-status err'; return; }
-  if (!mod)   { status.textContent = 'Select a module.';        status.className = 'curr-status err'; return; }
-  if (!label) { status.textContent = 'Enter a subject label.';  status.className = 'curr-status err'; return; }
-  if (!key)   { status.textContent = 'Enter an internal key.';  status.className = 'curr-status err'; return; }
-  if (subjects[key]) { status.textContent = `Key "${key}" already exists. Choose another.`; status.className = 'curr-status err'; return; }
-  status.textContent = '⏳ Saving…'; status.className = 'curr-status';
+  if (!yr)    { status.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Select a year.';          status.className = 'curr-status err'; return; }
+  if (!mod)   { status.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Select a module.';        status.className = 'curr-status err'; return; }
+  if (!label) { status.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Enter a subject label.';  status.className = 'curr-status err'; return; }
+  if (!key)   { status.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Enter an internal key.';  status.className = 'curr-status err'; return; }
+  if (subjects[key]) { status.textContent = `<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Key "${key}" already exists. Choose another.`; status.className = 'curr-status err'; return; }
+  status.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Saving…'; void 0; status.className = 'curr-status';
   subjects[key] = { icon, label, lectures: {} };
   if (!curriculum[yr]) curriculum[yr] = {};
   if (!curriculum[yr][mod]) curriculum[yr][mod] = [];
   if (!curriculum[yr][mod].includes(key)) curriculum[yr][mod].push(key);
   buildYearGrid();
   await saveCurriculumExtensionSubject(key, { icon, label, year: yr, module: mod });
-  status.textContent = `Subject "${label}" added to ${yr} → ${mod}!`;
+  status.textContent = `<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Subject "${label}" added to ${yr} → ${mod}!`;
   status.className = 'curr-status ok';
   labelIn.value = ''; keyIn.value = '';
   selectIconForField('currSubjIcon', '📘');
@@ -577,17 +577,17 @@ async function adminExecMoveQuiz(andDelete) {
 
   if (!destYear || !destModule || !destSubject) {
     statusEl.className = 'qm-status err';
-    statusEl.textContent = 'Please select a destination year, module, and subject.';
+    statusEl.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Please select a destination year, module, and subject.';
     return;
   }
   if (destSubject === adminTargetSubject && !andDelete) {
     statusEl.className = 'qm-status err';
-    statusEl.textContent = 'Source and destination subject are the same.';
+    statusEl.textContent = '<svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Source and destination subject are the same.';
     return;
   }
 
   statusEl.className = 'qm-status';
-  statusEl.textContent = '⏳ Working…';
+  statusEl.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg> Working…';
 
   try {
     // Fetch the source lecture from R2 (images already resolved, permanent URLs)
@@ -633,8 +633,8 @@ async function adminExecMoveQuiz(andDelete) {
 
     statusEl.className = 'qm-status ok';
     statusEl.textContent = andDelete
-      ? `Moved to ${subjects[destSubject].label || destSubject}!`
-      : `Copied to ${subjects[destSubject].label || destSubject}!`;
+      ? `<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Moved to ${subjects[destSubject].label || destSubject}!`
+      : `<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Copied to ${subjects[destSubject].label || destSubject}!`;
     // Manifest bump for the new destination lecture already happened
     // server-side in the Worker (as part of putContentItem above) — no
     // separate call needed here.
@@ -648,7 +648,7 @@ async function adminExecMoveQuiz(andDelete) {
     setTimeout(() => adminCloseMoveQuiz(), 1000);
   } catch (e) {
     statusEl.className = 'qm-status err';
-    statusEl.textContent = '' + (e.message || String(e));
+    statusEl.textContent = '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> ' + (e.message || String(e));
   }
 }
 

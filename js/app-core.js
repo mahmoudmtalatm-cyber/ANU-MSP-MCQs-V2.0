@@ -415,7 +415,7 @@ function buildYearGrid() {
 /* Keycap-digit emoji for a position, e.g. 1 → "1️⃣", 10 → "", 11 → "1️⃣1️⃣".
    Used as the default year icon until an admin picks a custom one. */
 function _numberEmoji(n) {
-  if (n === 10) return '';
+  if (n === 10) return '🔟';
   return String(n).split('').map(d => d + '\uFE0F\u20E3').join('');
 }
 
@@ -873,7 +873,7 @@ function toggleMark() {
 function updateMarkBtn() {
   const btn = document.getElementById('markBtn');
   btn.classList.toggle('is-marked', markedSet.has(currentIndex));
-  btn.textContent = markedSet.has(currentIndex) ? ' Unmark' : ' Mark / Unmark';
+  btn.textContent = markedSet.has(currentIndex) ? '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" style="fill:currentColor;stroke:none;"/></svg> Unmark' : '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" style="fill:currentColor;stroke:none;"/></svg> Mark / Unmark';
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -898,17 +898,17 @@ function submitQuiz() {
   });
 
   const pct = Math.round(score / total * 100);
-  const emoji = pct === 100 ? '' : pct >= 70 ? '' : '';
+  const emoji = pct === 100 ? '<svg class="micon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>' : pct >= 70 ? '<svg class="micon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>' : '<svg class="micon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg>';
   if (pct === 100) launchConfetti();
 
-  document.getElementById('resultsTitle').textContent = `${emoji} Quiz Results`;
+  document.getElementById('resultsTitle').innerHTML = `${emoji} Quiz Results`;
   const totalTime = Object.values(questionTimes).reduce((a,b) => a+b, 0);
   const answered = Object.keys(questionTimes).length || 1;
   const avgTime = Math.round(totalTime / answered);
   const avgMins = Math.floor(avgTime / 60);
   const avgSecs = String(avgTime % 60).padStart(2,'0');
   const avgLabel = avgMins > 0 ? `${avgMins}m ${avgSecs}s` : `${avgSecs}s`;
-  document.getElementById('resultsTitle').textContent = `${emoji} Quiz Results · ⏱ avg ${avgLabel}/question`;
+  document.getElementById('resultsTitle').innerHTML = `${emoji} Quiz Results · <svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v3"/></svg> avg ${avgLabel}/question`;
   const badge = document.getElementById('scoreBadge');
   badge.textContent = `${score} / ${total} (${pct}%)`;
   badge.style.background = pct >= 70 ? 'var(--green-pale-border)' : 'var(--red-pale)';
@@ -946,7 +946,7 @@ function buildResults() {
   // Cancel any in-progress explanations from a previous result view
   _cancelAndClearResultsAiState();
   const explainAllBtn = document.getElementById('explainAllBtn');
-  if (explainAllBtn) { explainAllBtn.disabled = false; explainAllBtn.innerHTML = '&nbsp; Explain All Questions'; explainAllBtn.onclick = explainAllQuestions; }
+  if (explainAllBtn) { explainAllBtn.disabled = false; explainAllBtn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg>&nbsp; Explain All Questions'; explainAllBtn.onclick = explainAllQuestions; }
 
   const body = document.getElementById('resultsBody');
   body.innerHTML = '';
@@ -955,7 +955,7 @@ function buildResults() {
     summary.style.cssText = 'background:#fff;border:1px solid var(--border-soft);border-radius:10px;padding:14px 20px;display:flex;gap:24px;flex-wrap:wrap;margin-bottom:4px;';
     summary.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:1.3rem"></span>
+        <span style="font-size:1.3rem"><svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
         <div>
           <div style="font-size:.78rem;font-weight:700;color:#5A7080;text-transform:uppercase;letter-spacing:.8px;">Answer Changes</div>
           <div style="display:flex;gap:16px;margin-top:4px;flex-wrap:wrap;">
@@ -969,7 +969,7 @@ function buildResults() {
 if (changeLog.length > 0) {
     const flowSection = document.createElement('div');
     flowSection.className = 'change-flow-section';
-    flowSection.innerHTML = `<div class="change-flow-title"> Answer Changes Flow — ${changeLog.length} change${changeLog.length!==1?'s':''}</div>`;
+    flowSection.innerHTML = `<div class="change-flow-title"><svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Answer Changes Flow — ${changeLog.length} change${changeLog.length!==1?'s':''}</div>`;
     const flowList = document.createElement('div');
     flowList.className = 'change-flow-list';
     const verdicts = {
@@ -1029,7 +1029,7 @@ if (changeLog.length > 0) {
         <div class="r-strip" style="background:${stripColor}"></div>
         <div class="r-content">
           <div class="r-card-header">
-            <div class="r-qnum">Q${i+1}${isMark?' &nbsp; Marked':''}</div>
+            <div class="r-qnum">Q${i+1}${isMark?' &nbsp;<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" style="fill:currentColor;stroke:none;"/></svg> Marked':''}</div>
             <div class="r-status ${statusClass}">${statusText}</div>
           </div>
           <div class="r-question">${q.question}</div>
@@ -1063,7 +1063,7 @@ if (changeLog.length > 0) {
     const explainBtn = document.createElement('button');
     explainBtn.className = 'ai-explain-btn';
     explainBtn.id = `explainBtn_${i}`;
-    explainBtn.innerHTML = ' Explain';
+    explainBtn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Explain';
     explainBtn.onclick = () => explainQuestion(i);
     card.querySelector('.r-content').appendChild(explainBtn);
 
@@ -1076,7 +1076,7 @@ if (changeLog.length > 0) {
     const chatBtn = document.createElement('button');
     chatBtn.className = 'ai-chat-btn';
     chatBtn.id = `chatBtn_${i}`;
-    chatBtn.innerHTML = ' Chat';
+    chatBtn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> Chat';
     chatBtn.onclick = () => toggleChatPanel(i);
     card.querySelector('.r-content').appendChild(chatBtn);
 
@@ -1311,7 +1311,7 @@ function openStats() {
     // Still loading from Firestore — show spinner
     document.getElementById('statsBody').innerHTML = `
       <div style="text-align:center;padding:40px;color:var(--text-muted);">
-        <div style="font-size:2rem;margin-bottom:12px;">⏳</div>
+        <div style="font-size:2rem;margin-bottom:12px;"><svg viewBox="0 0 24 24" style="width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><ellipse cx="12" cy="5" rx="7" ry="2.2"/><ellipse cx="12" cy="19" rx="7" ry="2.2"/><path d="M5 5c0 5 5 5 5 7s-5 2-5 7M19 5c0 5-5 5-5 7s5 2 5 7"/></svg></div>
         <div style="font-weight:700;">Loading your stats…</div>
       </div>`;
     // Try again shortly
@@ -1365,14 +1365,14 @@ function _makeHistoryItem(h) {
       <div>
         <div class="h-subject">${escapeHtml(subjectDisplayName(h.subject))}</div>
         <div class="h-lecture">${escapeHtml(lecShort)}</div>
-        <div class="h-lecture">⏱ ${fmtTime(h.avgTime)}/q${changeNote} · ${h.date}</div>
+        <div class="h-lecture"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v3"/></svg> ${fmtTime(h.avgTime)}/q${changeNote} · ${h.date}</div>
       </div>
       <div class="h-score" style="color:${h.pct >= 70 ? 'var(--correct-fg)' : 'var(--wrong-fg)'}">${h.score}/${h.total}<br><span style="font-size:.8rem">(${h.pct}%)</span></div>
     </div>`;
   const wrongCount = (h.wrongQuestions || []).length;
   const retakeBtn = document.createElement('button');
   retakeBtn.style.cssText = 'display:block;width:100%;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:white;font-weight:700;cursor:pointer;font-size:.8rem;opacity:' + (wrongCount > 0 ? '1' : '.4') + ';';
-  retakeBtn.textContent = ` Retake ${wrongCount} wrong Q${wrongCount !== 1 ? 's' : ''}`;
+  retakeBtn.textContent = `<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retake ${wrongCount} wrong Q${wrongCount !== 1 ? 's' : ''}`;
   retakeBtn.disabled = wrongCount === 0;
   retakeBtn.onclick = (e) => { e.stopPropagation(); retakeSingleQuiz(h); };
   item.appendChild(retakeBtn);
@@ -1397,10 +1397,10 @@ function _makeHistoryItem(h) {
 // backward compatibility — any history entry recorded before this feature
 // existed (it simply has no year/module field at all).
 function _otherBucketLabel(h) {
-  if (h.source === 'custom') return ' Custom Quizzes';
-  if (h.source === 'community') return ' Community Quizzes';
-  if (h.source === 'retake') return ' Retake Sessions';
-  return ' Unspecified (older quizzes)';
+  if (h.source === 'custom')    return '<svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Custom Quizzes';
+  if (h.source === 'community') return '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Community Quizzes';
+  if (h.source === 'retake')    return '<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retake Sessions';
+  return '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Unspecified (older quizzes)';
 }
 
 function _pctOf(node) { return node.total > 0 ? Math.round(node.correct / node.total * 100) : 0; }
@@ -1525,7 +1525,7 @@ function _renderCurriculumFlow(container, tree) {
   crumb.className = 'flow-breadcrumb';
   const allLink = document.createElement('span');
   allLink.className = 'flow-crumb' + (!_statsFlow.year ? ' active' : '');
-  allLink.textContent = ' All Years';
+  allLink.textContent = '<svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> All Years';
   allLink.onclick = () => { _statsFlow.year = null; _statsFlow.module = null; _statsFlow.openSubject = null; renderStatsModal(); };
   crumb.appendChild(allLink);
   if (_statsFlow.year) {
@@ -1620,7 +1620,7 @@ function _renderOtherSources(container, other) {
 
   const sec = document.createElement('div');
   sec.className = 'stats-section';
-  sec.innerHTML = `<div class="stats-section-title"> Other Quiz Sources</div>`;
+  sec.innerHTML = `<div class="stats-section-title"><svg class="micon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Other Quiz Sources</div>`;
   const list = document.createElement('div');
   list.className = 'quiz-toggle-list';
   labels
@@ -1640,7 +1640,7 @@ function renderStatsModal() {
   body.innerHTML = '';
 
   if (st.totalQuizzes === 0) {
-    body.innerHTML = `<div class="no-stats-box"><div class="ns-icon"></div>No data yet — complete a quiz to see your statistics.</div>`;
+    body.innerHTML = `<div class="no-stats-box"><div class="ns-icon"><svg class="hicon" style="width:32px;height:32px;" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>No data yet — complete a quiz to see your statistics.</div>`;
     return;
   }
 
@@ -1656,7 +1656,7 @@ function renderStatsModal() {
   /* — Overall Performance — */
   const sec1 = document.createElement('div');
   sec1.className = 'stats-section';
-  sec1.innerHTML = `<div class="stats-section-title"> Overall Performance</div>`;
+  sec1.innerHTML = `<div class="stats-section-title"><svg class="micon" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> Overall Performance</div>`;
   const g1 = document.createElement('div');
   g1.className = 'stats-grid';
   g1.innerHTML = `
@@ -1676,7 +1676,7 @@ function renderStatsModal() {
   /* — Answer Changes — */
   const sec2 = document.createElement('div');
   sec2.className = 'stats-section';
-  sec2.innerHTML = `<div class="stats-section-title"> Answer Changes (All Time) — ${totalChanges} total</div>`;
+  sec2.innerHTML = `<div class="stats-section-title"><svg class="micon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Answer Changes (All Time) — ${totalChanges} total</div>`;
   if (totalChanges === 0) {
     sec2.innerHTML += `<div style="color:var(--text-muted);font-size:.88rem;">No answer changes recorded yet.</div>`;
   } else {
@@ -1715,7 +1715,7 @@ function renderStatsModal() {
   if (Object.keys(tree).length > 0) {
     const sec3 = document.createElement('div');
     sec3.className = 'stats-section';
-    sec3.innerHTML = `<div class="stats-section-title"> Curriculum Breakdown — Year / Module / Subject</div>`;
+    sec3.innerHTML = `<div class="stats-section-title"><svg class="micon" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> Curriculum Breakdown — Year / Module / Subject</div>`;
     _renderCurriculumFlow(sec3, tree);
     body.appendChild(sec3);
   }
@@ -1725,7 +1725,7 @@ function renderStatsModal() {
   if (st.history.length > 0) {
     const sec4 = document.createElement('div');
     sec4.className = 'stats-section';
-    sec4.innerHTML = `<div class="stats-section-title"> Quiz History</div>`;
+    sec4.innerHTML = `<div class="stats-section-title"><svg class="micon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Quiz History</div>`;
     const hl = document.createElement('div');
     hl.className = 'history-list';
     st.history.forEach(h => hl.appendChild(_makeHistoryItem(h)));
@@ -1736,7 +1736,7 @@ function renderStatsModal() {
   /* — Reset — */
   const rb = document.createElement('button');
   rb.className = 'stats-reset-btn';
-  rb.textContent = ' Reset All Statistics';
+  rb.textContent = '<svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>  Reset All Statistics';
   rb.onclick = resetStats;
   body.appendChild(rb);
 }
@@ -1766,7 +1766,7 @@ function renderRetakeSelector() {
   body.innerHTML = '';
 
   if (!st.history.length) {
-    body.innerHTML = '<div class="no-stats-box"><div class="ns-icon"></div>No quiz history yet. Complete a quiz first.</div>';
+    body.innerHTML = '<div class="no-stats-box"><div class="ns-icon"><svg class="hicon" style="width:32px;height:32px;" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></div>No quiz history yet. Complete a quiz first.</div>';
     return;
   }
 
@@ -1824,7 +1824,7 @@ function renderRetakeSelector() {
   const retakeBtn = document.createElement('button');
   retakeBtn.className = 'btn btn-primary';
   retakeBtn.style.marginTop = '12px';
-  retakeBtn.textContent = ' Retake Selected Wrong Questions';
+  retakeBtn.textContent = '<svg class="sicon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retake Selected Wrong Questions';
   retakeBtn.onclick = async () => {
     const checked = [...document.querySelectorAll('#retakeBody input[type=checkbox]:checked')];
     if (!checked.length) return alert('Please select at least one quiz.');

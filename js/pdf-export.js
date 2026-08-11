@@ -1,7 +1,7 @@
 /* =============================================================================
    pdf-export.js
 
-   Drop #100 — "Export to PDF" inside the Backup & Transfer modal.
+   Drop #100 — "Export to PDF" inside the <svg class="sicon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Backup & Transfer modal.
 
    Lets a signed-in student (or admin) turn any mix of Curriculum lectures,
    Community quizzes and their own Custom quizzes into a single, elegantly
@@ -85,11 +85,11 @@ function _pdxFormatDate(d) {
    a big multi-source export reads as organised and colourful rather than
    one long grey wall of text. */
 const PDX_PALETTE = {
-  teal: { name: 'Teal (default)', base: '#0E6E82', dark: '#0A3F52', light: '#29C2D9', pale: '#E4F3F6' },
-  violet: { name: 'Violet', base: '#6B4FA0', dark: '#4E3878', light: '#7E57C2', pale: '#EFEAF8' },
-  gold: { name: 'Gold', base: '#C98D1F', dark: '#8A5E12', light: '#E7B65C', pale: '#FBF1DE' },
-  forest: { name: 'Forest', base: '#2E7A4F', dark: '#1F5C3B', light: '#4C9A6B', pale: '#E5F3EC' },
-  berry: { name: 'Berry', base: '#B23A3A', dark: '#8F2A2A', light: '#D97A7A', pale: '#F8DADA' },
+  teal:   { name: '🟦 Teal (default)', base: '#0E6E82', dark: '#0A3F52', light: '#29C2D9', pale: '#E4F3F6' },
+  violet: { name: '🟪 Violet',         base: '#6B4FA0', dark: '#4E3878', light: '#7E57C2', pale: '#EFEAF8' },
+  gold:   { name: '🟧 Gold',           base: '#C98D1F', dark: '#8A5E12', light: '#E7B65C', pale: '#FBF1DE' },
+  forest: { name: '🟩 Forest',         base: '#2E7A4F', dark: '#1F5C3B', light: '#4C9A6B', pale: '#E5F3EC' },
+  berry:  { name: '🟥 Berry',          base: '#B23A3A', dark: '#8F2A2A', light: '#D97A7A', pale: '#F8DADA' },
 };
 const PDX_TEXT_SIZES = { small: { q: 10.5, opt: 9.5, label: 8.5 }, medium: { q: 12, opt: 10.5, label: 9.5 }, large: { q: 13.5, opt: 12, label: 10.5 } };
 const PDX_IMAGE_SIZES = { small: 90, medium: 160, large: 230 }; // max image height, in pt
@@ -148,7 +148,7 @@ async function renderPdfExportModal() {
 
       <div class="pdx-settings-col">
         <div class="pdx-settings-card">
-          <div class="pdx-settings-title"> Look &amp; Feel</div>
+          <div class="pdx-settings-title"><svg class="sicon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.3c1.9 0 3.5-1.6 3.5-3.5C21 6.9 17 2 12 2z"/><circle cx="6.5" cy="11.5" r="1.5"/><circle cx="9.5" cy="7.5" r="1.5"/><circle cx="14.5" cy="7.5" r="1.5"/><circle cx="17.5" cy="11.5" r="1.5"/></svg> Look &amp; Feel</div>
 
           <div class="pdx-field-label">Text size</div>
           <div class="pdx-segmented" id="pdxTextSizeGroup">
@@ -170,7 +170,7 @@ async function renderPdfExportModal() {
         </div>
 
         <div class="pdx-preview-card">
-          <div class="pdx-settings-title"> Live Preview <span class="pdx-preview-tag">sample page — not real content</span></div>
+          <div class="pdx-settings-title"><svg class="sicon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Live Preview <span class="pdx-preview-tag">sample page — not real content</span></div>
           <div id="pdxPreview" class="pdx-preview-page"></div>
         </div>
       </div>
@@ -207,7 +207,7 @@ function _pdxRefreshChrome() {
    switching tabs never re-renders the tab bar markup itself. */
 function _pdxSyncTabButtons() {
   const counts = { curriculum: _pdxSelCurriculum.size, community: _pdxSelCommunity.size, custom: _pdxSelCustom.size };
-  const labels = { curriculum: ' Curriculum', community: ' Community', custom: ' My Custom Quizzes' };
+  const labels = { curriculum: '<svg class="sicon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Curriculum', community: '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Community', custom: '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> My Custom Quizzes' };
   document.querySelectorAll('.pdx-source-tabs .community-tab-btn').forEach(btn => {
     const tab = btn.dataset.tab;
     if (!tab) return;
@@ -376,7 +376,7 @@ function _pdxRenderCurriculumTab() {
   } else {
     const lectures = Object.keys((subjects[_pdxCurrSubject] || {}).lectures || {});
     if (!lectures.length) {
-      html += `<div class="community-empty"><div class="ce-icon"></div>No lectures in this subject yet.</div>`;
+      html += `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>No lectures in this subject yet.</div>`;
     } else {
       const selectedHere = lectures.filter(l => _pdxSelCurriculum.has(`${_pdxCurrSubject}::${l}`)).length;
       html += `<div class="pdx-lecture-list-header">Lectures <span class="backup-quiz-count" id="pdxSubjectSelectedBadge">${selectedHere}</span></div>
@@ -417,7 +417,7 @@ async function _pdxRenderCommunityTab() {
   // caching purposes; it never triggers a second, separate version check.
   const ok = await ensureSharedQuizzesLoaded(false);
   if (_pdxTab !== 'community') return;
-  if (!ok) { el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--wrong-fg);"> Failed to load community quizzes.</div>`; return; }
+  if (!ok) { el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--wrong-fg);"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Failed to load community quizzes.</div>`; return; }
   _pdxDrawCommunityList();
 }
 
@@ -480,7 +480,7 @@ function _pdxDrawCommunityList() {
     </div>`;
 
   if (!pool.length) {
-    html += `<div class="community-empty"><div class="ce-icon"></div>No quizzes match your search/filters.</div>`;
+    html += `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg></div>No quizzes match.</div>`;
   } else {
     pool.forEach(item => {
       const checked = _pdxSelCommunity.has(item.id);
@@ -638,7 +638,7 @@ function pdxRenderPreview() {
     </div>
     <div class="pdx-pv-crumb" style="color:var(--pdx-base);">Year 1 › Cardiovascular Module › Anatomy</div>
     <div class="pdx-pv-q" style="font-size:${tSize.q}px;">7. Which chamber of the heart receives oxygenated blood from the lungs?</div>
-    <div class="pdx-pv-img" style="width:${imgPx}px;height:${imgPx}px;"></div>
+    <div class="pdx-pv-img" style="width:${imgPx}px;height:${imgPx}px;"><svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
     <div class="pdx-pv-opts" style="font-size:${tSize.opt}px;">
       <div class="pdx-pv-opt"><b style="color:var(--pdx-base);">A</b> Right atrium</div>
       <div class="pdx-pv-opt"><b style="color:var(--pdx-base);">B</b> Left atrium</div>
@@ -659,7 +659,7 @@ function _pdxProgressHTML(message) {
   </div>`;
 }
 function _pdxResultHTML(ok, message) {
-  return `<div class="backup-result-bar ${ok ? 'ok' : 'fail'}"><span class="backup-result-icon">${ok ? '' : ''}</span><span class="backup-result-msg">${message}</span></div>`;
+  return `<div class="backup-result-bar ${ok ? 'ok' : 'fail'}"><span class="backup-result-icon">${ok ? '<svg class="hicon" style="width:17px;height:17px;" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' : '<svg class="hicon" style="width:17px;height:17px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'}</span><span class="backup-result-msg">${message}</span></div>`;
 }
 
 async function pdxGenerate() {
@@ -697,7 +697,7 @@ async function pdxGenerate() {
       for (const mod of Object.keys(curTree[year])) {
         _pdxDrawBanner(ctx, mod, 1, color, [year]);
         for (const subjKey of Object.keys(curTree[year][mod])) {
-          const subj = subjects[subjKey] || { label: subjKey, icon: '' };
+          const subj = subjects[subjKey] || { label: subjKey, icon: '📘' };
           _pdxDrawBanner(ctx, subj.label || subjKey, 2, color, [year, mod]);
           for (const lecName of curTree[year][mod][subjKey]) {
             _pdxDrawBanner(ctx, lecName, 3, color, [year, mod, subj.label || subjKey]);
@@ -841,27 +841,27 @@ async function _pdxCollectDataset() {
 function _pdxBuildOutline(dataset) {
   const out = [];
   for (const year of Object.keys(dataset.curriculum)) {
-    out.push({ level: 0, text: ` ${year}` });
+    out.push({ level: 0, text: `<svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${year}` });
     for (const mod of Object.keys(dataset.curriculum[year])) {
-      out.push({ level: 1, text: ` ${mod}` });
+      out.push({ level: 1, text: `<svg class="sicon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> ${mod}` });
       for (const subjKey of Object.keys(dataset.curriculum[year][mod])) {
-        const subj = subjects[subjKey] || { label: subjKey, icon: '' };
-        out.push({ level: 2, text: `${subj.icon || ''} ${subj.label || subjKey}` });
+        const subj = subjects[subjKey] || { label: subjKey, icon: '📘' };
+        out.push({ level: 2, text: `${subj.icon || '📘'} ${subj.label || subjKey}` });
         dataset.curriculum[year][mod][subjKey].forEach(lecName => out.push({ level: 3, text: lecName }));
       }
     }
   }
   if (dataset.community.groups.length) {
-    out.push({ level: 0, text: ' Community Quizzes' });
+    out.push({ level: 0, text: '<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Community Quizzes' });
     dataset.community.groups.forEach(group => {
-      out.push({ level: 1, text: ` ${group.label}` });
+      out.push({ level: 1, text: `<svg class="sicon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${group.label}` });
       group.quizzes.forEach(quiz => out.push({ level: 2, text: quiz.title }));
     });
   }
   if (dataset.custom.groups.length) {
-    out.push({ level: 0, text: ' My Custom Quizzes' });
+    out.push({ level: 0, text: '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> My Custom Quizzes' });
     dataset.custom.groups.forEach(group => {
-      out.push({ level: 1, text: ` ${group.label}` });
+      out.push({ level: 1, text: `<svg class="sicon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${group.label}` });
       group.quizzes.forEach(quiz => out.push({ level: 2, text: quiz.title }));
     });
   }

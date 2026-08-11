@@ -133,7 +133,7 @@ function maskApiKey(key) {
    access to the API Key Manager without scrolling back to the top. */
 function _apiKeyQuickBtnHTML() {
   const entry = getActiveApiKeyEntry();
-  if (!entry) return ' Add API Key';
+  if (!entry) return '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Add API Key';
   return `<span class="apikey-dot" style="background:${entry.color || 'var(--accent)'};"></span> ${escapeHtml(entry.label)}`;
 }
 function _refreshApiKeyQuickButtons() {
@@ -277,8 +277,8 @@ function renderApiKeyManager() {
   if (typeof allKeysRateLimited === 'function' && allKeysRateLimited()) {
     const rotationOn = (typeof isSmartRotationEnabled !== 'function') || isSmartRotationEnabled();
     html += rotationOn
-      ? `<div class="apikey-pending-note apikey-allrl-note"> All your keys are currently rate-limited by Google. The app keeps rotating between them and retrying automatically — adding one more key below will get things moving at full speed again.</div>`
-      : `<div class="apikey-pending-note apikey-allrl-note"> All your keys are currently rate-limited by Google, and Smart Rotation is off below, so requests keep retrying on the same key. Turn it back on, or add another key, to get moving again.</div>`;
+      ? `<div class="apikey-pending-note apikey-allrl-note"><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> All your keys are currently rate-limited by Google. The app keeps rotating between them and retrying automatically — adding one more key below will get things moving at full speed again.</div>`
+      : `<div class="apikey-pending-note apikey-allrl-note"><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> All your keys are currently rate-limited by Google, and Smart Rotation is off below, so requests keep retrying on the same key. Turn it back on, or add another key, to get moving again.</div>`;
   }
 
   html += `<div class="cq-help-box">
@@ -295,7 +295,7 @@ function renderApiKeyManager() {
   const rotationOn = (typeof isSmartRotationEnabled !== 'function') || isSmartRotationEnabled();
   html += `<div class="rotation-toggle-card ${rotationOn ? 'rotation-on' : ''}">
     <div class="rotation-toggle-info">
-      <div class="rotation-toggle-title"><span class="rotation-toggle-icon"></span> Smart Rotation</div>
+      <div class="rotation-toggle-title"><span class="rotation-toggle-icon"><svg class="hicon" style="width:16px;height:16px;" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span> Smart Rotation</div>
       <div class="rotation-toggle-desc">${rotationOn
         ? 'On — when a key gets rate-limited or fails, the app automatically switches to your next key.'
         : 'Off — the app stays on your active key and retries it, even if others are available.'}</div>
@@ -308,7 +308,7 @@ function renderApiKeyManager() {
 
   html += `<div class="apikey-list">`;
   if (!keys.length) {
-    html += `<div class="apikey-empty"><span class="ns-icon"></span>No API keys yet — add your first one below.</div>`;
+    html += `<div class="apikey-empty"><span class="ns-icon"><svg class="hicon" style="width:32px;height:32px;" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>No API keys yet — add your first one below.</div>`;
   } else {
     keys.forEach((k, idx) => {
       const isActive = k.id === activeId;
@@ -319,7 +319,7 @@ function renderApiKeyManager() {
         rotStatus.reason === 'invalid'
           ? `<span class="apikey-status-chip apikey-status-invalid" title="This key was rejected by Google — check the value or replace it.">✕ Invalid</span>`
           : rotStatus.reason === 'model_error'
-          ? `<span class="apikey-status-chip apikey-status-model-error" title="3 requests in a row came back as bad requests on this key — temporarily skipped by auto-rotation and will be retried automatically."> Model Error</span>`
+          ? `<span class="apikey-status-chip apikey-status-model-error" title="3 requests in a row came back as bad requests on this key — temporarily skipped by auto-rotation and will be retried automatically."><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Model Error</span>`
           : `<span class="apikey-status-chip apikey-status-limited" title="Temporarily skipped by auto-rotation — will be retried automatically."><svg class="sicon" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> Rate-limited</span>`;
       html += `<div class="apikey-item ${isActive ? 'active' : ''}" style="--apikey-color:${color};">
         <div class="apikey-num">${idx + 1}</div>
@@ -352,7 +352,7 @@ function renderApiKeyManager() {
         <div class="apikey-item-actions">
           <button class="apikey-use-btn" ${isActive ? 'disabled' : ''} onclick="useApiKey('${k.id}')">${isActive ? '✓ In use' : 'Use'}</button>
           <button class="apikey-edit-btn" onclick="startEditApiKey('${k.id}')" title="Edit this key's value"><svg class="sicon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit</button>
-          <button class="apikey-del-btn" onclick="deleteApiKeyPrompt('${k.id}', '${escapeHtml(k.label).replace(/'/g, "&#39;")}')"></button>
+          <button class="apikey-del-btn" onclick="deleteApiKeyPrompt('${k.id}', '${escapeHtml(k.label).replace(/'/g, "&#39;")}')"><svg class="sicon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
         </div>
         `}
       </div>`;
@@ -362,7 +362,7 @@ function renderApiKeyManager() {
 
   const nextColor = _pickRandomApiKeyColor(keys.map(k => k.color));
   html += `<div class="apikey-add-form" id="apiKeyAddForm" data-color="${nextColor}">
-    <div class="cq-section-title" style="margin-bottom:0;"> Add a New API Key</div>
+    <div class="cq-section-title" style="margin-bottom:0;"><svg class="micon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add a New API Key</div>
     <div style="font-size:.78rem;color:var(--text-muted);font-weight:600;">
       Its name and colour are assigned automatically — just paste your Gemini key below.
     </div>
@@ -576,14 +576,14 @@ function renderExplainKeyPrompt(panelEl, onSave, errorMsg) {
   panelEl.innerHTML = `
     <div class="ai-explain-panel">
       <div class="ai-explain-panel-header">
-        <span></span> Gemini API Key Required
+        <span><svg class="sicon" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span> Gemini API Key Required
       </div>
       <div class="ai-explain-panel-body">
         <div class="ai-key-prompt">
           <div class="ai-key-prompt-title">${errorMsg ? escapeHtml(errorMsg) : 'Add a Gemini API key to enable AI explanations'}</div>
           <div class="ai-key-prompt-sub">Add, choose, or manage your keys in one place — the API Key Manager.</div>
           <div class="ai-key-prompt-row">
-            <button onclick="openApiKeyManager(() => { const p = this && this.closest ? this.closest('.ai-explain-panel') : null; })" style="width:100%;justify-content:center;" type="button"> Open API Key Manager</button>
+            <button onclick="openApiKeyManager(() => { const p = this && this.closest ? this.closest('.ai-explain-panel') : null; })" style="width:100%;justify-content:center;" type="button"><svg class="sicon" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Open API Key Manager</button>
           </div>
         </div>
       </div>
@@ -613,7 +613,7 @@ function displayExplainPanel(i, html) {
   const panel = document.getElementById(`explainPanel_${i}`);
   if (!panel) return;
   const staleHint = _explainStale[i]
-    ? `<div class="ai-explain-stale-hint"> This question has changed since this explanation was generated — regenerate recommended.</div>`
+    ? `<div class="ai-explain-stale-hint"><svg class="sicon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> This question has changed since this explanation was generated — regenerate recommended.</div>`
     : '';
   panel.innerHTML = html + staleHint + `
     <div class="ai-explain-regen-row" style="padding:6px 16px 14px;text-align:right;">
@@ -641,9 +641,9 @@ async function explainQuestion(i, forceRegenerate = false) {
   if (!forceRegenerate) {
     // Already shown — toggle off
     if (_explainCache[i] && _explainCache[i] !== 'loading') {
-      if (panel.innerHTML.trim()) { panel.innerHTML = ''; btn.innerHTML = ' Explain'; return; }
+      if (panel.innerHTML.trim()) { panel.innerHTML = ''; btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Explain'; return; }
       displayExplainPanel(i, _explainCache[i]);
-      btn.innerHTML = ' Hide';
+      btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Hide';
       return;
     }
     if (_explainCache[i] === 'loading') return;
@@ -663,7 +663,7 @@ async function explainQuestion(i, forceRegenerate = false) {
         _explainRawText[i] = cached.text;
         _explainStale[i] = cached.stale;
         displayExplainPanel(i, cached.html);
-        btn.innerHTML = ' Hide';
+        btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Hide';
         return;
       }
     } catch (e) { /* non-fatal — fall through to a fresh generation */ }
@@ -693,7 +693,7 @@ async function explainQuestion(i, forceRegenerate = false) {
           <div class="ai-exp-spinner"></div>
           Getting AI explanation…
         </span>
-        <button onclick="stopExplainQuestion(${i})" style="background:var(--wrong-fg);color:white;border:none;border-radius:6px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:var(--font);flex-shrink:0;">⏹ Stop</button>
+        <button onclick="stopExplainQuestion(${i})" style="background:var(--wrong-fg);color:white;border:none;border-radius:6px;padding:4px 10px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:var(--font);flex-shrink:0;"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Stop</button>
       </div>
     </div>`;
 
@@ -739,7 +739,7 @@ async function explainQuestion(i, forceRegenerate = false) {
       const p = document.getElementById(`explainPanel_${i}`);
       if (p) p.innerHTML = '';
       const b = document.getElementById(`explainBtn_${i}`);
-      if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = ' Explain'; }
+      if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Explain'; }
       return;
     }
 
@@ -750,7 +750,7 @@ async function explainQuestion(i, forceRegenerate = false) {
 
     displayExplainPanel(i, html);
     const b = document.getElementById(`explainBtn_${i}`);
-    if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = ' Hide'; }
+    if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Hide'; }
 
     // Cache locally on this device only — never sent to Firestore or anywhere else.
     (async () => {
@@ -768,7 +768,7 @@ async function explainQuestion(i, forceRegenerate = false) {
       const p = document.getElementById(`explainPanel_${i}`);
       if (p) p.innerHTML = '';
       const b = document.getElementById(`explainBtn_${i}`);
-      if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = ' Explain'; }
+      if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Explain'; }
       return;
     }
     _explainCache[i] = null; // allow retry
@@ -783,7 +783,7 @@ async function explainQuestion(i, forceRegenerate = false) {
       } else {
         p.innerHTML = `
           <div class="ai-explain-panel">
-            <div class="ai-explain-panel-header"><span></span> Explanation failed</div>
+            <div class="ai-explain-panel-header"><span><svg class="micon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> Explanation failed</div>
             <div class="ai-explain-panel-body">
               <div class="ai-exp-error">${escapeHtml(err.message || String(err))}</div>
             </div>
@@ -791,7 +791,7 @@ async function explainQuestion(i, forceRegenerate = false) {
       }
     }
     const b = document.getElementById(`explainBtn_${i}`);
-    if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = ' Explain'; }
+    if (b) { b.disabled = false; b.classList.remove('loading'); b.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Explain'; }
   }
 }
 
@@ -841,7 +841,7 @@ function renderExplainText(text, q) {
   hits.sort((a, b) => a.start - b.start);
 
   // Extract body text between consecutive headers
-  let html = '<div class="ai-explain-panel"><div class="ai-explain-panel-header"><span></span> AI Explanation</div><div class="ai-explain-panel-body">';
+  let html = '<div class="ai-explain-panel"><div class="ai-explain-panel-header"><span><svg class="micon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg></span> AI Explanation</div><div class="ai-explain-panel-body">';
 
   if (hits.length === 0) {
     // Parsing found nothing — show raw text as fallback
@@ -876,7 +876,7 @@ function stopExplainAll() {
   Object.values(_singleCancelToken).forEach(t => { _cancelAiToken(t); });
   _explainAllBusy = false;
   const btn = document.getElementById('explainAllBtn');
-  if (btn) { btn.disabled = false; btn.innerHTML = ' Explain All'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Explain All'; }
 }
 
 /* ── Explain ALL questions sequentially ── */
@@ -906,7 +906,7 @@ async function explainAllQuestions() {
   const btn = document.getElementById('explainAllBtn');
   if (btn) {
     btn.disabled = false; // keep it clickable so it acts as Stop
-    btn.innerHTML = '⏹ Stop All';
+    btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Stop All';
     btn.onclick = stopExplainAll;
   }
 
@@ -919,7 +919,7 @@ async function explainAllQuestions() {
       const p = document.getElementById(`explainPanel_${i}`);
       if (p && !p.innerHTML.trim()) displayExplainPanel(i, _explainCache[i]);
       const b = document.getElementById(`explainBtn_${i}`);
-      if (b) b.innerHTML = ' Hide';
+      if (b) b.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Hide';
       continue;
     }
 
@@ -933,7 +933,7 @@ async function explainAllQuestions() {
     const panel = document.getElementById(`explainPanel_${i}`);
     if (panel && panel.querySelector('#explainKeyInput')) {
       _explainAllBusy = false;
-      if (btn) { btn.disabled = false; btn.innerHTML = ' Explain All'; btn.onclick = explainAllQuestions; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> Explain All'; btn.onclick = explainAllQuestions; }
       window._explainKeySaveCallback = (key) => {
         panel.innerHTML = '';
         explainAllQuestions(); // restart from scratch — already-done questions are cached
@@ -976,12 +976,12 @@ function toggleChatPanel(i) {
   if (panel.classList.contains('open')) {
     panel.classList.remove('open');
     panel.innerHTML = '';
-    if (btn) btn.innerHTML = ' Chat';
+    if (btn) btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> Chat';
     return;
   }
 
   panel.classList.add('open');
-  if (btn) btn.innerHTML = ' Hide Chat';
+  if (btn) btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> Hide Chat';
   renderChatPanel(i);
 }
 
@@ -1047,10 +1047,10 @@ function renderChatPanel(i) {
           if ((p.inline_data.mime_type || '').startsWith('image/')) {
             bodyHTML += `<div class="ai-chat-attach-thumb"><img src="data:${p.inline_data.mime_type};base64,${p.inline_data.data}" alt="attachment" /></div>`;
           } else {
-            bodyHTML += `<div class="ai-chat-file-chip"> ${escapeHtml(p._name || 'attachment')}</div>`;
+            bodyHTML += `<div class="ai-chat-file-chip"><svg class="sicon" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ${escapeHtml(p._name || 'attachment')}</div>`;
           }
         } else if (p.file_data) {
-          bodyHTML += `<div class="ai-chat-file-chip"> ${escapeHtml(p._name || 'attachment')}</div>`;
+          bodyHTML += `<div class="ai-chat-file-chip"><svg class="sicon" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ${escapeHtml(p._name || 'attachment')}</div>`;
         }
       });
       msgsHTML += `<div class="ai-chat-msg ${isUser ? 'user' : 'model'}"><div class="ai-chat-bubble">${bodyHTML}</div></div>`;
@@ -1063,7 +1063,7 @@ function renderChatPanel(i) {
         <div class="ai-chat-bubble ai-chat-loading">
           <div class="ai-exp-spinner"></div>
           <span id="chatLoadingLabel_${i}">Thinking…</span>
-          <button class="ai-chat-stop-btn" onclick="stopChat(${i})">⏹ Stop</button>
+          <button class="ai-chat-stop-btn" onclick="stopChat(${i})"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Stop</button>
         </div>
       </div>`;
   } else if (error) {
@@ -1071,7 +1071,7 @@ function renderChatPanel(i) {
       <div class="ai-chat-msg model">
         <div class="ai-chat-bubble ai-chat-error">
           <div class="ai-chat-error-row">
-            <span> ${escapeHtml(error)}</span>
+            <span><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${escapeHtml(error)}</span>
             <button class="ai-chat-retry-btn" onclick="retryLastChatMessage(${i})">↻ Retry</button>
           </div>
         </div>
@@ -1090,12 +1090,12 @@ function renderChatPanel(i) {
 
   panel.innerHTML = `
     <div class="ai-chat-box">
-      <div class="ai-chat-header"><span></span> Chat about this question</div>
+      <div class="ai-chat-header"><span><svg class="micon" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span> Chat about this question</div>
       <div class="ai-chat-messages" id="chatMessages_${i}">${msgsHTML}</div>
       ${attachHTML}
       <div class="ai-chat-input-row">
         <input type="file" id="chatFileInput_${i}" multiple accept="image/*,.pdf,.txt,.csv" style="display:none" onchange="handleChatFileSelect(${i}, this)" />
-        <button class="ai-chat-attach-btn" type="button" title="Attach file" onclick="document.getElementById('chatFileInput_${i}').click()" ${busy ? 'disabled' : ''}></button>
+        <button class="ai-chat-attach-btn" type="button" title="Attach file" onclick="document.getElementById('chatFileInput_${i}').click()" ${busy ? 'disabled' : ''}><svg class="sicon" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
         <input type="text" class="ai-chat-text-input" id="chatTextInput_${i}" placeholder="Ask a question…" ${busy ? 'disabled' : ''} onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage(${i});}" />
         <button class="ai-chat-send-btn" type="button" title="Send" onclick="sendChatMessage(${i})" ${busy ? 'disabled' : ''}>➤</button>
       </div>
@@ -1452,7 +1452,7 @@ function _cqFileListHTML(items, removeFnName, fileAccessor) {
     const f = getFile(it);
     return `
     <div class="cq-dz-file-item">
-      <span> ${escapeHtml(f.name)} <span style="opacity:.65;">(${formatBytes(f.size)})</span></span>
+      <span><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> ${escapeHtml(f.name)} <span style="opacity:.65;">(${formatBytes(f.size)})</span></span>
       <button type="button" onclick="event.stopPropagation();${removeFnName}(${idx})" title="Remove this file">✕</button>
     </div>
   `;
@@ -1704,7 +1704,7 @@ function _caseGroupEnsureSingleCore(questions, gid) {
    Auto-detection during extraction gets the shared case/vignette/image
    right most of the time, but not always — and grouping is also useful
    for quizzes that weren't extracted at all (typed by hand, or edited
-   later). These helpers add a small " Case Link" control to every
+   later). These helpers add a small "<svg class="sicon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Case Link" control to every
    question card in BOTH inline editors (the extraction review screen and
    the generic admin quiz editor) so the user can see which question is the
    root case-holder, which questions depend on it (directly, or nested
@@ -1828,35 +1828,35 @@ function _renderBulkAiToolsPanel(editorKey, questions) {
   const cachedStatus = busy ? getCachedStatusHTML(statusId) : '';
   return `
   <div class="cq-bulk-ai-panel">
-    <div class="cq-bulk-ai-title"> AI Tools — Whole Quiz
+    <div class="cq-bulk-ai-title"><svg class="micon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> AI Tools — Whole Quiz
       <span style="font-weight:600;opacity:.7;">(${n} question${n !== 1 ? 's' : ''})</span>
     </div>
-    <div class="cq-bulk-ai-subtitle">Each tool below runs on every question in this quiz. Open a tool's to set instructions for that tool only.</div>
+    <div class="cq-bulk-ai-subtitle">Each tool below runs on every question in this quiz. Open a tool's <svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> to set instructions for that tool only.</div>
 
     <div class="cq-bulk-ai-tool">
       <div class="cq-bulk-ai-tool-row">
         <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkSolveBtn" type="button"
           ${busy ? 'disabled' : ''} onclick="_editorBulkAiSolve('${editorKey}')"
-          style="background:#1565C0;color:#fff;"> AI Solve All</button>
+          style="background:#1565C0;color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> AI Solve All</button>
         <button class="ai-tool-stop-btn" type="button" id="${editorKey}BulkSolveStopBtn"
           style="${busy && activeTool === 'Solve' ? 'display:inline-block;' : ''}"
-          title="Stop AI Solve All" onclick="_editorBulkStopTool('${editorKey}')">⏹ Stop</button>
+          title="Stop AI Solve All" onclick="_editorBulkStopTool('${editorKey}')"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Stop</button>
       </div>
       <details class="cq-bulk-ai-opts">
-        <summary> AI Solve settings</summary>
+        <summary><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> AI Solve settings</summary>
         <div style="margin-top:8px;">
-          <div class="cq-bulk-ai-label"> Reference source (optional) — upload images/PDFs for the AI to use, or leave empty to answer from general knowledge</div>
+          <div class="cq-bulk-ai-label"><svg class="sicon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Reference source (optional) — upload images/PDFs for the AI to use, or leave empty to answer from general knowledge</div>
           <div class="cq-dropzone cq-dz-purple" id="${editorKey}BulkSourceDropzone"
             style="${busy ? 'pointer-events:none;opacity:.55;' : ''}"
             onclick="document.getElementById('${editorKey}BulkSourceFileInput').click()">
-            <div class="cq-dz-icon"></div>
+            <div class="cq-dz-icon"><svg class="hicon" style="width:28px;height:28px;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
             <div class="cq-dz-text">Click to upload, or drag &amp; drop — one or more reference images or PDFs</div>
             ${_editorBulkSourceFileListHTML(editorKey, _editorBulkAiSourceFiles[editorKey])}
-            ${_editorBulkAiSourceFiles[editorKey].length ? `<div class="cq-dz-add-more"> Click again to add more files</div>` : ''}
+            ${_editorBulkAiSourceFiles[editorKey].length ? `<div class="cq-dz-add-more"><svg class="sicon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Click again to add more files</div>` : ''}
           </div>
           <input type="file" id="${editorKey}BulkSourceFileInput" accept="image/*,application/pdf" multiple style="display:none;" ${busy ? 'disabled' : ''}
             onchange="_editorBulkSourceFileSelect('${editorKey}', this)">
-          <div class="cq-bulk-ai-scope">Used only by AI Solve All — no effect on Fill Choices or Refine Questions. Any source added here is also selectable per-question (as "Editor bulk source").</div>
+          <div class="cq-bulk-ai-scope">Used only by <svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> AI Solve All — no effect on Fill Choices or Refine Questions. Any source added here is also selectable per-question (as "Editor bulk source").</div>
         </div>
       </details>
     </div>
@@ -1866,12 +1866,12 @@ function _renderBulkAiToolsPanel(editorKey, questions) {
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkFillBtn" type="button"
             ${busy ? 'disabled' : ''} onclick="_editorBulkFillChoices('${editorKey}')"
-            style="background:var(--unanswered-fg);color:#fff;"> Fill Choices (All)</button>
+            style="background:var(--unanswered-fg);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> Fill Choices (All)</button>
           ${_renderAiThinkingToggle('fillBulk', 'amber')}
         </div>
         <button class="ai-tool-stop-btn" type="button" id="${editorKey}BulkFillStopBtn"
           style="${busy && activeTool === 'Fill' ? 'display:inline-block;' : ''}"
-          title="Stop Fill Choices" onclick="_editorBulkStopTool('${editorKey}')">⏹ Stop</button>
+          title="Stop Fill Choices" onclick="_editorBulkStopTool('${editorKey}')"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Stop</button>
         <span class="cq-bulk-ai-no-opts">Tops up missing answer choices.</span>
       </div>
     </div>
@@ -1881,21 +1881,21 @@ function _renderBulkAiToolsPanel(editorKey, questions) {
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkRefineBtn" type="button"
             ${busy ? 'disabled' : ''} onclick="_editorBulkRefineQuestions('${editorKey}')"
-            style="background:var(--violet-dark);color:#fff;"> Refine Questions (All)</button>
+            style="background:var(--violet-dark);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Refine Questions (All)</button>
           ${_renderAiThinkingToggle('refineBulk', 'violet')}
         </div>
         <button class="ai-tool-stop-btn" type="button" id="${editorKey}BulkRefineStopBtn"
           style="${busy && activeTool === 'Refine' ? 'display:inline-block;' : ''}"
-          title="Stop Refine Questions" onclick="_editorBulkStopTool('${editorKey}')">⏹ Stop</button>
+          title="Stop Refine Questions" onclick="_editorBulkStopTool('${editorKey}')"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Stop</button>
       </div>
       <details class="cq-bulk-ai-opts">
-        <summary> Refine Questions settings</summary>
+        <summary><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Refine Questions settings</summary>
         <div style="margin-top:8px;">
-          <div class="cq-bulk-ai-label"> Custom instructions for Refine (optional)</div>
+          <div class="cq-bulk-ai-label"><svg class="sicon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Custom instructions for Refine (optional)</div>
           <textarea class="cq-textarea" rows="2" id="${editorKey}BulkRefineInput" ${busy ? 'disabled' : ''}
             oninput="_editorBulkRefineInstructions['${editorKey}'] = this.value"
             placeholder="e.g. keep each question to one sentence">${escapeHtml(_editorBulkRefineInstructions[editorKey] || '')}</textarea>
-          <div class="cq-bulk-ai-scope">Used only by Refine Questions (All) — no effect on AI Solve or Fill Choices.</div>
+          <div class="cq-bulk-ai-scope">Used only by <svg class="sicon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Refine Questions (All) — no effect on AI Solve or Fill Choices.</div>
         </div>
       </details>
     </div>
@@ -1922,10 +1922,10 @@ function _renderBulkReextractToolHTML(editorKey, questions, busy, activeTool) {
         <button class="cq-btn cq-btn-secondary" id="${editorKey}BulkReextractBtn" type="button"
           ${busy || !missing ? 'disabled' : ''} onclick="_editorBulkReextractImages('${editorKey}')"
           title="${missing ? `Re-run image extraction for ${missing} question${missing !== 1 ? 's' : ''} still missing an image` : 'No questions are currently missing an extractable image'}"
-          style="background:var(--accent);color:#fff;"> Re-extract Missing Images${missing ? ` (${missing})` : ''}</button>
+          style="background:var(--accent);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Re-extract Missing Images${missing ? ` (${missing})` : ''}</button>
         <button class="ai-tool-stop-btn" type="button" id="${editorKey}BulkReextractStopBtn"
           style="${busy && activeTool === 'Reextract' ? 'display:inline-block;' : ''}"
-          title="Stop Re-extract Missing Images" onclick="_editorBulkStopTool('${editorKey}')">⏹ Stop</button>
+          title="Stop Re-extract Missing Images" onclick="_editorBulkStopTool('${editorKey}')"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Stop</button>
         <span class="cq-bulk-ai-no-opts">Retries only questions flagged with an image that never got extracted — grouped and requested per source file, same batching as extraction itself.</span>
       </div>
     </div>`;
@@ -1946,7 +1946,7 @@ function _editorBulkGuard(editorKey) {
   }
   const apiKey = getActiveApiKey();
   if (!apiKey) {
-    if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML('Add a Gemini API key ( API Keys) to use AI tools.');
+    if (statusEl) statusEl.innerHTML = _aiToolsErrorHTML('Add a Gemini API key (<svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> API Keys) to use AI tools.');
     return null;
   }
   return { ed, questions };
@@ -1959,7 +1959,7 @@ function _editorBulkSourceFileListHTML(editorKey, files) {
   if (!files || !files.length) return '';
   return `<div class="cq-dz-filelist">` + files.map((f, idx) => `
     <div class="cq-dz-file-item">
-      <span> ${escapeHtml(f.name)}</span>
+      <span><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> ${escapeHtml(f.name)}</span>
       <button type="button" onclick="event.stopPropagation();_editorBulkSourceRemoveFile('${editorKey}', ${idx})" title="Remove this file">✕</button>
     </div>`).join('') + `</div>`;
 }
@@ -2024,15 +2024,15 @@ async function _editorBulkAiSolve(editorKey) {
   // Self-healing + auto-caching (see js/dom-utils.js) — this loop writes
   // progress across many `await`s, and the panel can be rebuilt mid-run.
   const statusEl = liveStatusRef(`${editorKey}BulkAiStatus`, `${editorKey}BulkAiStatus`);
-  statusEl.innerHTML = _cqProgressStatusHTML(' AI is solving all questions…', 0);
+  statusEl.innerHTML = _cqProgressStatusHTML('<svg class="sicon" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/><path d="M9 17h6M12 8V4M2 12v4M22 12v4"/></svg> AI is solving all questions…', 0);
   let finalHtml;
   try {
     const sourceFiles = _editorBulkAiSourceFiles[editorKey] || [];
     const allIdxs = questions.map((q, i) => i).filter(i => questions[i] && questions[i].question && questions[i].question.trim());
     await cqAiSolveQuestions(questions, allIdxs, '', sourceFiles, statusEl, token);
     finalHtml = token.cancelled
-      ? `<div class="cq-status warning">⏹ AI Solve stopped.</div>`
-      : `<div class="cq-status success"> AI Solve finished — ${allIdxs.length} question${allIdxs.length !== 1 ? 's' : ''} checked.</div>`;
+      ? `<div class="cq-status warning"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> AI Solve stopped.</div>`
+      : `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> AI Solve finished — ${allIdxs.length} question${allIdxs.length !== 1 ? 's' : ''} checked.</div>`;
   } catch (e) {
     finalHtml = _aiToolsErrorHTML(e.message || 'AI Solve failed.');
   } finally {
@@ -2060,14 +2060,14 @@ async function _editorBulkFillChoices(editorKey) {
   // Self-healing + auto-caching (see js/dom-utils.js) — this loop writes
   // progress across many `await`s, and the panel can be rebuilt mid-run.
   const statusEl = liveStatusRef(`${editorKey}BulkAiStatus`, `${editorKey}BulkAiStatus`);
-  statusEl.innerHTML = _cqProgressStatusHTML(' Filling choices…', 0);
+  statusEl.innerHTML = _cqProgressStatusHTML('<svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> Filling choices…', 0);
   let finalHtml;
   try {
     const { done, errors } = await cqBulkFillChoices(questions, statusEl, token);
     finalHtml = token.cancelled
-      ? `<div class="cq-status warning">⏹ Fill Choices stopped — topped up ${done} question${done !== 1 ? 's' : ''} so far.</div>`
-      : `<div class="cq-status success"> Fill Choices finished — topped up ${done} question${done !== 1 ? 's' : ''}.</div>`;
-    if (errors.length) finalHtml += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;"> ${escapeHtml(e)}</div>`).join('');
+      ? `<div class="cq-status warning"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Fill Choices stopped — topped up ${done} question${done !== 1 ? 's' : ''} so far.</div>`
+      : `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Fill Choices finished — topped up ${done} question${done !== 1 ? 's' : ''}.</div>`;
+    if (errors.length) finalHtml += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;"><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${escapeHtml(e)}</div>`).join('');
   } catch (e) {
     finalHtml = _aiToolsErrorHTML(e.message || 'Fill Choices failed.');
   } finally {
@@ -2091,15 +2091,15 @@ async function _editorBulkRefineQuestions(editorKey) {
   // Self-healing + auto-caching (see js/dom-utils.js) — this loop writes
   // progress across many `await`s, and the panel can be rebuilt mid-run.
   const statusEl = liveStatusRef(`${editorKey}BulkAiStatus`, `${editorKey}BulkAiStatus`);
-  statusEl.innerHTML = _cqProgressStatusHTML(' Refining question wording…', 0);
+  statusEl.innerHTML = _cqProgressStatusHTML('<svg class="sicon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Refining question wording…', 0);
   let finalHtml;
   try {
     const custom = (_editorBulkRefineInstructions[editorKey] || '').trim();
     const { done, errors } = await cqBulkRefineQuestions(questions, custom, statusEl, token);
     finalHtml = token.cancelled
-      ? `<div class="cq-status warning">⏹ Refine stopped — rewrote ${done} question${done !== 1 ? 's' : ''} so far.</div>`
-      : `<div class="cq-status success"> Refine finished — rewrote ${done} question${done !== 1 ? 's' : ''}.</div>`;
-    if (errors.length) finalHtml += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;"> ${escapeHtml(e)}</div>`).join('');
+      ? `<div class="cq-status warning"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Refine stopped — rewrote ${done} question${done !== 1 ? 's' : ''} so far.</div>`
+      : `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Refine finished — rewrote ${done} question${done !== 1 ? 's' : ''}.</div>`;
+    if (errors.length) finalHtml += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;"><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${escapeHtml(e)}</div>`).join('');
   } catch (e) {
     finalHtml = _aiToolsErrorHTML(e.message || 'Refine failed.');
   } finally {
@@ -2128,15 +2128,15 @@ async function _editorBulkReextractImages(editorKey) {
   // Self-healing + auto-caching (see js/dom-utils.js) — this loop writes
   // progress across many `await`s, and the panel can be rebuilt mid-run.
   const statusEl = liveStatusRef(`${editorKey}BulkAiStatus`, `${editorKey}BulkAiStatus`);
-  statusEl.innerHTML = _cqProgressStatusHTML(' Re-extracting missing images…', 0);
+  statusEl.innerHTML = _cqProgressStatusHTML('<svg class="sicon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Re-extracting missing images…', 0);
   let finalHtml;
   try {
     const { done, errors, skipped } = await cqBulkReextractMissingImages(questions, statusEl, token);
     finalHtml = token.cancelled
-      ? `<div class="cq-status warning">⏹ Re-extract Missing Images stopped — recovered ${done} image${done !== 1 ? 's' : ''} so far.</div>`
-      : `<div class="cq-status success"> Re-extract Missing Images finished — recovered ${done} image${done !== 1 ? 's' : ''}.</div>`;
-    if (skipped) finalHtml += `<div class="cq-status warning" style="margin-top:4px;"> Skipped ${skipped} question${skipped !== 1 ? 's' : ''} with no traceable source file (hand-typed or merged in from another quiz) — upload an image manually for those instead.</div>`;
-    if (errors.length) finalHtml += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;"> ${escapeHtml(e)}</div>`).join('');
+      ? `<div class="cq-status warning"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Re-extract Missing Images stopped — recovered ${done} image${done !== 1 ? 's' : ''} so far.</div>`
+      : `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Re-extract Missing Images finished — recovered ${done} image${done !== 1 ? 's' : ''}.</div>`;
+    if (skipped) finalHtml += `<div class="cq-status warning" style="margin-top:4px;"><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Skipped ${skipped} question${skipped !== 1 ? 's' : ''} with no traceable source file (hand-typed or merged in from another quiz) — upload an image manually for those instead.</div>`;
+    if (errors.length) finalHtml += errors.map(e => `<div class="cq-status warning" style="margin-top:4px;"><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${escapeHtml(e)}</div>`).join('');
   } catch (e) {
     finalHtml = _aiToolsErrorHTML(e.message || 'Re-extract Missing Images failed.');
   } finally {
@@ -2279,7 +2279,7 @@ function _renderCaseGroupBlock(editorKey, questions, i) {
   let html = `<div class="case-link-block" style="margin:8px 0;padding:8px 10px;border-radius:8px;
     border:1.5px dashed ${color};background:${gid ? color + '14' : 'var(--surface-2)'};">`;
   html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <span style="font-size:.78rem;font-weight:800;color:${gid ? color : 'var(--text-muted)'};white-space:nowrap;"> Case Link</span>
+    <span style="font-size:.78rem;font-weight:800;color:${gid ? color : 'var(--text-muted)'};white-space:nowrap;"><svg class="sicon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Case Link</span>
     <select style="flex:1;min-width:160px;font-family:var(--font);font-size:.78rem;padding:4px 6px;
       border-radius:6px;border:1.5px solid ${color};background:#fff;color:var(--text-main);"
       onchange="_caseGroupOnSelect('${editorKey}', ${i}, this.value)">
@@ -2297,7 +2297,7 @@ function _renderCaseGroupBlock(editorKey, questions, i) {
 
     html += `<div style="font-size:.72rem;color:${color};font-weight:700;margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">`;
     if (isCore) {
-      html += `<span> Root case question — its own text${q.image ? ' &amp; image' : ''} above is the case every linked question depends on${hasChildren ? ' (directly, or via a nested sub-case)' : ''}</span>`;
+      html += `<span><svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> Root case question — its own text${q.image ? ' &amp; image' : ''} above is the case every linked question depends on${hasChildren ? ' (directly, or via a nested sub-case)' : ''}</span>`;
     } else {
       const parent = _cqFindCaseParent(questions, q);
       const parentIdx = questions.indexOf(parent);
@@ -2319,7 +2319,7 @@ function _renderCaseGroupBlock(editorKey, questions, i) {
           onclick="_caseGroupSetCore('${editorKey}', ${i})">★ Make this the root case instead</button>`;
     }
     if (hasChildren) {
-      html += `<span> ${childCount} question${childCount !== 1 ? 's' : ''} nested directly under this one${!isCore ? " — it's a sub-case within the case above" : ''}</span>`;
+      html += `<span><svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> ${childCount} question${childCount !== 1 ? 's' : ''} nested directly under this one${!isCore ? " — it's a sub-case within the case above" : ''}</span>`;
     }
     html += `</div>`;
 

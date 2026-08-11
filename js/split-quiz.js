@@ -130,7 +130,7 @@ function _buildVisualSplitHTML(questions) {
 
   // Hint
   html += `<div style="font-size:.75rem;color:var(--violet-dark);font-weight:700;margin-bottom:8px;line-height:1.5;">
-    Click between questions to mark a split point. Click again to remove it.
+    Click <svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> between questions to mark a split point. Click again to remove it.
     ${cuts.size === 0 ? '<span style="color:var(--unanswered-fg);"> — No cuts yet.</span>' : `<span style="color:var(--correct-fg);"> — ${cuts.size} cut${cuts.size !== 1 ? 's' : ''} = ${chunks.length} quizzes.</span>`}
   </div>`;
 
@@ -153,7 +153,7 @@ function _buildVisualSplitHTML(questions) {
       const partColor = SPLIT_PART_COLORS[partIdx % SPLIT_PART_COLORS.length];
       html += `<div class="cq-split-part-header" style="background:${partColor.bg};border:1.5px solid ${partColor.border};">
         <span style="font-size:.72rem;font-weight:800;color:${partColor.text};">
-           Quiz ${partIdx + 1}
+          <svg class="sicon" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg> Quiz ${partIdx + 1}
         </span>
         <input type="text" class="cq-split-part-title-input" placeholder="Optional title for Quiz ${partIdx + 1}…"
           value="${escapeHtml(labelVal)}"
@@ -175,7 +175,7 @@ function _buildVisualSplitHTML(questions) {
       const isCut = cuts.has(i);
       html += `<div class="cq-scissors-row${isCut ? ' cut' : ''}" onclick="toggleVisualCut(${i})" title="${isCut ? 'Remove cut here' : 'Cut here — split into separate quiz'}">
         <div class="cq-scissors-line"></div>
-        <button class="cq-scissors-btn" type="button"></button>
+        <button class="cq-scissors-btn" type="button"><svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg></button>
         <div class="cq-scissors-line"></div>
         ${isCut ? `<span style="position:absolute;left:50%;transform:translateX(-50%) translateX(22px);font-size:.68rem;font-weight:800;color:var(--violet-darkest);white-space:nowrap;pointer-events:none;">— split here —</span>` : ''}
       </div>`;
@@ -287,7 +287,7 @@ function _buildSplitSummaryHTML(total) {
   } else {
     chunks = _computeCustomChunks();
   }
-  if (!chunks.length) return `<span style="color:var(--unanswered-fg);font-size:.78rem;font-weight:700;"> No valid ranges defined yet.</span>`;
+  if (!chunks.length) return `<span style="color:var(--unanswered-fg);font-size:.78rem;font-weight:700;"><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> No valid ranges defined yet.</span>`;
   const coveredSet = new Set();
   chunks.forEach(c => { for (let i = c.start; i <= Math.min(c.end, total); i++) coveredSet.add(i); });
   const uncovered = total - coveredSet.size;
@@ -299,7 +299,7 @@ function _buildSplitSummaryHTML(total) {
     </span>`;
   });
   if (uncovered > 0 && cqSplitState.mode === 'custom') {
-    html += `<span class="cq-split-chip warn"> ${uncovered} question${uncovered !== 1 ? 's' : ''} not covered</span>`;
+    html += `<span class="cq-split-chip warn"><svg class="sicon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${uncovered} question${uncovered !== 1 ? 's' : ''} not covered</span>`;
   }
   return html;
 }
@@ -319,7 +319,7 @@ function renderSplitPanel(context, quizId, totalQuestions) {
 
   let html = `<div class="cq-split-panel" id="${panelId}">
     <div class="cq-split-panel-title">
-      <span> Split into Multiple Quizzes</span>
+      <span><svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> Split into Multiple Quizzes</span>
       <button class="cq-btn cq-btn-secondary" onclick="closeSplitPanel()" style="padding:4px 10px;font-size:.75rem;">✕ Cancel</button>
     </div>
     <div class="cq-split-mode-tabs">
@@ -366,10 +366,10 @@ function renderSplitPanel(context, quizId, totalQuestions) {
   if (context === 'adminPublished') {
     html += `<button class="cq-btn" id="cqSplitExecPublishBtn_${panelKey}" onclick="executeSplitQuiz('publish')"
         title="Publish the split parts as new curriculum lectures and remove the original lecture">
-         Split &amp; Publish to Curriculum</button>
+        <svg class="sicon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Split &amp; Publish to Curriculum</button>
       <button class="cq-btn cq-btn-secondary" id="cqSplitExecCustomBtn_${panelKey}" onclick="executeSplitQuiz('custom')"
         style="background:var(--violet);color:#fff;" title="Save the split parts as custom quizzes — the curriculum lecture stays untouched">
-         Split to Custom Quizzes</button>`;
+        <svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Split to Custom Quizzes</button>`;
   } else {
     html += `<button class="cq-btn" id="cqSplitExecBtn_${panelKey}" onclick="executeSplitQuiz()"><svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M20 4L8.12 15.88M20 20L14 14"/></svg> Create Split Quizzes</button>`;
   }
@@ -411,7 +411,7 @@ async function executeSplitQuiz(targetMode) {
     chunks = _computeEqualChunks(total, cqSplitState.chunkSize);
   } else if (cqSplitState.mode === 'visual') {
     const rawChunks = _getVisualChunksFromCuts(total); // 0-based inclusive
-    if (!rawChunks.length) { alert('No cuts defined yet. Click the scissors between questions to split.'); return; }
+    if (!rawChunks.length) { alert('No cuts defined yet. Click the <svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> scissors between questions to split.'); return; }
     const labels = cqSplitState.visualPartLabels || {};
     chunks = rawChunks.map(c => ({
       start: c.start + 1,
@@ -529,7 +529,7 @@ async function executeSplitQuiz(targetMode) {
       cqSplitState = null;
       renderAdminAssignedList();
       if (selectedSubject === subject) selectSubject(subject);
-      alert(` Published ${newLectures.length} new lecture${newLectures.length !== 1 ? 's' : ''} from "${baseTitle}" to ${subjects[subject].label || subject}, replacing the original lecture.`);
+      alert(`<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Published ${newLectures.length} new lecture${newLectures.length !== 1 ? 's' : ''} from "${baseTitle}" to ${subjects[subject].label || subject}, replacing the original lecture.`);
     } catch (e) {
       _setSplitPanelBusy(panelKey, false);
       alert('Failed to split & publish: ' + (e.message || e));
@@ -566,7 +566,7 @@ async function executeSplitQuiz(targetMode) {
 
     cqSplitState = null;
     _renderAdminAssignedListHTML();
-    alert(` Created ${newCustomQuizzes.length} split quiz${newCustomQuizzes.length !== 1 ? 'zes' : ''} from "${baseTitle}".\n\nThese were NOT published directly to students — they've been added to your Custom Quizzes, where you can review and publish each one individually when ready.`);
+    alert(`<svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Created ${newCustomQuizzes.length} split quiz${newCustomQuizzes.length !== 1 ? 'zes' : ''} from "${baseTitle}".\n\nThese were NOT published directly to students — they've been added to your Custom Quizzes, where you can review and publish each one individually when ready.`);
     return;
   }
 
@@ -604,7 +604,7 @@ async function executeSplitQuiz(targetMode) {
   cqSplitState = null;
   renderCustomQuizModal();
   const statusEl = document.getElementById('cqStatus');
-  if (statusEl) statusEl.innerHTML = `<div class="cq-status success"> Created ${newQuizzes.length} split quiz${newQuizzes.length !== 1 ? 'zes' : ''} from "${escapeHtml(baseTitle)}"!</div>`;
+  if (statusEl) statusEl.innerHTML = `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Created ${newQuizzes.length} split quiz${newQuizzes.length !== 1 ? 'zes' : ''} from "${escapeHtml(baseTitle)}"!</div>`;
 }
 
 async function deleteCustomQuiz(id) {

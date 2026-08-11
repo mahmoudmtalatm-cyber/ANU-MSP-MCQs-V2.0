@@ -226,7 +226,7 @@ function _applyCurriculumCache(cached) {
 
   Object.entries(extSubjects).forEach(([key, info]) => {
     if (!subjects[key])
-      subjects[key] = { icon: info.icon || '', label: info.label || key, lectures: {} };
+      subjects[key] = { icon: info.icon || '📘', label: info.label || key, lectures: {} };
     const { year, module: mod } = info;
     if (!year || !mod) return;
     if (!curriculum[year]) curriculum[year] = {};
