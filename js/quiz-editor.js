@@ -129,7 +129,7 @@ function renderAdminQuestionEditor(containerId) {
 
   html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="cq-btn cq-btn-secondary" onclick="adminEditAddBlankQuestion()" style="background:var(--green-mid);">＋ Add Question</button>
-    <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('admin')" style="background:var(--violet);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M20 4L8.12 15.88M20 20L14 14"/></svg> Merge Quizzes In</button>
+    <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('admin')" style="background:var(--violet);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg> Merge Quizzes In</button>
     ${adminEditMode === 'published' ? `
       <button class="cq-btn cq-btn-secondary" onclick="openAdminSplitPanel('${adminEditingPublishedId}')"
         style="background:var(--violet);color:#fff;" title="Split into multiple quizzes"><svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> Split into Multiple</button>
@@ -499,7 +499,7 @@ function renderCustomQuizEditor() {
 
   html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="cq-btn cq-btn-secondary" onclick="cqEditAddBlankQuestion()" style="background:var(--green-mid);">＋ Add Question</button>
-    <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('customQuiz')" style="background:var(--violet);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M20 4L8.12 15.88M20 20L14 14"/></svg> Merge Quizzes In</button>
+    <button class="cq-btn cq-btn-secondary" onclick="openMergePicker('customQuiz')" style="background:var(--violet);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg> Merge Quizzes In</button>
     ${!cqCreatingNew ? `
       <button class="cq-btn cq-btn-secondary" onclick="openSplitPanel('saved', '${cqEditingQuizId}')"
         style="background:var(--violet);color:#fff;" title="Split into multiple quizzes"><svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> Split into Multiple</button>

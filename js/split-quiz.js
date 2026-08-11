@@ -45,7 +45,10 @@ function setSplitMode(mode) {
     if (!cqSplitState.visualCuts) cqSplitState.visualCuts = new Set();
     if (!cqSplitState.visualPartLabels) cqSplitState.visualPartLabels = {};
   }
-  _rerenderSplitOwner();
+  // In-place: swaps only the split panel's own markup, so the surrounding
+  // modal/list is never touched and the page doesn't jump (see
+  // _rerenderSplitPanelInPlace for why a full owner re-render would).
+  _rerenderSplitPanelInPlace();
 }
 
 function toggleVisualCut(afterIndex) {
@@ -204,20 +207,29 @@ function updateVisualPartLabel(key, val) {
 function setSplitChunkSize(val) {
   if (!cqSplitState) return;
   cqSplitState.chunkSize = parseInt(val, 10) || 10;
-  _rerenderSplitOwner();
+  const panelKey = cqSplitState.quizId || 'preview';
+  const total = (_getSplitSourceQuestions() || []).length;
+  // Targeted DOM updates only — fires on every keystroke, so re-rendering
+  // the whole panel (let alone the whole modal) here would tear down and
+  // recreate the number input the user is actively typing into, stealing
+  // focus/cursor position after each digit and jumping the page's scroll.
+  const countEl = document.getElementById('cqSplitChunkCount_' + panelKey);
+  if (countEl) countEl.textContent = _buildChunkCountLabel(total, cqSplitState.chunkSize);
+  const summaryEl = document.getElementById('cqSplitSummary_' + panelKey);
+  if (summaryEl) summaryEl.innerHTML = _buildSplitSummaryHTML(total);
 }
 
 function addSplitRange() {
   if (!cqSplitState) return;
   cqSplitState.ranges.push({ start: '', end: '', label: '' });
-  _rerenderSplitOwner();
+  _rerenderSplitPanelInPlace();
 }
 
 function removeSplitRange(idx) {
   if (!cqSplitState) return;
   cqSplitState.ranges.splice(idx, 1);
   if (!cqSplitState.ranges.length) cqSplitState.ranges.push({ start: '', end: '', label: '' });
-  _rerenderSplitOwner();
+  _rerenderSplitPanelInPlace();
 }
 
 function updateSplitRange(idx, field, val) {
@@ -234,6 +246,37 @@ function _rerenderSplitOwner() {
   if (cqSplitState.context === 'preview') renderCQPreview();
   else if (cqSplitState.context === 'adminPublished') _renderAdminAssignedListHTML();
   else renderCustomQuizModal();
+}
+
+// Re-renders ONLY the split panel's own DOM node in place, leaving every
+// other part of the owning modal/list untouched.
+//
+// Why this exists: the owner render functions (renderCQPreview,
+// renderCustomQuizModal, _renderAdminAssignedListHTML) rebuild their
+// entire container's innerHTML from scratch. That container is nested
+// inside the scrollable overlay the split panel lives in, and replacing
+// all of its content resets that overlay's scroll position back to the
+// top — so every click on a split-mode tab, or Add/Remove Range, used to
+// yank the user's scroll position away from the very panel they were
+// interacting with. Swapping just the panel's own element via
+// replaceChild leaves everything above and below it completely
+// undisturbed, so the enclosing scroll position never moves.
+function _rerenderSplitPanelInPlace() {
+  if (!cqSplitState) return;
+  const panelKey = cqSplitState.quizId || 'preview';
+  const el = document.getElementById('cqSplitPanel_' + panelKey);
+  if (!el || !el.parentNode) {
+    // Panel not found in the DOM (shouldn't normally happen while a split
+    // is open) — fall back to a full owner re-render so the UI still ends
+    // up correct even though scroll position may shift in this edge case.
+    _rerenderSplitOwner();
+    return;
+  }
+  const total = (_getSplitSourceQuestions() || []).length;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = renderSplitPanel(cqSplitState.context, cqSplitState.quizId, total);
+  const newEl = tmp.firstElementChild;
+  if (newEl) el.parentNode.replaceChild(newEl, el);
 }
 
 function _getSplitSourceQuestions() {
@@ -259,6 +302,15 @@ function _computeEqualChunks(total, chunkSize) {
     chunks.push({ start: s, end: Math.min(s + chunkSize - 1, total) });
   }
   return chunks;
+}
+
+// Small "(N total → M quizzes)" text shown next to the Equal Chunks input.
+// Pulled out into its own helper so it can be reused both when the split
+// panel is first rendered and when it's live-updated on every keystroke
+// (see setSplitChunkSize), without duplicating the pluralization logic.
+function _buildChunkCountLabel(total, chunkSize) {
+  const n = _computeEqualChunks(total, chunkSize).length;
+  return `(${total} total \u2192 ${n} quiz${n !== 1 ? 'zes' : ''})`;
 }
 
 function _computeCustomChunks() {
@@ -333,9 +385,7 @@ function renderSplitPanel(context, quizId, totalQuestions) {
       <label>Questions per quiz:</label>
       <input type="number" min="1" max="${total}" value="${cqSplitState.chunkSize}"
         oninput="setSplitChunkSize(this.value)" />
-      <span style="font-size:.78rem;color:var(--violet-dark);font-weight:600;">
-        (${total} total → ${_computeEqualChunks(total, cqSplitState.chunkSize).length} quiz${_computeEqualChunks(total, cqSplitState.chunkSize).length !== 1 ? 'zes' : ''})
-      </span>
+      <span id="cqSplitChunkCount_${panelKey}" style="font-size:.78rem;color:var(--violet-dark);font-weight:600;">${_buildChunkCountLabel(total, cqSplitState.chunkSize)}</span>
     </div>`;
   } else if (isCustom) {
     html += `<div style="font-size:.76rem;color:var(--violet-dark);font-weight:700;margin-bottom:8px;">

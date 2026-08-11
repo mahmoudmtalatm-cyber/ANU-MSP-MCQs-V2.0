@@ -1189,7 +1189,7 @@ function renderCQPreview() {
     <button class="cq-btn cq-btn-secondary" id="cqPreviewAddBtn" onclick="cqAddBlankQuestion()"
       style="background:var(--green-mid);">＋ Add Question</button>
     <button class="cq-btn cq-btn-secondary" id="cqPreviewMergeBtn" onclick="openMergePicker('cq')"
-      style="background:var(--violet);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><path d="M11 4a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1 2 2 0 1 0 0 4 1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-2a1 1 0 0 1-1-1 2 2 0 1 0-4 0 1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1 2 2 0 1 0 0-4 1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h2a1 1 0 0 0 1-1z"/></svg> Merge Quizzes In</button>
+      style="background:var(--violet);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg> Merge Quizzes In</button>
     <button class="cq-btn cq-btn-secondary" id="cqPreviewSplitBtn" onclick="openSplitPanel('preview', null)"
       style="background:var(--violet);color:#fff;"><svg class="sicon" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> Split into Multiple</button>
     <button class="cq-btn cq-btn-secondary" id="cqPreviewDiscardBtn" onclick="discardGeneratedQuiz()">✖ Discard</button>
