@@ -2527,13 +2527,28 @@
 .comm-filter-row {
   display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
 }
+/* Wraps each filter <select> with a themed leading icon (Year/Module/
+   Subject/Sort) — mirrors .comm-search-wrap's icon-in-input treatment
+   right above so the whole filter bar reads as one consistent control
+   group. Native <option> elements can only ever render plain text (any
+   markup written inside one is invisible to the browser), so the icon
+   lives on the wrapper instead of inside the select's options. */
+.comm-filter-select-wrap {
+  position: relative; flex: 1; min-width: 120px;
+}
+.comm-filter-select-wrap .comm-filter-icon {
+  position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+  display: flex; pointer-events: none; opacity: .55; color: var(--accent);
+}
 .comm-filter-select {
-  flex: 1; min-width: 120px;
-  padding: 8px 10px; border: 1.5px solid var(--border-soft); border-radius: 8px;
+  width: 100%; box-sizing: border-box;
+  padding: 8px 10px 8px 30px; border: 1.5px solid var(--border-soft); border-radius: 8px;
   font-family: var(--font); font-size: .82rem; background: var(--surface-2); color: var(--text-main);
   outline: none; cursor: pointer; transition: border-color .15s, background .2s;
 }
 .comm-filter-select:focus { border-color: var(--accent); }
+.comm-filter-select:disabled { cursor: not-allowed; opacity: .6; }
+.comm-filter-select-wrap:has(.comm-filter-select:disabled) .comm-filter-icon { opacity: .3; }
 .comm-results-count {
   font-size: .76rem; color: var(--text-muted); padding: 2px 0;
 }
@@ -3341,7 +3356,7 @@ button.apikey-view-btn { background: var(--surface-2-hover); color: var(--text-m
 
 @media (max-width: 480px) {
   .comm-filter-row { flex-direction: column; }
-  .comm-filter-select { min-width: unset; width: 100%; }
+  .comm-filter-select-wrap { min-width: unset; width: 100%; }
   .sq-modal { padding: 22px 16px 18px; }
   .apikey-item { padding: 12px; }
   .apikey-info { flex-basis: 100%; min-width: 0; }

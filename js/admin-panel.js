@@ -686,54 +686,28 @@ async function renderAdminPanel() {
       ? (curriculum[adminCommYearFilter][adminCommModuleFilter] || []).filter(k => subjects[k])
       : [...new Set(allShared.map(i => i.subjectKey).filter(Boolean))];
 
-    const searchVal = escapeHtml(adminCommSearchQuery);
-    const clearStyle = adminCommSearchQuery ? 'display:block' : 'display:none';
-
     const filterBar = document.getElementById('adminCommFilterBar');
     if (filterBar) {
-      filterBar.innerHTML = `
-        <div class="comm-filter-bar">
-          <div class="comm-search-wrap">
-            <span class="comm-search-icon"><svg class="hicon" style="width:14px;height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-            <input class="comm-search-input" id="adminCommSearchInput" type="text"
-                   placeholder="Search by title, author, category or tag…"
-                   value="${searchVal}"
-                   oninput="adminCommOnSearchInput(this.value)" />
-            <button class="comm-search-clear" id="adminCommClearBtn" style="${clearStyle}"
-                    onclick="adminCommSearchQuery='';document.getElementById('adminCommSearchInput').value='';this.style.display='none';renderAdminPanel()">✕</button>
-          </div>
-          <div class="comm-filter-row">
-            <select class="comm-filter-select" id="adminCommYearFilter"
-                    onchange="adminCommYearFilter=this.value;adminCommModuleFilter='';adminCommSubjectFilter='';renderAdminPanel()">
-              <option value="">All Years</option>
-              ${allYears.map(y => `<option value="${escapeHtml(y)}" ${adminCommYearFilter === y ? 'selected' : ''}>${escapeHtml(y)}</option>`).join('')}
-            </select>
-            <select class="comm-filter-select" id="adminCommModuleFilter"
-                    onchange="adminCommModuleFilter=this.value;adminCommSubjectFilter='';renderAdminPanel()"
-                    ${!adminCommYearFilter ? 'disabled' : ''}>
-              <option value="">All Modules</option>
-              ${allModules.map(m => `<option value="${escapeHtml(m)}" ${adminCommModuleFilter === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
-            </select>
-            <select class="comm-filter-select" id="adminCommSubjectFilter"
-                    onchange="adminCommSubjectFilter=this.value;renderAdminPanel()"
-                    ${!adminCommModuleFilter ? 'disabled' : ''}>
-              <option value="">All Subjects</option>
-              ${allSubjects.map(k => {
-                const lbl = (subjects[k] && (subjects[k].label || k)) || k;
-                const ico = (subjects[k] && subjects[k].icon) || '';
-                return `<option value="${escapeHtml(k)}" ${adminCommSubjectFilter === k ? 'selected' : ''}>${ico} ${escapeHtml(lbl)}</option>`;
-              }).join('')}
-            </select>
-            <select class="comm-filter-select" id="adminCommSortSelect"
-                    onchange="adminCommSort=this.value;renderAdminPanel()">
-              <option value="newest" ${adminCommSort==='newest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Newest</option>
-              <option value="oldest" ${adminCommSort==='oldest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Oldest</option>
-              <option value="az"     ${adminCommSort==='az'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M4 7V4h9M4 4l5 16M15 4h5M15 10h5M15 16h5"/></svg> A → Z</option>
-              <option value="questions" ${adminCommSort==='questions'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Most Questions</option>
-            </select>
-          </div>
-          <div class="comm-results-count">${shared.length} quiz${shared.length !== 1 ? 'zes' : ''} shown</div>
-        </div>`;
+      filterBar.innerHTML = _buildCommFilterBarHTML({
+        idPrefix: 'adminComm',
+        searchVal: adminCommSearchQuery,
+        searchOninput: 'adminCommOnSearchInput(this.value)',
+        clearOnclick: "adminCommSearchQuery='';document.getElementById('adminCommSearchInput').value='';this.style.display='none';renderAdminPanel()",
+        yearVal: adminCommYearFilter,
+        yearOnchange: "adminCommYearFilter=this.value;adminCommModuleFilter='';adminCommSubjectFilter='';renderAdminPanel()",
+        allYears,
+        moduleVal: adminCommModuleFilter,
+        moduleOnchange: "adminCommModuleFilter=this.value;adminCommSubjectFilter='';renderAdminPanel()",
+        moduleDisabled: !adminCommYearFilter,
+        allModules,
+        subjectVal: adminCommSubjectFilter,
+        subjectOnchange: 'adminCommSubjectFilter=this.value;renderAdminPanel()',
+        subjectDisabled: !adminCommModuleFilter,
+        allSubjects,
+        sortVal: adminCommSort,
+        sortOnchange: 'adminCommSort=this.value;renderAdminPanel()',
+        resultCount: shared.length
+      });
     }
 
     const list = document.getElementById('adminQuizList');
@@ -937,57 +911,31 @@ async function renderAdminManageCommunityPanel(forceReload) {
     ? (curriculum[commManageYearFilter][commManageModuleFilter] || []).filter(k => subjects[k])
     : [...new Set(shared.map(i => i.subjectKey).filter(Boolean))];
 
-  const searchVal = escapeHtml(commManageSearchQuery);
-  const clearStyle = commManageSearchQuery ? 'display:block' : 'display:none';
-
   let html = `
     <div class="community-section-tabs">
       <button class="community-tab-btn ${commManageTab === 'browse' ? 'active' : ''}" onclick="commManageTab='browse';commManageSearchQuery='';commManageYearFilter='';commManageModuleFilter='';commManageSubjectFilter='';renderAdminManageCommunityPanel()"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Browse All (${shared.length})</button>
       <button class="community-tab-btn ${commManageTab === 'mine' ? 'active' : ''}" onclick="commManageTab='mine';renderAdminManageCommunityPanel()"><svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Shared (${myShared.length})</button>
     </div>
-
-    <div class="comm-filter-bar">
-      <div class="comm-search-wrap">
-        <span class="comm-search-icon"><svg class="hicon" style="width:14px;height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-        <input class="comm-search-input" id="commManageSearchInput" type="text"
-               placeholder="Search by title, author, category or tag…"
-               value="${searchVal}"
-               oninput="commManageOnSearchInput(this.value)" />
-        <button class="comm-search-clear" id="commManageClearBtn" style="${clearStyle}"
-                onclick="commManageSearchQuery='';document.getElementById('commManageSearchInput').value='';this.style.display='none';renderAdminManageCommunityPanel()">✕</button>
-      </div>
-      <div class="comm-filter-row">
-        <select class="comm-filter-select" id="commManageYearFilter"
-                onchange="commManageYearFilter=this.value;commManageModuleFilter='';commManageSubjectFilter='';renderAdminManageCommunityPanel()">
-          <option value="">All Years</option>
-          ${allYears.map(y => `<option value="${escapeHtml(y)}" ${commManageYearFilter === y ? 'selected' : ''}>${escapeHtml(y)}</option>`).join('')}
-        </select>
-        <select class="comm-filter-select" id="commManageModuleFilter"
-                onchange="commManageModuleFilter=this.value;commManageSubjectFilter='';renderAdminManageCommunityPanel()"
-                ${!commManageYearFilter ? 'disabled' : ''}>
-          <option value="">All Modules</option>
-          ${allModules.map(m => `<option value="${escapeHtml(m)}" ${commManageModuleFilter === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
-        </select>
-        <select class="comm-filter-select" id="commManageSubjectFilter"
-                onchange="commManageSubjectFilter=this.value;renderAdminManageCommunityPanel()"
-                ${!commManageModuleFilter ? 'disabled' : ''}>
-          <option value="">All Subjects</option>
-          ${allSubjects.map(k => {
-            const lbl = (subjects[k] && (subjects[k].label || k)) || k;
-            const ico = (subjects[k] && subjects[k].icon) || '';
-            return `<option value="${escapeHtml(k)}" ${commManageSubjectFilter === k ? 'selected' : ''}>${ico} ${escapeHtml(lbl)}</option>`;
-          }).join('')}
-        </select>
-        <select class="comm-filter-select" id="commManageSortSelect"
-                onchange="commManageSort=this.value;renderAdminManageCommunityPanel()">
-          <option value="newest" ${commManageSort==='newest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Newest</option>
-          <option value="oldest" ${commManageSort==='oldest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Oldest</option>
-          <option value="az"     ${commManageSort==='az'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M4 7V4h9M4 4l5 16M15 4h5M15 10h5M15 16h5"/></svg> A → Z</option>
-          <option value="questions" ${commManageSort==='questions'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Most Questions</option>
-        </select>
-      </div>
-      <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
-    </div>`;
+    ${_buildCommFilterBarHTML({
+      idPrefix: 'commManage',
+      searchVal: commManageSearchQuery,
+      searchOninput: 'commManageOnSearchInput(this.value)',
+      clearOnclick: "commManageSearchQuery='';document.getElementById('commManageSearchInput').value='';this.style.display='none';renderAdminManageCommunityPanel()",
+      yearVal: commManageYearFilter,
+      yearOnchange: "commManageYearFilter=this.value;commManageModuleFilter='';commManageSubjectFilter='';renderAdminManageCommunityPanel()",
+      allYears,
+      moduleVal: commManageModuleFilter,
+      moduleOnchange: "commManageModuleFilter=this.value;commManageSubjectFilter='';renderAdminManageCommunityPanel()",
+      moduleDisabled: !commManageYearFilter,
+      allModules,
+      subjectVal: commManageSubjectFilter,
+      subjectOnchange: 'commManageSubjectFilter=this.value;renderAdminManageCommunityPanel()',
+      subjectDisabled: !commManageModuleFilter,
+      allSubjects,
+      sortVal: commManageSort,
+      sortOnchange: 'commManageSort=this.value;renderAdminManageCommunityPanel()',
+      resultCount: pool.length
+    })}`;
 
   if (!pool.length) {
     html += `<div class="community-empty">

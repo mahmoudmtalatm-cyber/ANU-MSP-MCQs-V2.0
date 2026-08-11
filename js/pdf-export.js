@@ -439,49 +439,31 @@ function _pdxDrawCommunityList() {
     sort: _pdxCommSort,
   });
 
-  const searchVal = escapeHtml(_pdxCommSearch);
-  const clearStyle = _pdxCommSearch ? 'display:block' : 'display:none';
-
   let html = `
     <div class="community-section-tabs">
       <button class="community-tab-btn ${_pdxCommScope === 'browse' ? 'active' : ''}" onclick="pdxCommSetScope('browse')"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Browse All (${shared.length})</button>
       <button class="community-tab-btn ${_pdxCommScope === 'mine' ? 'active' : ''}" onclick="pdxCommSetScope('mine')"><svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Shared (${myShared.length})</button>
     </div>
-
-    <div class="comm-filter-bar">
-      <div class="comm-search-wrap">
-        <span class="comm-search-icon"></span>
-        <input class="comm-search-input" id="pdxCommSearchInput" type="text"
-               placeholder="Search by title, author, category or tag…"
-               value="${searchVal}" oninput="pdxCommSearchInput(this.value)" />
-        <button class="comm-search-clear" style="${clearStyle}" onclick="pdxCommSearchInput('')">✕</button>
-      </div>
-      <div class="comm-filter-row">
-        <select class="comm-filter-select" onchange="pdxCommSetYearFilter(this.value)">
-          <option value="">All Years</option>
-          ${allYears.map(y => `<option value="${escapeHtml(y)}" ${_pdxCommYearFilter === y ? 'selected' : ''}>${escapeHtml(y)}</option>`).join('')}
-        </select>
-        <select class="comm-filter-select" onchange="pdxCommSetModuleFilter(this.value)" ${!_pdxCommYearFilter ? 'disabled' : ''}>
-          <option value="">All Modules</option>
-          ${allModules.map(m => `<option value="${escapeHtml(m)}" ${_pdxCommModuleFilter === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
-        </select>
-        <select class="comm-filter-select" onchange="pdxCommSetSubjectFilter(this.value)" ${!_pdxCommModuleFilter ? 'disabled' : ''}>
-          <option value="">All Subjects</option>
-          ${allSubjects.map(k => {
-            const lbl = (subjects[k] && (subjects[k].label || k)) || k;
-            const ico = (subjects[k] && subjects[k].icon) || '';
-            return `<option value="${escapeHtml(k)}" ${_pdxCommSubjectFilter === k ? 'selected' : ''}>${ico} ${escapeHtml(lbl)}</option>`;
-          }).join('')}
-        </select>
-        <select class="comm-filter-select" onchange="pdxCommSetSort(this.value)">
-          <option value="newest" ${_pdxCommSort === 'newest' ? 'selected' : ''}> Newest</option>
-          <option value="oldest" ${_pdxCommSort === 'oldest' ? 'selected' : ''}> Oldest</option>
-          <option value="az" ${_pdxCommSort === 'az' ? 'selected' : ''}> A → Z</option>
-          <option value="questions" ${_pdxCommSort === 'questions' ? 'selected' : ''}> Most Questions</option>
-        </select>
-      </div>
-      <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
-    </div>`;
+    ${_buildCommFilterBarHTML({
+      idPrefix: 'pdxComm',
+      searchVal: _pdxCommSearch,
+      searchOninput: 'pdxCommSearchInput(this.value)',
+      clearOnclick: "pdxCommSearchInput('')",
+      yearVal: _pdxCommYearFilter,
+      yearOnchange: 'pdxCommSetYearFilter(this.value)',
+      allYears,
+      moduleVal: _pdxCommModuleFilter,
+      moduleOnchange: 'pdxCommSetModuleFilter(this.value)',
+      moduleDisabled: !_pdxCommYearFilter,
+      allModules,
+      subjectVal: _pdxCommSubjectFilter,
+      subjectOnchange: 'pdxCommSetSubjectFilter(this.value)',
+      subjectDisabled: !_pdxCommModuleFilter,
+      allSubjects,
+      sortVal: _pdxCommSort,
+      sortOnchange: 'pdxCommSetSort(this.value)',
+      resultCount: pool.length
+    })}`;
 
   if (!pool.length) {
     html += `<div class="community-empty"><div class="ce-icon"><svg class="hicon" style="width:40px;height:40px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg></div>No quizzes match.</div>`;

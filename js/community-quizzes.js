@@ -244,46 +244,31 @@ function _renderMergeCommunityList() {
     ? (curriculum[mergeCommYearFilter][mergeCommModuleFilter] || []).filter(k => subjects[k])
     : [...new Set(shared.map(i => i.subjectKey).filter(Boolean))];
 
-  const searchVal = escapeHtml(mergeCommSearch);
-
   let html = `
     <div class="community-section-tabs">
       <button class="community-tab-btn ${mergeCommTab === 'browse' ? 'active' : ''}" onclick="mergeCommTab='browse';mergeCommSearch='';mergeCommYearFilter='';mergeCommModuleFilter='';mergeCommSubjectFilter='';_renderMergeCommunityList()"><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg> Browse All (${shared.length})</button>
       <button class="community-tab-btn ${mergeCommTab === 'mine' ? 'active' : ''}" onclick="mergeCommTab='mine';_renderMergeCommunityList()"><svg class="sicon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Shared (${myShared.length})</button>
     </div>
-    <div class="comm-filter-bar">
-      <div class="comm-search-wrap">
-        <span class="comm-search-icon"><svg class="hicon" style="width:14px;height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-        <input class="comm-search-input" id="mergeCommSearchInput" type="text"
-               placeholder="Search by title, author, category or tag…"
-               value="${searchVal}" oninput="mergeCommOnSearchInput(this.value)" />
-      </div>
-      <div class="comm-filter-row">
-        <select class="comm-filter-select" onchange="mergeCommYearFilter=this.value;mergeCommModuleFilter='';mergeCommSubjectFilter='';_renderMergeCommunityList()">
-          <option value="">All Years</option>
-          ${allYears.map(y => `<option value="${escapeHtml(y)}" ${mergeCommYearFilter === y ? 'selected' : ''}>${escapeHtml(y)}</option>`).join('')}
-        </select>
-        <select class="comm-filter-select" onchange="mergeCommModuleFilter=this.value;mergeCommSubjectFilter='';_renderMergeCommunityList()" ${!mergeCommYearFilter ? 'disabled' : ''}>
-          <option value="">All Modules</option>
-          ${allModules.map(m => `<option value="${escapeHtml(m)}" ${mergeCommModuleFilter === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
-        </select>
-        <select class="comm-filter-select" onchange="mergeCommSubjectFilter=this.value;_renderMergeCommunityList()" ${!mergeCommModuleFilter ? 'disabled' : ''}>
-          <option value="">All Subjects</option>
-          ${allSubjects.map(k => {
-            const lbl = (subjects[k] && (subjects[k].label || k)) || k;
-            const ico = (subjects[k] && subjects[k].icon) || '';
-            return `<option value="${escapeHtml(k)}" ${mergeCommSubjectFilter === k ? 'selected' : ''}>${ico} ${escapeHtml(lbl)}</option>`;
-          }).join('')}
-        </select>
-        <select class="comm-filter-select" onchange="mergeCommSort=this.value;_renderMergeCommunityList()">
-          <option value="newest" ${mergeCommSort==='newest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Newest</option>
-          <option value="oldest" ${mergeCommSort==='oldest'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Oldest</option>
-          <option value="az"     ${mergeCommSort==='az'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M4 7V4h9M4 4l5 16M15 4h5M15 10h5M15 16h5"/></svg> A → Z</option>
-          <option value="questions" ${mergeCommSort==='questions'?'selected':''}><svg class="sicon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6M9 9h1"/></svg> Most Questions</option>
-        </select>
-      </div>
-      <div class="comm-results-count">${pool.length} quiz${pool.length !== 1 ? 'zes' : ''} shown</div>
-    </div>`;
+    ${_buildCommFilterBarHTML({
+      idPrefix: 'mergeComm',
+      searchVal: mergeCommSearch,
+      searchOninput: 'mergeCommOnSearchInput(this.value)',
+      clearOnclick: "mergeCommSearch='';document.getElementById('mergeCommSearchInput').value='';_renderMergeCommunityList()",
+      yearVal: mergeCommYearFilter,
+      yearOnchange: "mergeCommYearFilter=this.value;mergeCommModuleFilter='';mergeCommSubjectFilter='';_renderMergeCommunityList()",
+      allYears,
+      moduleVal: mergeCommModuleFilter,
+      moduleOnchange: "mergeCommModuleFilter=this.value;mergeCommSubjectFilter='';_renderMergeCommunityList()",
+      moduleDisabled: !mergeCommYearFilter,
+      allModules,
+      subjectVal: mergeCommSubjectFilter,
+      subjectOnchange: 'mergeCommSubjectFilter=this.value;_renderMergeCommunityList()',
+      subjectDisabled: !mergeCommModuleFilter,
+      allSubjects,
+      sortVal: mergeCommSort,
+      sortOnchange: 'mergeCommSort=this.value;_renderMergeCommunityList()',
+      resultCount: pool.length
+    })}`;
 
   if (!pool.length) {
     html += `<div class="community-empty">
