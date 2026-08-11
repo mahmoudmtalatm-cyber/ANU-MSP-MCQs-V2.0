@@ -182,7 +182,14 @@
     #introScreen {
       position: fixed; inset: 0; z-index: 100000;
       display: flex; align-items: center; justify-content: center;
-      background: radial-gradient(circle at 50% 42%, #1E46B8 0%, #16306E 72%, #0F2154 100%);
+      /* Flat, static brand color — deliberately not a gradient. A
+         radial-gradient across three close, dark blues (the previous
+         approach) bands visibly on plenty of real screens, showing up as
+         faint concentric rings that look like they're rippling even
+         though nothing is animating. A single solid fill has nothing to
+         band, so it reads as genuinely still. Reuses the existing
+         --nav-current token rather than a new magic color. */
+      background: var(--nav-current);
       clip-path: circle(150% at 50% 42%);
       opacity: 1;
       transition: clip-path .7s cubic-bezier(.65,0,.35,1), opacity .5s ease .2s;
@@ -190,14 +197,15 @@
     #introScreen.intro-hide { clip-path: circle(0% at 50% 42%); opacity: 0; pointer-events: none; }
     .intro-inner {
       display: flex; flex-direction: column; align-items: center;
-      gap: clamp(14px, 3vh, 22px);
+      gap: clamp(18px, 3.4vh, 30px);
       transition: transform .7s cubic-bezier(.65,0,.35,1);
     }
     #introScreen.intro-hide .intro-inner { transform: scale(1.08); }
 
     .intro-badge-wrap {
       position: relative; display: flex; align-items: center; justify-content: center;
-      width: clamp(88px, 22vw, 132px); height: clamp(88px, 22vw, 132px);
+      width: clamp(130px, min(32vw, 34vh), 200px);
+      height: clamp(130px, min(32vw, 34vh), 200px);
       animation: introBadgeIn .7s cubic-bezier(.2,.9,.3,1.15) both;
     }
     @keyframes introBadgeIn {
@@ -270,8 +278,8 @@
     .intro-wordmark.show { opacity: 1; transform: translateY(0); }
     .intro-word-main {
       display: block; font-family: var(--font-display);
-      font-size: clamp(.85rem, 3.4vw, 1.05rem); font-weight: 600; letter-spacing: 2.5px;
-      color: #fff; max-width: min(80vw, 260px);
+      font-size: clamp(1.05rem, 4.6vw, 1.4rem); font-weight: 600; letter-spacing: 2.5px;
+      color: #fff; max-width: min(88vw, 340px);
     }
     @media (prefers-reduced-motion: reduce) {
       #introScreen { transition: opacity .3s ease; clip-path: none !important; }
