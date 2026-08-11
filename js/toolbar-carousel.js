@@ -99,14 +99,28 @@
     if (!looping || pendingFrame) return;
     pendingFrame = requestAnimationFrame(() => {
       pendingFrame = null;
-      // Rewinding by exactly one lap the instant a lap is fully crossed
-      // keeps the visible tiles identical before and after the jump, so
-      // nothing appears to skip — the wheel simply keeps turning.
+      if (toolbar.scrollLeft > 0 && toolbar.scrollLeft < setWidth * 2) return;
+
+      // Scroll snapping is deliberately gentle (see .toolbar--loop in
+      // styles.css), but it can still try to "help" mid-correction —
+      // and on a fast fling, momentum scrolling can keep delivering
+      // scroll events for a moment after we've already rewound once.
+      // Suspending snap for the one frame the jump happens in, and
+      // resolving the *exact* number of laps crossed (not just one)
+      // rather than assuming a single lap, keeps the correction a single
+      // clean, instant jump no matter how hard or fast the rider scrolls.
+      const prevSnap = toolbar.style.scrollSnapType;
+      toolbar.style.scrollSnapType = 'none';
+
       if (toolbar.scrollLeft <= 0) {
-        toolbar.scrollLeft += setWidth;
-      } else if (toolbar.scrollLeft >= setWidth * 2) {
-        toolbar.scrollLeft -= setWidth;
+        const laps = Math.floor((setWidth - toolbar.scrollLeft) / setWidth) + 1;
+        toolbar.scrollLeft += setWidth * laps;
+      } else {
+        const laps = Math.floor((toolbar.scrollLeft - setWidth * 2) / setWidth) + 1;
+        toolbar.scrollLeft -= setWidth * laps;
       }
+
+      requestAnimationFrame(() => { toolbar.style.scrollSnapType = prevSnap || ''; });
     });
   }
 
