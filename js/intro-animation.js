@@ -7,7 +7,7 @@
   //   ~420ms  magnifying glass sweeps in at an angle and settles onto the
   //           "D" mark (auto-runs via CSS, .intro-glass-group)
   //   ~780ms  its lens flashes a glint right as it lands (.sigil-glint)
-  //   1550ms  glow pulse on the assembled badge
+  //   1550ms  settle pulse on the assembled badge
   //   1900ms  wordmark settles in below it
   //   2450ms  screen contracts away from the badge, revealing the app —
   //           which shows the identical badge already waiting in the header.
@@ -31,7 +31,7 @@
       return;
     }
 
-    setTimeout(function () { if (svgEl) svgEl.classList.add('sigil-glow'); }, 1550);
+    setTimeout(function () { if (svgEl) svgEl.classList.add('sigil-pulse'); }, 1550);
     setTimeout(function () { if (wordEl) wordEl.classList.add('show'); }, 1900);
     setTimeout(function () {
       if (screenEl) {
