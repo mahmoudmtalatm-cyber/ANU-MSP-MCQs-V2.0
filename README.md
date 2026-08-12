@@ -824,6 +824,32 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **112 — "Ask AI" gets a remembered default assistant, and images are now
+  auto-copied on send instead of a separate manual step.** Two changes to
+  `js/ai-external-send.js`:
+  - **Default AI.** Whichever assistant the student picks from the "Ask AI"
+    dropdown is now remembered (`localStorage`, `_extAiSetDefaultProvider()`)
+    and turns the button into a one-click split control: "Ask ChatGPT" (or
+    whichever was picked) sends straight there, and a small caret beside it
+    reopens the picker to send this one question elsewhere or change the
+    default — with the current default marked "✓ Default" in the list and a
+    "Forget default AI" entry to go back to the plain picker. The default is
+    shared across every question on the results screen and updates all of
+    them at once (`_extAiRefreshAllButtons()`). "Copy for another AI" is
+    excluded — it's a generic fallback, not one assistant to remember.
+  - **Image auto-copy.** A question's image no longer needs the separate
+    "Copy question image" click to travel along with a send. For prefill
+    sites (ChatGPT, Perplexity) the image is copied to the clipboard
+    automatically right after opening, ready to paste in next to the
+    pre-filled text. For every other AI, the prompt and the image are
+    written to the clipboard together as one combined clipboard item — two
+    representations of the same item (`_extAiCopyTextAndImage()`), so a
+    single paste can hand a rich composer both at once — falling back to a
+    text-only copy if the browser can't do a combined write. "Copy question
+    image" stays in the menu as a manual option for re-copying the image on
+    its own. The dropdown now opens with a hint banner explaining which of
+    the two behaviors applies, before the student picks, and each provider's
+    subtitle reflects it too (`_extAiSubtitleFor()`).
 - **111 — Fixed the "Ask AI" dropdown (#110) being clipped instead of
   shown.** The menu was rendered as an absolutely-positioned child inside
   `.ai-send-wrap`, which sits inside `.r-content` → `.r-card` →

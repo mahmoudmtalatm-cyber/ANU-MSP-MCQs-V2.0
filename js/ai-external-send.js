@@ -18,11 +18,25 @@
    question (if any), and the full on-screen AI chat transcript
    (if any) — so switching assistants never loses context.
 
+   Default AI: whichever provider the student last picked is
+   remembered (localStorage) and becomes a one-click "Ask <Name>"
+   split button, so they don't reselect on every question — the
+   small caret half reopens the picker to change it at any time
+   (see _extAiGetDefaultProvider()/_extAiRenderButtonInto()).
+
+   Images: a question with an image gets it copied to the
+   clipboard automatically as part of sending, not as a separate
+   manual step — alongside the prompt in one combined clipboard
+   write for non-prefill AIs (_extAiCopyTextAndImage()), or on its
+   own right after opening a prefill AI. The dropdown explains
+   which applies before the student picks (the "hint" banner in
+   toggleAskAiMenu()).
+
    Depends on (all loaded earlier, see index.html):
      - currentQuestions, userAnswers, getOptionEntries()  (app-core.js)
      - escapeHtml(), _cqCaseContextBlock(), _cqFindCaseGroupImage(),
        _explainRawText, _chatHistory                       (ai-features.js)
-   See changelog #110.
+   See changelog #110/#111/#112.
 ══════════════════════════════════════════════════════════ */
 
 /* URL-prefill only works for sites that actually support it (verified
@@ -100,6 +114,53 @@ const EXTERNAL_AI_PROVIDERS = [
 
 /* Currently-open menu's question index, or null. Only one open at a time. */
 let _extAiOpenMenuIndex = null;
+
+/* ── Default AI — remember whichever assistant the student last picked, so
+   "Ask AI" becomes a single click to the same place next time instead of
+   reselecting from the dropdown on every question. Any real provider sets
+   the default when picked ("Copy for another AI" doesn't, since it isn't
+   one specific assistant to remember); reopening the menu (via the small
+   caret button next to the quick button) and picking a different one
+   changes it at any time. Persisted in localStorage so it survives reloads.
+   See README changelog for this feature. ── */
+const ASK_AI_DEFAULT_KEY = 'askAiDefaultProviderId';
+
+function _extAiGetDefaultProvider() {
+  let id = null;
+  try { id = localStorage.getItem(ASK_AI_DEFAULT_KEY); } catch (e) { /* storage unavailable */ }
+  if (!id) return null;
+  return EXTERNAL_AI_PROVIDERS.find(p => p.id === id && p.id !== 'other') || null;
+}
+
+function _extAiSetDefaultProvider(id) {
+  try { localStorage.setItem(ASK_AI_DEFAULT_KEY, id); } catch (e) { /* storage unavailable */ }
+  _extAiRefreshAllButtons();
+}
+
+function _extAiClearDefaultProvider() {
+  try { localStorage.removeItem(ASK_AI_DEFAULT_KEY); } catch (e) { /* storage unavailable */ }
+  _extAiRefreshAllButtons();
+}
+
+/* The default applies app-wide, and every visible result card has its own
+   "Ask AI" control, so a change made from one question's menu is reflected
+   on all of them immediately rather than only after the next re-render. */
+function _extAiRefreshAllButtons() {
+  document.querySelectorAll('.ai-send-wrap').forEach(wrap => {
+    const idx = parseInt(wrap.id.replace('askAiWrap_', ''), 10);
+    if (!isNaN(idx)) _extAiRenderButtonInto(wrap, idx);
+  });
+}
+
+/* Per-provider dropdown subtitle, adjusted for whether this question has an
+   image — see the image hint banner in toggleAskAiMenu() for the fuller
+   explanation shown once at the top of the menu. */
+function _extAiSubtitleFor(p, hasImage) {
+  if (!hasImage) return p.subtitle;
+  if (p.prefill) return `${p.subtitle} — image copied too`;
+  if (p.id === 'other') return `${p.subtitle} (image copied too)`;
+  return p.subtitle.replace('Copies prompt', 'Copies prompt & image');
+}
 
 /* ── Build the exact block of context this question would send to an AI —
    shared with buildExplainPrompt()/buildChatSystemInstruction() in
@@ -192,6 +253,28 @@ async function _extAiCopyImage(dataUrl) {
   }
 }
 
+/* Writes the prompt text and the question image to the clipboard as one
+   combined clipboard item (two representations of the same item, rather
+   than two separate copy actions). A composer that accepts rich paste picks
+   whichever representation(s) it supports, so a single Ctrl/Cmd+V can hand
+   a non-prefill AI both the text and the image at once. Falls back to
+   text-only (caller retries with _extAiCopyText) if the browser can't do a
+   combined write. */
+async function _extAiCopyTextAndImage(text, dataUrl) {
+  try {
+    if (!navigator.clipboard || !window.ClipboardItem) return false;
+    const res = await fetch(dataUrl);
+    const imageBlob = await res.blob();
+    const textBlob = new Blob([text], { type: 'text/plain' });
+    await navigator.clipboard.write([
+      new ClipboardItem({ [textBlob.type]: textBlob, [imageBlob.type]: imageBlob }),
+    ]);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 /* ── Small floating confirmation toast, theme-matched and auto-dismissing ── */
 let _extAiToastTimer = null;
 function _extAiToast(message) {
@@ -215,16 +298,60 @@ function renderAskAiButtonGroup(i) {
   const wrap = document.createElement('span');
   wrap.className = 'ai-send-wrap';
   wrap.id = `askAiWrap_${i}`;
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'ai-send-btn';
-  btn.id = `askAiBtn_${i}`;
-  btn.innerHTML = '<svg class="sicon" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Ask AI <svg class="sicon ai-send-caret" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
-  btn.onclick = (e) => { e.stopPropagation(); toggleAskAiMenu(i); };
-
-  wrap.appendChild(btn);
+  _extAiRenderButtonInto(wrap, i);
   return wrap;
+}
+
+const PAPER_PLANE_ICON = '<svg class="sicon" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+const CARET_ICON = '<svg class="sicon ai-send-caret" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
+
+/* Fills an already-mounted .ai-send-wrap with the right control for the
+   current default: a single "Ask AI" button (opens the picker) when no
+   default is set yet, or a two-part split button — "Ask <Name>" that sends
+   straight to the remembered assistant, plus a small caret that reopens the
+   picker to change it — once one is. Called on first render and again
+   whenever the default changes (_extAiSetDefaultProvider/_extAiRefreshAllButtons)
+   so every card on screen stays in sync. */
+function _extAiRenderButtonInto(wrap, i) {
+  const wasOpen = _extAiOpenMenuIndex === i;
+  if (wasOpen) closeAskAiMenu(i);
+
+  const def = _extAiGetDefaultProvider();
+  wrap.innerHTML = '';
+
+  if (!def) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ai-send-btn';
+    btn.id = `askAiBtn_${i}`;
+    btn.innerHTML = `${PAPER_PLANE_ICON} Ask AI ${CARET_ICON}`;
+    btn.onclick = (e) => { e.stopPropagation(); toggleAskAiMenu(i); };
+    wrap.appendChild(btn);
+  } else {
+    const split = document.createElement('span');
+    split.className = 'ai-send-split';
+    split.id = `askAiBtn_${i}`;
+
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'ai-send-btn ai-send-btn-main';
+    main.title = `Ask ${def.name} — this question's context, one click`;
+    main.innerHTML = `${PAPER_PLANE_ICON} Ask ${escapeHtml(def.name)}`;
+    main.onclick = (e) => { e.stopPropagation(); sendQuestionToExternalAi(i, def.id); };
+
+    const caret = document.createElement('button');
+    caret.type = 'button';
+    caret.className = 'ai-send-btn ai-send-btn-caret';
+    caret.title = 'Choose a different AI';
+    caret.innerHTML = CARET_ICON;
+    caret.onclick = (e) => { e.stopPropagation(); toggleAskAiMenu(i); };
+
+    split.appendChild(main);
+    split.appendChild(caret);
+    wrap.appendChild(split);
+  }
+
+  if (wasOpen) toggleAskAiMenu(i);
 }
 
 function toggleAskAiMenu(i) {
@@ -237,17 +364,27 @@ function toggleAskAiMenu(i) {
   wrap.classList.add('open');
 
   const hasImage = !!_extAiGetImageDataUrl(i);
+  const def = _extAiGetDefaultProvider();
   const menu = document.createElement('div');
   menu.className = 'ai-send-menu';
   menu.id = `askAiMenu_${i}`;
   menu.innerHTML = `
     <div class="ai-send-menu-label">Continue with…</div>
+    ${hasImage ? `
+    <div class="ai-send-menu-hint">
+      📎 This question has an image. <strong>ChatGPT</strong> and
+      <strong>Perplexity</strong> open pre-filled with the text — the image
+      is copied to your clipboard automatically too, so just paste it
+      (Ctrl/Cmd+V) into the chat right after. Every other AI copies the
+      prompt <strong>and</strong> the image together in one go, ready to
+      paste in.
+    </div>` : ''}
     ${EXTERNAL_AI_PROVIDERS.map(p => `
-      <button type="button" class="ai-send-menu-item" onclick="sendQuestionToExternalAi(${i}, '${p.id}')">
+      <button type="button" class="ai-send-menu-item${p.id === (def && def.id) ? ' is-default' : ''}" onclick="sendQuestionToExternalAi(${i}, '${p.id}')">
         <span class="ai-send-badge${p.color ? '' : ' ai-send-badge-outline'}"${p.color ? ` style="background:${p.color}"` : ''}>${escapeHtml(p.initial)}</span>
         <span class="ai-send-item-text">
-          <span class="ai-send-item-name">${escapeHtml(p.name)}</span>
-          <span class="ai-send-item-sub">${escapeHtml(p.subtitle)}</span>
+          <span class="ai-send-item-name">${escapeHtml(p.name)}${p.id === (def && def.id) ? ' <span class="ai-send-default-badge">✓ Default</span>' : ''}</span>
+          <span class="ai-send-item-sub">${escapeHtml(_extAiSubtitleFor(p, hasImage))}</span>
         </span>
       </button>`).join('')}
     ${hasImage ? `
@@ -256,9 +393,19 @@ function toggleAskAiMenu(i) {
       <span class="ai-send-badge ai-send-badge-outline">📎</span>
       <span class="ai-send-item-text">
         <span class="ai-send-item-name">Copy question image</span>
-        <span class="ai-send-item-sub">Paste it in after the prompt</span>
+        <span class="ai-send-item-sub">On its own, any time you need to re-copy it</span>
       </span>
     </button>` : ''}
+    ${def ? `
+    <div class="ai-send-menu-sep"></div>
+    <button type="button" class="ai-send-menu-item ai-send-menu-reset" onclick="closeAskAiMenu(${i}); _extAiClearDefaultProvider();">
+      <span class="ai-send-badge ai-send-badge-outline">↺</span>
+      <span class="ai-send-item-text">
+        <span class="ai-send-item-name">Forget default AI</span>
+        <span class="ai-send-item-sub">Ask AI will show this picker again</span>
+      </span>
+    </button>` : `
+    <div class="ai-send-menu-footer">Picking one sets it as your one-click default — change it anytime from here.</div>`}
   `;
 
   // Appended to <body>, not to `wrap` — .r-card clips overflow (rounded
@@ -337,9 +484,30 @@ async function sendQuestionToExternalAi(i, providerId) {
   closeAskAiMenu(i);
   if (!provider) return;
 
+  // Remember this as the one-click default for next time — any specific
+  // assistant qualifies, but "Copy for another AI" is a generic fallback,
+  // not one AI to remember. See _extAiSetDefaultProvider().
+  if (provider.id !== 'other') _extAiSetDefaultProvider(provider.id);
+
   const { text, hasImage } = buildExternalAiPrompt(i);
-  const copied = await _extAiCopyText(text);
+  const dataUrl = hasImage ? _extAiGetImageDataUrl(i) : null;
   const canPrefill = !!provider.prefill && text.length <= EXTERNAL_AI_MAX_PREFILL_LEN;
+
+  // Prefill providers carry the text via the URL itself, so only the image
+  // (if any) needs the clipboard. Everyone else needs the prompt copied —
+  // and if there's an image too, it's copied together with the prompt as
+  // one combined clipboard item (see _extAiCopyTextAndImage()) so a single
+  // paste can hand the composer both, rather than the student needing a
+  // separate manual step for the image.
+  let copiedText = false, copiedImage = false, combinedCopy = false;
+  if (canPrefill) {
+    if (hasImage) copiedImage = await _extAiCopyImage(dataUrl);
+  } else if (hasImage) {
+    combinedCopy = await _extAiCopyTextAndImage(text, dataUrl);
+    copiedText = combinedCopy || await _extAiCopyText(text);
+  } else {
+    copiedText = await _extAiCopyText(text);
+  }
 
   let opened = false;
   if (canPrefill) {
@@ -352,19 +520,37 @@ async function sendQuestionToExternalAi(i, providerId) {
 
   let msg;
   if (provider.id === 'other') {
-    msg = copied
-      ? 'Prompt copied — paste it into any AI chat.'
-      : "Couldn't copy automatically — select and copy the prompt manually.";
+    if (!hasImage) {
+      msg = copiedText ? 'Prompt copied — paste it into any AI chat.' : "Couldn't copy automatically — select and copy the prompt manually.";
+    } else if (combinedCopy) {
+      msg = 'Prompt and image copied together — paste them into any AI chat.';
+    } else if (copiedText) {
+      msg = 'Prompt copied — paste it into any AI chat. Use "Copy question image" for the image separately.';
+    } else {
+      msg = "Couldn't copy automatically — select and copy the prompt manually.";
+    }
   } else if (canPrefill) {
     msg = `Opened ${provider.name}, pre-filled with the question.`;
+    if (hasImage) {
+      msg += copiedImage
+        ? ' This question has an image — it was copied to your clipboard too; paste it (Ctrl/Cmd+V) into the chat.'
+        : ' This question has an image, but copying it failed — use "Copy question image" to try again.';
+    }
   } else if (opened) {
-    msg = copied
-      ? `Opened ${provider.name} — paste the prompt (Ctrl/Cmd+V) into the chat.`
-      : `Opened ${provider.name}, but copying the prompt failed — copy it manually.`;
+    if (!hasImage) {
+      msg = copiedText
+        ? `Opened ${provider.name} — paste the prompt (Ctrl/Cmd+V) into the chat.`
+        : `Opened ${provider.name}, but copying the prompt failed — copy it manually.`;
+    } else if (combinedCopy) {
+      msg = `Opened ${provider.name} — the prompt and image were copied together; paste (Ctrl/Cmd+V) into the chat.`;
+    } else if (copiedText) {
+      msg = `Opened ${provider.name} — paste the prompt (Ctrl/Cmd+V); use "Copy question image" for the image separately.`;
+    } else {
+      msg = `Opened ${provider.name}, but copying the prompt failed — copy it manually.`;
+    }
   } else {
-    msg = copied ? 'Prompt copied to your clipboard.' : "Couldn't copy the prompt — please try again.";
+    msg = copiedText ? 'Prompt copied to your clipboard.' : "Couldn't copy the prompt — please try again.";
   }
-  if (hasImage) msg += ' This question has an image — use "Copy question image" to bring that along too.';
 
   _extAiToast(msg);
 }

@@ -2958,6 +2958,47 @@
 .ai-send-caret { width: 13px; height: 13px; transition: transform .15s ease; }
 .ai-send-wrap.open .ai-send-caret { transform: rotate(180deg); }
 
+/* Split button shown once a default AI is remembered — see
+   _extAiRenderButtonInto() in js/ai-external-send.js. "Ask <Name>" sends
+   straight to it; the narrow caret half reopens the picker to change it.
+   Both halves share the same pill so it reads as one control. */
+.ai-send-split {
+  display: inline-flex; align-items: stretch; margin-top: 8px; margin-left: 8px;
+  border-radius: 7px; overflow: hidden;
+}
+.ai-send-split .ai-send-btn { margin: 0; border-radius: 0; }
+.ai-send-btn-main {
+  border-right: none; display: inline-flex; align-items: center;
+  max-width: min(220px, 46vw); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ai-send-btn-main .sicon:first-child { flex-shrink: 0; }
+.ai-send-btn-caret {
+  padding: 5px 9px; border-left: 1.5px solid var(--extai-border);
+}
+.ai-send-btn-caret .ai-send-caret { margin: 0; }
+
+/* Info strip at the top of the dropdown when the question has an image —
+   explains up front what gets copied for prefill vs. non-prefill AIs
+   (rather than only after the student has already picked one). */
+.ai-send-menu-hint {
+  font-size: .72rem; line-height: 1.5; color: var(--text-muted);
+  background: var(--surface-2); border: 1px solid var(--border-soft-2);
+  border-radius: 8px; padding: 8px 9px; margin: 0 2px 6px;
+}
+.ai-send-menu-hint strong { color: var(--text-main); }
+
+.ai-send-menu-item.is-default { background: var(--extai-pale); }
+.ai-send-default-badge {
+  display: inline-block; font-size: .62rem; font-weight: 800;
+  color: var(--extai-fg); background: #fff; border: 1px solid var(--extai-border-strong);
+  border-radius: 999px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+}
+.ai-send-menu-footer {
+  font-size: .68rem; color: var(--text-muted); line-height: 1.4;
+  padding: 6px 8px 2px;
+}
+.ai-send-menu-reset .ai-send-item-name { color: var(--text-muted); }
+
 /* Rendered as a sibling of <body> (a "portal"), not nested inside
    .ai-send-wrap — see renderAskAiButtonGroup()/positionAskAiMenu() in
    js/ai-external-send.js. .r-card clips overflow for its rounded corners
