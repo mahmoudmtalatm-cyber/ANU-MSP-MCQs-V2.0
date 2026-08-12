@@ -260,27 +260,73 @@ function toggleAskAiMenu(i) {
       </span>
     </button>` : ''}
   `;
-  wrap.appendChild(menu);
 
+  // Appended to <body>, not to `wrap` — .r-card clips overflow (rounded
+  // corners + color strip) and .results-body is its own scroll container,
+  // so a menu nested inside either was being silently clipped to the
+  // card's box instead of floating above it. Living at the body level
+  // sidesteps both ancestors; positionAskAiMenu() below places it under
+  // the button with inline top/left (skipped on narrow screens, where CSS
+  // pins it as a bottom sheet instead). See changelog #111.
+  document.body.appendChild(menu);
+  positionAskAiMenu(i);
+
+  window.addEventListener('scroll', _extAiRepositionHandler, true);
+  window.addEventListener('resize', _extAiRepositionHandler);
   // Deferred so the click that opened the menu doesn't immediately close it.
   setTimeout(() => document.addEventListener('click', _extAiOutsideClickHandler), 0);
 }
 
+/* Places the open menu directly under its button, flipping above the
+   button if there isn't room below, and clamping horizontally so it
+   never runs off either edge of the viewport. No-op below 480px, where
+   CSS pins the menu as a fixed bottom sheet instead (see
+   `@media (max-width: 480px) .ai-send-menu` in styles.css). */
+function positionAskAiMenu(i) {
+  const btn = document.getElementById(`askAiBtn_${i}`);
+  const menu = document.getElementById(`askAiMenu_${i}`);
+  if (!btn || !menu) return;
+  if (window.innerWidth <= 480) { menu.style.top = ''; menu.style.left = ''; return; }
+
+  const GAP = 6, EDGE = 16;
+  const r = btn.getBoundingClientRect();
+  const menuW = menu.offsetWidth;
+  const menuH = menu.offsetHeight;
+  const vw = window.innerWidth, vh = window.innerHeight;
+
+  let left = r.left;
+  left = Math.min(left, vw - menuW - EDGE);
+  left = Math.max(left, EDGE);
+
+  const spaceBelow = vh - r.bottom - GAP;
+  const openAbove = spaceBelow < menuH && r.top > spaceBelow;
+  const top = openAbove ? Math.max(EDGE, r.top - GAP - menuH) : r.bottom + GAP;
+
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+}
+
+function _extAiRepositionHandler() {
+  if (_extAiOpenMenuIndex !== null) positionAskAiMenu(_extAiOpenMenuIndex);
+}
+
 function closeAskAiMenu(i) {
   const wrap = document.getElementById(`askAiWrap_${i}`);
-  if (wrap) {
-    wrap.classList.remove('open');
-    const menu = document.getElementById(`askAiMenu_${i}`);
-    if (menu) menu.remove();
-  }
+  if (wrap) wrap.classList.remove('open');
+  const menu = document.getElementById(`askAiMenu_${i}`);
+  if (menu) menu.remove();
   _extAiOpenMenuIndex = null;
   document.removeEventListener('click', _extAiOutsideClickHandler);
+  window.removeEventListener('scroll', _extAiRepositionHandler, true);
+  window.removeEventListener('resize', _extAiRepositionHandler);
 }
 
 function _extAiOutsideClickHandler(e) {
   if (_extAiOpenMenuIndex === null) return;
   const wrap = document.getElementById(`askAiWrap_${_extAiOpenMenuIndex}`);
-  if (wrap && !wrap.contains(e.target)) closeAskAiMenu(_extAiOpenMenuIndex);
+  const menu = document.getElementById(`askAiMenu_${_extAiOpenMenuIndex}`);
+  const inside = (wrap && wrap.contains(e.target)) || (menu && menu.contains(e.target));
+  if (!inside) closeAskAiMenu(_extAiOpenMenuIndex);
 }
 
 /* ── Core action: copy the prompt, open the chosen AI, and tell the

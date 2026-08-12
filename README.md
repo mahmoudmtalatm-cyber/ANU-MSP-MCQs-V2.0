@@ -824,6 +824,25 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **111 — Fixed the "Ask AI" dropdown (#110) being clipped instead of
+  shown.** The menu was rendered as an absolutely-positioned child inside
+  `.ai-send-wrap`, which sits inside `.r-content` → `.r-card` →
+  `.results-body`. `.r-card` uses `overflow: hidden` for its rounded
+  corners and colored side strip, and `.results-body` is itself a scroll
+  container — both clip any child that visually extends past their box,
+  so the dropdown was being cut off (often to nothing visible) instead of
+  floating above the card. It's now rendered as a "portal": appended
+  directly to `<body>` and positioned with `position: fixed` using
+  coordinates computed from the Ask AI button's `getBoundingClientRect()`
+  (`positionAskAiMenu()` in `js/ai-external-send.js`), the same pattern
+  used by most dropdown/popover libraries to escape a clipping ancestor.
+  It now also flips to open **above** the button when there isn't room
+  below, clamps horizontally so it can't run off either edge of the
+  viewport, gets a `max-height` with its own scroll for very short
+  screens, and stays correctly positioned under the button on scroll or
+  resize while open. Below 480px wide it's unaffected — the existing
+  fixed, full-width bottom-sheet layout still applies, taking priority
+  over the new inline positioning.
 - **110 — Added "🤖 Ask AI": send a results-screen question to an external
   AI chat site, with a provider picker.** A new button sits in the results
   card's AI row, next to 🪄 Explain and 💬 Chat. Clicking it opens a
