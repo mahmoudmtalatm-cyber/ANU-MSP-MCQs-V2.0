@@ -45,6 +45,12 @@ else is plain HTML/CSS/JavaScript.
   slides/PDFs, generate new questions, auto-answer, refine question
   wording, fill in missing choices, and produce step-by-step explanations
   or a per-question AI chat.
+  - **🤖 Ask AI** — on the results screen, next to Explain and Chat, a
+    dropdown lets you send the question (plus any AI explanation or chat
+    already generated for it) to ChatGPT, Claude, Gemini, Perplexity,
+    DeepSeek, Grok, or "copy for another AI" — opening the real site in a
+    new tab so you continue in your own account, no API key of ours
+    needed. See changelog **#110**.
   - **Smart multi-key rotation** — add more than one Gemini API key and
     the app automatically rotates between them whenever one gets rate
     limited, with no interruption to whatever's currently running. See
@@ -818,6 +824,70 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **110 — Added "🤖 Ask AI": send a results-screen question to an external
+  AI chat site, with a provider picker.** A new button sits in the results
+  card's AI row, next to 🪄 Explain and 💬 Chat. Clicking it opens a
+  dropdown — styled after the app's other dropdown pickers (e.g. the
+  custom-quiz collections menu) — listing ChatGPT, Claude, Gemini,
+  Perplexity, DeepSeek, Grok, and a generic "Copy for another AI"
+  fallback. Picking one sends the student to that AI's real website in a
+  new tab, in their own account, with no Gemini API key (or any API key
+  of ours) involved:
+  - **ChatGPT** (`chatgpt.com/?q=…`) and **Perplexity**
+    (`perplexity.ai/search?q=…`) genuinely pre-fill/auto-run the prompt —
+    verified current behavior for both sites, not assumed. Claude, Gemini,
+    DeepSeek, and Grok don't offer an equivalent URL parameter, so for
+    those (and whenever a prompt is too long to safely put in a URL — over
+    `EXTERNAL_AI_MAX_PREFILL_LEN`, 6000 characters) the app instead copies
+    the full prompt to the clipboard and opens the site, with a toast
+    telling the student to paste it in. "Copy for another AI" always just
+    copies, for any assistant not in the list.
+  - **Same context every time, nothing re-typed.** `buildExternalAiPrompt()`
+    (new `js/ai-external-send.js`) builds the prompt from the exact same
+    pieces `buildExplainPrompt()`/`buildChatSystemInstruction()` already
+    send to Gemini: the question, options, correct answer, the student's
+    own answer, and — for a question that's part of a shared case/vignette
+    — the same "linked" ancestor-case context block
+    (`_cqCaseContextBlock()`) used for extraction and chat. If an AI
+    explanation was already generated for this question on-screen, it's
+    included so the new assistant can build on it rather than start over;
+    if the on-screen AI chat has any messages, the full transcript is
+    appended too, so switching assistants mid-conversation doesn't lose
+    anything.
+  - **Images.** Since a browser can't hand another site's composer a file
+    automatically, a question with an image gets a second menu row, "Copy
+    question image" (`copyQuestionImageForAi()`), that copies the image
+    itself to the clipboard via the Clipboard API (`ClipboardItem`) so the
+    student can paste it into the chat right after the prompt; the prompt
+    text also notes the image exists either way.
+  - **Theming & responsiveness.** Three new tokens (`--extai-pale`,
+    `--extai-fg`, `--extai-border`, `--extai-border-strong`) give the
+    button its own accent, distinct from the violet Explain and sky Chat
+    surfaces but inside the same design system. The dropdown wraps like
+    every other button in that row on narrow cards, and below 480px wide
+    it switches to a fixed, full-width bottom sheet instead of a floating
+    panel that could otherwise run off-screen. A small theme-matched
+    toast confirms exactly what happened (opened + pre-filled / opened +
+    "paste it in" / copied only) so the outcome is never ambiguous.
+- **109 — Hid the page-level scrollbar on the home screen.** The home
+  screen's content scrolls the page itself (`html`/`body`) rather than
+  an internal `.xxx-body` pane, so it was picking up the app's shared
+  `::-webkit-scrollbar` styling — a thin colored track/thumb pinned to
+  the right edge — which read as a stray scroll rail rather than part of
+  the page while scrolling up and down. `html`/`body` now suppress that
+  scrollbar specifically (`scrollbar-width: none` +
+  `::-webkit-scrollbar { display: none }`) while scrolling itself is
+  untouched; internal panes like `.admin-body` and `.results-body` keep
+  their own visible scrollbar as before.
+- **108 — Replaced the remaining ⌛ hourglass emoji loading indicators with
+  the app's standard SVG spinner.** The Admin Panel's "Manage Community
+  Quizzes" loading state (`renderAdminManageCommunityPanel()` in
+  `js/admin-panel.js`) and the merge-conflict picker's Community tab
+  loading state (`_mergeLoadCommunityTab()` in `js/community-quizzes.js`)
+  were still rendering a plain `&#8987;` emoji, out of step with every
+  other loading state in the app, which uses the shared `sicon`/`hicon`
+  spinner SVG with the `.spin` rotation class. Both now render that same
+  spinner for visual consistency.
 - **104 — Fixed raw `<svg ...>` markup rendering as literal text in the
   Export to PDF picker's source tabs, and in the exported PDF's own
   Contents page.** The Curriculum/Community/My Custom Quizzes tab
