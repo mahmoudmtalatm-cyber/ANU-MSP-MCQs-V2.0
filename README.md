@@ -824,6 +824,53 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **117 — The "Ask AI" selection toast now gives situation-specific
+  instructions instead of a generic "asking X next" line, and the toast
+  that used to follow an actual send is gone for anything that opens a
+  new tab.** Two changes to `js/ai-external-send.js`, both in the same
+  spirit — say something the student will actually use, and only when
+  they're actually looking at this page to read it:
+  - The toast shown right after selecting a specific assistant
+    (`_extAiSelectionInstructionText()`, replacing #116's
+    `_extAiSelectionToastText()`) now describes what tapping the
+    resulting "Ask ‹Name›" button will do, in one of four ways depending
+    on the assistant and the question: pre-fill support with no image
+    ("opens with the question already typed in and ready to send"),
+    pre-fill support with an image (notes the image is copied separately
+    since a URL can't carry it, and needs pasting in before sending),
+    no pre-fill support with no image ("the question is copied — paste
+    it in and send once it opens"), and no pre-fill support with an
+    image (same, but "the question and image are copied together").
+  - `sendQuestionToExternalAi()` no longer shows a toast once a real
+    site actually opens in a new tab, since by the time that tab has
+    loaded the student has already moved their attention there — a
+    toast left behind on this page mostly goes unseen. The
+    situation-specific instructions above are the only feedback for that
+    path now. A toast still fires for "Copy for another AI" (never opens
+    a site) and for any provider where opening didn't happen — both
+    cases where the student is still looking at this page. The
+    now-simpler function drops the dead message-building branches for
+    outcomes that could never be shown anymore.
+- **116 — Selecting an AI in the "Ask AI" picker goes back to just
+  selecting — it no longer sends.** Follows immediately after #115,
+  which (per that step's request) made a tap send right away. This
+  undoes that specifically: tapping a specific assistant (anything but
+  "Copy for another AI") now closes the picker, remembers it as the
+  default (turning the button into the one-click "Ask ‹Name›" split
+  control, per #114), and shows a toast that tells the student what
+  tapping "Ask ‹Name›" will do next — but doesn't copy or open anything
+  itself. The actual send only happens once "Ask ‹Name›" is tapped
+  afterward. Concretely, `js/ai-external-send.js` gets
+  `_extAiSelectProviderInMenu()` back as a thin selection step (picker
+  row `onclick` points to it again instead of calling
+  `sendQuestionToExternalAi()` directly), and a new
+  `_extAiSelectionToastText()` supplies the instructional toast wording
+  (replacing #115's confirmation-after-sending toast for this path).
+  "Copy for another AI" is unchanged from #115/#113: it never becomes a
+  one-click default, so selecting it is still the only way to use it —
+  it copies the prompt immediately and leaves the picker open, since
+  there's no later "Ask" button for it to defer to. "Copy question
+  image" is unaffected either way.
 - **115 — Selecting an AI in the "Ask AI" picker now sends right away
   again, and the picker no longer asks for a separate Send tap.** Undoes
   #113's select-then-confirm step in `js/ai-external-send.js`: tapping a

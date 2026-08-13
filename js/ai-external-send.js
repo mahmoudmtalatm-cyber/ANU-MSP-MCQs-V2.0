@@ -24,32 +24,44 @@
    small caret half reopens the picker to send this one elsewhere
    (see _extAiGetDefaultProvider()/_extAiRenderButtonInto()).
 
-   Picker behavior: tapping an assistant in the dropdown *sends
-   immediately* — there's no separate select-then-confirm step. The
-   confirmation message (what got opened/copied, and whether the image
-   came along) shows as a toast right after that tap
-   (sendQuestionToExternalAi()/_extAiToast()). Selecting a specific
-   assistant (anything but "Copy for another AI") also remembers it as
-   the default at the same moment, so the student isn't asked to pick it
-   again on their next question. "Copy for another AI" only writes to
-   the clipboard and never opens a site, so it leaves the picker open
-   afterward instead of closing it. Wording throughout avoids
-   keyboard-shortcut phrasing like "Ctrl/Cmd+V", since this app is used
-   on phones too — it just says "paste".
+   Picker behavior: tapping a specific assistant (anything but "Copy for
+   another AI") only *selects* it — it remembers that assistant as the
+   default right away (so it becomes the one-click "Ask <Name>" split
+   button described above) and closes the picker, but it does **not**
+   open or copy anything yet. Instead, a toast gives instructions for
+   what tapping "Ask <Name>" will actually do — worded differently
+   depending on whether that assistant supports pre-filling and whether
+   this question has an image, since an image can never travel with a
+   pre-fill (only text fits in a URL) and always falls back to the
+   clipboard either way (_extAiSelectProviderInMenu()/
+   _extAiSelectionInstructionText()). The actual send only happens once
+   the student taps that "Ask <Name>" button — see
+   sendQuestionToExternalAi(), which deliberately shows no toast of its
+   own once a real site opens in a new tab, since the student's
+   attention (and view, on a phone) has already moved there by then; the
+   instructions given at selection time are the only feedback for that
+   path. "Copy for another AI" is the one exception throughout: since it
+   never becomes a one-click default (it isn't one specific assistant to
+   remember) and never opens a site (it only writes to the clipboard),
+   tapping it copies the prompt immediately, shows its own toast (the
+   student is still looking at this page), and leaves the picker open —
+   exactly as before.
+   Wording throughout avoids keyboard-shortcut phrasing like
+   "Ctrl/Cmd+V", since this app is used on phones too — it just says
+   "paste".
 
    Images: a question with an image gets it copied to the
    clipboard automatically as part of sending, not as a separate
    manual step — alongside the prompt in one combined clipboard
    write for non-prefill AIs (_extAiCopyTextAndImage()), or on its
-   own right after opening a prefill AI. The toast shown after
-   sending says which applies. "Copy question image" in the menu
-   re-copies it on its own at any time, without closing the picker.
+   own right after opening a prefill AI. "Copy question image" in the
+   menu re-copies it on its own at any time, without closing the picker.
 
    Depends on (all loaded earlier, see index.html):
      - currentQuestions, userAnswers, getOptionEntries()  (app-core.js)
      - escapeHtml(), _cqCaseContextBlock(), _cqFindCaseGroupImage(),
        _explainRawText, _chatHistory                       (ai-features.js)
-   See changelog #110/#111/#112/#113/#114/#115.
+   See changelog #110/#111/#112/#113/#114/#115/#116/#117.
 ══════════════════════════════════════════════════════════ */
 
 /* URL-prefill only works for sites that actually support it (verified
@@ -129,13 +141,14 @@ const EXTERNAL_AI_PROVIDERS = [
 let _extAiOpenMenuIndex = null;
 
 /* ── Default AI — remember whichever specific assistant the student last
-   sent to, so "Ask AI" becomes a single click to the same place next time
-   instead of reselecting from the dropdown on every question. Set the
-   moment a real provider is tapped in the picker, as part of the same
-   send (see sendQuestionToExternalAi()). "Copy for another AI" never
-   sets it, since it isn't one specific assistant to remember. Reopening
-   the picker (via the small caret next to the quick button) and tapping
-   a different one changes it at any time — there's no separate "forget"
+   selected, so "Ask AI" becomes a single click to the same place next
+   time instead of reselecting from the dropdown on every question. Set
+   the moment a real provider is *selected* in the picker — not once
+   something is actually sent — so picking one is remembered right away
+   (see _extAiSelectProviderInMenu()). "Copy for another AI" never sets
+   it, since it isn't one specific assistant to remember. Reopening the
+   picker (via the small caret next to the quick button) and selecting a
+   different one changes it at any time — there's no separate "forget"
    action, since that reselect already covers it. Persisted in
    localStorage so it survives reloads. See README changelog for this
    feature. ── */
@@ -364,6 +377,28 @@ function _extAiRenderButtonInto(wrap, i) {
   if (wasOpen) toggleAskAiMenu(i);
 }
 
+/* Plain instructions for what happens once the student actually taps
+   "Ask <Name>" afterward — shown as a toast right after they select
+   that assistant in the picker. Four variants cover every combination
+   of whether the assistant supports pre-filling and whether this
+   question has an image (pre-filling only ever carries the text, since
+   that only works over a URL — an image always falls back to the
+   clipboard regardless of the assistant). Deliberately avoids
+   keyboard-shortcut wording ("Ctrl/Cmd+V") since a lot of students use
+   this on a phone; "paste" alone works the same way on touch (press and
+   hold) as it does with a keyboard shortcut. */
+function _extAiSelectionInstructionText(provider, hasImage) {
+  const askLabel = `Ask ${provider.name}`;
+  if (provider.prefill) {
+    return hasImage
+      ? `Tap "${askLabel}" — ${provider.name} opens with the question already typed in. The image is copied to your clipboard too, so paste it in before you send.`
+      : `Tap "${askLabel}" — ${provider.name} opens with the question already typed in and ready to send.`;
+  }
+  return hasImage
+    ? `Tap "${askLabel}" — the question and image are copied together. Once ${provider.name} opens, paste them in and send.`
+    : `Tap "${askLabel}" — the question is copied to your clipboard. Once ${provider.name} opens, paste it in and send.`;
+}
+
 function toggleAskAiMenu(i) {
   if (_extAiOpenMenuIndex === i) { closeAskAiMenu(i); return; }
   if (_extAiOpenMenuIndex !== null) closeAskAiMenu(_extAiOpenMenuIndex);
@@ -382,7 +417,7 @@ function toggleAskAiMenu(i) {
   menu.innerHTML = `
     <div class="ai-send-menu-label">Continue with…</div>
     ${EXTERNAL_AI_PROVIDERS.map(p => `
-      <button type="button" class="ai-send-menu-item${p.id === (def && def.id) ? ' is-default' : ''}" data-provider="${p.id}" onclick="sendQuestionToExternalAi(${i}, '${p.id}')">
+      <button type="button" class="ai-send-menu-item${p.id === (def && def.id) ? ' is-default' : ''}" data-provider="${p.id}" onclick="_extAiSelectProviderInMenu(${i}, '${p.id}')">
         <span class="ai-send-badge${p.color ? '' : ' ai-send-badge-outline'}"${p.color ? ` style="background:${p.color}"` : ''}>${escapeHtml(p.initial)}</span>
         <span class="ai-send-item-text">
           <span class="ai-send-item-name">${escapeHtml(p.name)}${p.id === (def && def.id) ? ' <span class="ai-send-default-badge">✓ Default</span>' : ''}</span>
@@ -449,6 +484,35 @@ function _extAiRepositionHandler() {
   if (_extAiOpenMenuIndex !== null) positionAskAiMenu(_extAiOpenMenuIndex);
 }
 
+/* Tapping a provider row in the picker. For a specific assistant (not
+   "Copy for another AI"), this only *selects* it: the picker closes,
+   the assistant is remembered as the default (turning the button into
+   the one-click "Ask <Name>" split control — see
+   _extAiSetDefaultProvider()/_extAiRenderButtonInto()), and a toast
+   gives instructions for what tapping that new button will actually do
+   (_extAiSelectionInstructionText()) — this is the only feedback the
+   student gets about the outcome, since sendQuestionToExternalAi() no
+   longer toasts once a site opens (see the comment there). Nothing is
+   copied or opened yet at this point. "Copy for another AI" is the
+   exception: it never becomes a one-click default, so selecting it is
+   the only way to use it — it copies the prompt right away and leaves
+   the picker open, same as it always has. */
+function _extAiSelectProviderInMenu(i, providerId) {
+  if (_extAiOpenMenuIndex !== i) return;
+  const provider = EXTERNAL_AI_PROVIDERS.find(p => p.id === providerId);
+  if (!provider) return;
+
+  if (provider.id === 'other') {
+    sendQuestionToExternalAi(i, providerId);
+    return;
+  }
+
+  const hasImage = !!_extAiGetImageDataUrl(i);
+  closeAskAiMenu(i);
+  _extAiSetDefaultProvider(provider.id);
+  _extAiToast(_extAiSelectionInstructionText(provider, hasImage));
+}
+
 function closeAskAiMenu(i) {
   const wrap = document.getElementById(`askAiWrap_${i}`);
   if (wrap) wrap.classList.remove('open');
@@ -468,12 +532,23 @@ function _extAiOutsideClickHandler(e) {
   if (!inside) closeAskAiMenu(_extAiOpenMenuIndex);
 }
 
-/* ── Core action: copy the prompt, open the chosen AI, and tell the
-   student exactly what happened (pre-filled vs. paste-it-yourself) so
-   there's never any ambiguity about whether it "worked". Called the
-   moment a provider is tapped in the picker, and also by the one-click
-   default split button — both send straight away, with no separate
-   confirm step in between. ── */
+/* ── Core action: copy the prompt and open the chosen AI. Called by the
+   one-click "Ask <Name>" split button (the normal path, once an
+   assistant is already the remembered default), and also directly when
+   "Copy for another AI" is picked in the menu, since that option has no
+   one-click button of its own to defer to.
+
+   No toast here once a real site actually opens in a new tab — by the
+   time that tab has loaded, the student's attention (and often the
+   whole browser view, especially on a phone) has already moved there,
+   so a toast left behind on this page mostly goes unseen. The
+   instructions for what to expect are given up front instead, the
+   moment the assistant was selected (see
+   _extAiSelectProviderInMenu()/_extAiSelectionInstructionText()). A
+   toast still fires here for "Copy for another AI", which never
+   navigates anywhere, and for any provider if opening the site itself
+   didn't happen (no fallback URL) — both cases where the student is
+   still looking at this page and needs to know what to do next. ── */
 async function sendQuestionToExternalAi(i, providerId) {
   const provider = EXTERNAL_AI_PROVIDERS.find(p => p.id === providerId);
   if (!provider) { closeAskAiMenu(i); return; }
@@ -485,11 +560,13 @@ async function sendQuestionToExternalAi(i, providerId) {
   // reads as the interaction being finished, so the picker closes.
   if (provider.id !== 'other') closeAskAiMenu(i);
 
-  // Remember this as the default the moment it's sent to — covers both
-  // a fresh pick from the picker and the one-click "Ask <n>" split
-  // button, which calls straight into this function without going
-  // through the picker at all. "Copy for another AI" is a generic
-  // fallback, not one assistant to remember, so it's excluded.
+  // Belt-and-suspenders: a specific assistant is already remembered the
+  // moment it's selected in the picker (_extAiSelectProviderInMenu()),
+  // so this is normally a no-op re-set — but the one-click "Ask <n>"
+  // split button calls straight into this function without going
+  // through the picker at all, so it's kept here too. "Copy for another
+  // AI" is a generic fallback, not one assistant to remember, so it's
+  // excluded.
   if (provider.id !== 'other') _extAiSetDefaultProvider(provider.id);
 
   const { text, hasImage } = buildExternalAiPrompt(i);
@@ -502,9 +579,9 @@ async function sendQuestionToExternalAi(i, providerId) {
   // one combined clipboard item (see _extAiCopyTextAndImage()) so a single
   // paste can hand the composer both, rather than the student needing a
   // separate manual step for the image.
-  let copiedText = false, copiedImage = false, combinedCopy = false;
+  let copiedText = false, combinedCopy = false;
   if (canPrefill) {
-    if (hasImage) copiedImage = await _extAiCopyImage(dataUrl);
+    if (hasImage) await _extAiCopyImage(dataUrl);
   } else if (hasImage) {
     combinedCopy = await _extAiCopyTextAndImage(text, dataUrl);
     copiedText = combinedCopy || await _extAiCopyText(text);
@@ -521,8 +598,12 @@ async function sendQuestionToExternalAi(i, providerId) {
     opened = true;
   }
 
-  let msg;
-  if (provider.id === 'other') {
+  // "Copy for another AI" is the only provider without a fallbackUrl, so
+  // it's the only one that ever reaches this still with opened === false
+  // — every other provider always opens a real site (see the comment
+  // above sendQuestionToExternalAi() for why that means no toast).
+  if (!opened) {
+    let msg;
     if (!hasImage) {
       msg = copiedText ? 'Prompt copied — paste it into any AI chat.' : "Couldn't copy automatically — select and copy the prompt manually.";
     } else if (combinedCopy) {
@@ -532,30 +613,8 @@ async function sendQuestionToExternalAi(i, providerId) {
     } else {
       msg = "Couldn't copy automatically — select and copy the prompt manually.";
     }
-  } else if (canPrefill) {
-    msg = `Opened ${provider.name}, pre-filled with the question.`;
-    if (hasImage) {
-      msg += copiedImage
-        ? ' This question has an image — it was copied to your clipboard too; paste it into the chat.'
-        : ' This question has an image, but copying it failed — use "Copy question image" to try again.';
-    }
-  } else if (opened) {
-    if (!hasImage) {
-      msg = copiedText
-        ? `Opened ${provider.name} — paste the prompt into the chat.`
-        : `Opened ${provider.name}, but copying the prompt failed — copy it manually.`;
-    } else if (combinedCopy) {
-      msg = `Opened ${provider.name} — the prompt and image were copied together; paste them into the chat.`;
-    } else if (copiedText) {
-      msg = `Opened ${provider.name} — paste the prompt in; use "Copy question image" for the image separately.`;
-    } else {
-      msg = `Opened ${provider.name}, but copying the prompt failed — copy it manually.`;
-    }
-  } else {
-    msg = copiedText ? 'Prompt copied to your clipboard.' : "Couldn't copy the prompt — please try again.";
+    _extAiToast(msg);
   }
-
-  _extAiToast(msg);
 }
 
 /* Copies the question's image on its own — a manual option next to the
