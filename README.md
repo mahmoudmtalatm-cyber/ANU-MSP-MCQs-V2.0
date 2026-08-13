@@ -824,6 +824,27 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **115 — Selecting an AI in the "Ask AI" picker now sends right away
+  again, and the picker no longer asks for a separate Send tap.** Undoes
+  #113's select-then-confirm step in `js/ai-external-send.js`: tapping a
+  specific assistant in the dropdown immediately copies/opens it and
+  shows the confirmation toast (e.g. "Opened ChatGPT, pre-filled with
+  the question.") right there — the same message that used to wait for
+  a separate Send button press now appears the moment the assistant is
+  picked. The in-between preview line ("Opens ChatGPT with the question
+  already typed in…") and the Send button are both removed, since
+  there's no longer a pending selection for them to describe or confirm.
+  Concretely, each row in the picker now calls `sendQuestionToExternalAi()`
+  directly instead of `_extAiSelectProviderInMenu()` (removed, along with
+  `_extAiConfirmSend()`, `_extAiPreviewText()`, and `_extAiSendLabel()`),
+  and the matching CSS for the preview line and Send button
+  (`.ai-send-menu-preview`, `.ai-send-menu-send`, `.ai-send-menu-item.is-selected`)
+  was removed from `css/styles.css`. #114's default-remembering is
+  unaffected — a specific assistant is still saved as the default the
+  moment it's tapped, since that happens inside `sendQuestionToExternalAi()`
+  itself. "Copy for another AI" still leaves the picker open afterward
+  (it only writes to the clipboard, never opens a site), and "Copy
+  question image" is unchanged.
 - **114 — Selecting an AI in the "Ask AI" picker now remembers it right
   away, not only once Send is pressed.** One change to
   `_extAiSelectProviderInMenu()` in `js/ai-external-send.js`, following

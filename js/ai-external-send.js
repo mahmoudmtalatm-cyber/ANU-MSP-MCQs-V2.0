@@ -24,35 +24,32 @@
    small caret half reopens the picker to send this one elsewhere
    (see _extAiGetDefaultProvider()/_extAiRenderButtonInto()).
 
-   Picker behavior: tapping an assistant in the dropdown *selects* it —
-   it doesn't send anything yet. The panel updates in place with a
-   one-line plain-language preview of what will happen ("Opens ChatGPT
-   with the question already typed in…", "Copies the question, then
-   opens Claude…", etc.) and a Send button becomes active to confirm
-   (_extAiSelectProviderInMenu()/_extAiPreviewText()/_extAiConfirmSend()).
-   Selecting a specific assistant (anything but "Copy for another AI")
-   also remembers it as the default right away, not only once Send is
-   pressed, so the student isn't asked to reselect it again on their next
-   question even if they close this picker without sending. If a default
-   is already remembered, it's preselected when the picker opens so Send
-   is immediately ready. Wording throughout avoids keyboard-shortcut
-   phrasing like "Ctrl/Cmd+V", since this app is used on phones too — it
-   just says "paste".
+   Picker behavior: tapping an assistant in the dropdown *sends
+   immediately* — there's no separate select-then-confirm step. The
+   confirmation message (what got opened/copied, and whether the image
+   came along) shows as a toast right after that tap
+   (sendQuestionToExternalAi()/_extAiToast()). Selecting a specific
+   assistant (anything but "Copy for another AI") also remembers it as
+   the default at the same moment, so the student isn't asked to pick it
+   again on their next question. "Copy for another AI" only writes to
+   the clipboard and never opens a site, so it leaves the picker open
+   afterward instead of closing it. Wording throughout avoids
+   keyboard-shortcut phrasing like "Ctrl/Cmd+V", since this app is used
+   on phones too — it just says "paste".
 
    Images: a question with an image gets it copied to the
    clipboard automatically as part of sending, not as a separate
    manual step — alongside the prompt in one combined clipboard
    write for non-prefill AIs (_extAiCopyTextAndImage()), or on its
-   own right after opening a prefill AI. The per-provider preview
-   text says which applies before the student sends. "Copy
-   question image" in the menu re-copies it on its own at any
-   time, without closing the picker.
+   own right after opening a prefill AI. The toast shown after
+   sending says which applies. "Copy question image" in the menu
+   re-copies it on its own at any time, without closing the picker.
 
    Depends on (all loaded earlier, see index.html):
      - currentQuestions, userAnswers, getOptionEntries()  (app-core.js)
      - escapeHtml(), _cqCaseContextBlock(), _cqFindCaseGroupImage(),
        _explainRawText, _chatHistory                       (ai-features.js)
-   See changelog #110/#111/#112/#113/#114.
+   See changelog #110/#111/#112/#113/#114/#115.
 ══════════════════════════════════════════════════════════ */
 
 /* URL-prefill only works for sites that actually support it (verified
@@ -131,26 +128,17 @@ const EXTERNAL_AI_PROVIDERS = [
 /* Currently-open menu's question index, or null. Only one open at a time. */
 let _extAiOpenMenuIndex = null;
 
-/* Which provider is currently selected (but not yet sent) in the open
-   picker — tapping a provider row only sets this and updates the preview;
-   nothing is copied or opened until the Send button confirms it. Cleared
-   whenever the menu closes. See toggleAskAiMenu()/_extAiSelectProviderInMenu()
-   /_extAiConfirmSend(). */
-let _extAiMenuSelection = { index: null, providerId: null };
-
 /* ── Default AI — remember whichever specific assistant the student last
-   picked, so "Ask AI" becomes a single click to the same place next time
+   sent to, so "Ask AI" becomes a single click to the same place next time
    instead of reselecting from the dropdown on every question. Set the
-   moment a real provider is *selected* in the picker — not only once
-   Send is actually pressed — so picking one is remembered right away and
-   the student doesn't have to reselect it on their next question even if
-   they don't end up sending this one (see _extAiSelectProviderInMenu()).
-   "Copy for another AI" never sets it, since it isn't one specific
-   assistant to remember. Reopening the picker (via the small caret next
-   to the quick button) and selecting a different one changes it at any
-   time — there's no separate "forget" action, since that reselect already
-   covers it. Persisted in localStorage so it survives reloads. See
-   README changelog for this feature. ── */
+   moment a real provider is tapped in the picker, as part of the same
+   send (see sendQuestionToExternalAi()). "Copy for another AI" never
+   sets it, since it isn't one specific assistant to remember. Reopening
+   the picker (via the small caret next to the quick button) and tapping
+   a different one changes it at any time — there's no separate "forget"
+   action, since that reselect already covers it. Persisted in
+   localStorage so it survives reloads. See README changelog for this
+   feature. ── */
 const ASK_AI_DEFAULT_KEY = 'askAiDefaultProviderId';
 
 function _extAiGetDefaultProvider() {
@@ -176,8 +164,7 @@ function _extAiRefreshAllButtons() {
 }
 
 /* Per-provider dropdown subtitle, adjusted for whether this question has an
-   image — see _extAiPreviewText() for the fuller, plain-language version
-   shown once a provider is selected. */
+   image. */
 function _extAiSubtitleFor(p, hasImage) {
   if (!hasImage) return p.subtitle;
   if (p.prefill) return `${p.subtitle} — image copied too`;
@@ -377,37 +364,6 @@ function _extAiRenderButtonInto(wrap, i) {
   if (wasOpen) toggleAskAiMenu(i);
 }
 
-/* Plain-language, device-agnostic description of what pressing Send will
-   do for the given provider — shown live in the picker as the student
-   taps between assistants, before anything is actually sent. Deliberately
-   avoids keyboard-shortcut wording ("Ctrl/Cmd+V") since a lot of students
-   use this on a phone; "paste" alone works the same way on touch (press
-   and hold) as it does with a keyboard shortcut. */
-function _extAiPreviewText(provider, hasImage) {
-  if (provider.id === 'other') {
-    return hasImage
-      ? 'Copies the question and image together — paste them into any AI chat of your choice.'
-      : 'Copies the question — paste it into any AI chat of your choice.';
-  }
-  if (provider.prefill) {
-    return hasImage
-      ? `Opens ${provider.name} with the question already typed in, and copies the image so you can paste it in once it loads.`
-      : `Opens ${provider.name} with the question already typed in and ready to go.`;
-  }
-  return hasImage
-    ? `Copies the question and image together, then opens ${provider.name} — paste them in once it loads.`
-    : `Copies the question, then opens ${provider.name} — paste it in once it loads.`;
-}
-
-/* Label shown on the Send button for whichever provider is selected —
-   "other" never opens a site of its own, so it reads as a copy action
-   rather than a send. */
-function _extAiSendLabel(provider) {
-  return provider.id === 'other'
-    ? `${PAPER_PLANE_ICON} Copy prompt`
-    : `${PAPER_PLANE_ICON} Send to ${escapeHtml(provider.name)}`;
-}
-
 function toggleAskAiMenu(i) {
   if (_extAiOpenMenuIndex === i) { closeAskAiMenu(i); return; }
   if (_extAiOpenMenuIndex !== null) closeAskAiMenu(_extAiOpenMenuIndex);
@@ -419,10 +375,6 @@ function toggleAskAiMenu(i) {
 
   const hasImage = !!_extAiGetImageDataUrl(i);
   const def = _extAiGetDefaultProvider();
-  // Preselect the remembered default (if any) so Send is ready right
-  // away — the student can still tap a different assistant first, and
-  // nothing is sent until Send is actually pressed either way.
-  _extAiMenuSelection = { index: i, providerId: def ? def.id : null };
 
   const menu = document.createElement('div');
   menu.className = 'ai-send-menu';
@@ -430,7 +382,7 @@ function toggleAskAiMenu(i) {
   menu.innerHTML = `
     <div class="ai-send-menu-label">Continue with…</div>
     ${EXTERNAL_AI_PROVIDERS.map(p => `
-      <button type="button" class="ai-send-menu-item${p.id === (def && def.id) ? ' is-default' : ''}${p.id === _extAiMenuSelection.providerId ? ' is-selected' : ''}" data-provider="${p.id}" onclick="_extAiSelectProviderInMenu(${i}, '${p.id}')">
+      <button type="button" class="ai-send-menu-item${p.id === (def && def.id) ? ' is-default' : ''}" data-provider="${p.id}" onclick="sendQuestionToExternalAi(${i}, '${p.id}')">
         <span class="ai-send-badge${p.color ? '' : ' ai-send-badge-outline'}"${p.color ? ` style="background:${p.color}"` : ''}>${escapeHtml(p.initial)}</span>
         <span class="ai-send-item-text">
           <span class="ai-send-item-name">${escapeHtml(p.name)}${p.id === (def && def.id) ? ' <span class="ai-send-default-badge">✓ Default</span>' : ''}</span>
@@ -446,15 +398,6 @@ function toggleAskAiMenu(i) {
         <span class="ai-send-item-sub">On its own, any time — doesn't close this picker</span>
       </span>
     </button>` : ''}
-    <div class="ai-send-menu-sep"></div>
-    <div class="ai-send-menu-preview" id="askAiPreview_${i}">${
-      _extAiMenuSelection.providerId
-        ? escapeHtml(_extAiPreviewText(def, hasImage))
-        : 'Pick an AI above, then press Send.'
-    }</div>
-    <button type="button" class="ai-send-menu-send" id="askAiSendBtn_${i}" onclick="_extAiConfirmSend(${i})"${_extAiMenuSelection.providerId ? '' : ' disabled'}>
-      ${_extAiMenuSelection.providerId ? _extAiSendLabel(def) : `${PAPER_PLANE_ICON} Send`}
-    </button>
   `;
 
   // Appended to <body>, not to `wrap` — .r-card clips overflow (rounded
@@ -506,71 +449,12 @@ function _extAiRepositionHandler() {
   if (_extAiOpenMenuIndex !== null) positionAskAiMenu(_extAiOpenMenuIndex);
 }
 
-/* Tapping a provider row selects it for this open picker — updates the
-   highlighted row, the live preview line, and the Send button. Nothing
-   is copied or opened here; only pressing Send (_extAiConfirmSend())
-   does that.
-
-   For any specific assistant (not "Copy for another AI"), selecting it
-   also sets it as the remembered default immediately — see
-   _extAiSetDefaultProvider() — rather than waiting for Send, so the
-   student isn't asked to pick it again on their next question even if
-   they don't end up sending this one. That call rebuilds this button and
-   reopens the picker fresh with the new default already preselected
-   (_extAiRefreshAllButtons() → _extAiRenderButtonInto()), so it already
-   covers the highlight/preview/Send-button update — no manual DOM patch
-   needed for that path. "Copy for another AI" isn't a specific assistant
-   to remember, so it's only ever selected for this one send and is
-   patched in place below instead. */
-function _extAiSelectProviderInMenu(i, providerId) {
-  if (_extAiOpenMenuIndex !== i) return;
-  const provider = EXTERNAL_AI_PROVIDERS.find(p => p.id === providerId);
-  if (!provider) return;
-
-  if (provider.id !== 'other') {
-    _extAiSetDefaultProvider(provider.id);
-    return;
-  }
-
-  _extAiMenuSelection = { index: i, providerId };
-
-  const menu = document.getElementById(`askAiMenu_${i}`);
-  if (!menu) return;
-  menu.querySelectorAll('.ai-send-menu-item[data-provider]').forEach(el => {
-    el.classList.toggle('is-selected', el.dataset.provider === providerId);
-  });
-
-  const hasImage = !!_extAiGetImageDataUrl(i);
-  const preview = document.getElementById(`askAiPreview_${i}`);
-  if (preview) preview.textContent = _extAiPreviewText(provider, hasImage);
-
-  const sendBtn = document.getElementById(`askAiSendBtn_${i}`);
-  if (sendBtn) {
-    sendBtn.disabled = false;
-    sendBtn.innerHTML = _extAiSendLabel(provider);
-  }
-
-  // The picker may have changed height (a longer/shorter preview line),
-  // so re-clamp its position rather than leaving it possibly off-screen.
-  positionAskAiMenu(i);
-}
-
-/* Confirms whatever's currently selected in the open picker — this is
-   the only place that actually copies/opens anything for a picker
-   selection (as opposed to the one-click "Ask <n>" split button, which
-   already knows its target and sends immediately by design). */
-function _extAiConfirmSend(i) {
-  if (_extAiMenuSelection.index !== i || !_extAiMenuSelection.providerId) return;
-  sendQuestionToExternalAi(i, _extAiMenuSelection.providerId);
-}
-
 function closeAskAiMenu(i) {
   const wrap = document.getElementById(`askAiWrap_${i}`);
   if (wrap) wrap.classList.remove('open');
   const menu = document.getElementById(`askAiMenu_${i}`);
   if (menu) menu.remove();
   _extAiOpenMenuIndex = null;
-  _extAiMenuSelection = { index: null, providerId: null };
   document.removeEventListener('click', _extAiOutsideClickHandler);
   window.removeEventListener('scroll', _extAiRepositionHandler, true);
   window.removeEventListener('resize', _extAiRepositionHandler);
@@ -586,9 +470,10 @@ function _extAiOutsideClickHandler(e) {
 
 /* ── Core action: copy the prompt, open the chosen AI, and tell the
    student exactly what happened (pre-filled vs. paste-it-yourself) so
-   there's never any ambiguity about whether it "worked". Only called
-   once the student has confirmed a selection with the Send button (see
-   _extAiConfirmSend()) or via the one-click default split button. ── */
+   there's never any ambiguity about whether it "worked". Called the
+   moment a provider is tapped in the picker, and also by the one-click
+   default split button — both send straight away, with no separate
+   confirm step in between. ── */
 async function sendQuestionToExternalAi(i, providerId) {
   const provider = EXTERNAL_AI_PROVIDERS.find(p => p.id === providerId);
   if (!provider) { closeAskAiMenu(i); return; }
@@ -600,12 +485,11 @@ async function sendQuestionToExternalAi(i, providerId) {
   // reads as the interaction being finished, so the picker closes.
   if (provider.id !== 'other') closeAskAiMenu(i);
 
-  // Belt-and-suspenders: a specific assistant is already remembered the
-  // moment it's selected in the picker (_extAiSelectProviderInMenu()), so
-  // this is normally a no-op re-set — but the one-click "Ask <n>" split
-  // button calls straight into this function without going through the
-  // picker at all, so it's kept here too. "Copy for another AI" is a
-  // generic fallback, not one assistant to remember, so it's excluded.
+  // Remember this as the default the moment it's sent to — covers both
+  // a fresh pick from the picker and the one-click "Ask <n>" split
+  // button, which calls straight into this function without going
+  // through the picker at all. "Copy for another AI" is a generic
+  // fallback, not one assistant to remember, so it's excluded.
   if (provider.id !== 'other') _extAiSetDefaultProvider(provider.id);
 
   const { text, hasImage } = buildExternalAiPrompt(i);
