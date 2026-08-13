@@ -2944,7 +2944,7 @@
 
 /* ── ASK AI — send this question (+ any explanation/chat already on
    screen) to an external AI chat site the student picks from a dropdown.
-   See js/ai-external-send.js and changelog #110/#111. ── */
+   See js/ai-external-send.js and changelog #110/#111/#112/#113. ── */
 .ai-send-wrap { position: relative; display: inline-block; }
 .ai-send-btn {
   display: inline-flex; align-items: center; gap: 5px;
@@ -2977,27 +2977,47 @@
 }
 .ai-send-btn-caret .ai-send-caret { margin: 0; }
 
-/* Info strip at the top of the dropdown when the question has an image —
-   explains up front what gets copied for prefill vs. non-prefill AIs
-   (rather than only after the student has already picked one). */
-.ai-send-menu-hint {
-  font-size: .72rem; line-height: 1.5; color: var(--text-muted);
-  background: var(--surface-2); border: 1px solid var(--border-soft-2);
-  border-radius: 8px; padding: 8px 9px; margin: 0 2px 6px;
-}
-.ai-send-menu-hint strong { color: var(--text-main); }
-
 .ai-send-menu-item.is-default { background: var(--extai-pale); }
 .ai-send-default-badge {
   display: inline-block; font-size: .62rem; font-weight: 800;
   color: var(--extai-fg); background: #fff; border: 1px solid var(--extai-border-strong);
   border-radius: 999px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
 }
-.ai-send-menu-footer {
-  font-size: .68rem; color: var(--text-muted); line-height: 1.4;
-  padding: 6px 8px 2px;
+
+/* Selecting a provider (tap/click) only highlights it — see
+   _extAiSelectProviderInMenu() in js/ai-external-send.js. Nothing is sent
+   until the Send button below is pressed, so the selected state needs its
+   own clear marker distinct from "is-default" (the remembered one-click
+   choice, which may not be the one currently selected in this picker). */
+.ai-send-menu-item.is-selected {
+  background: var(--extai-pale); box-shadow: inset 0 0 0 1.5px var(--extai-border-strong);
 }
-.ai-send-menu-reset .ai-send-item-name { color: var(--text-muted); }
+
+/* Live one-line preview of what Send will do for whichever provider is
+   currently selected — updates in place as the student taps between
+   assistants, before anything is copied or opened. Plain language only;
+   never mentions keyboard shortcuts (see _extAiPreviewText()), since this
+   picker is used on phones as much as on a desktop keyboard. */
+.ai-send-menu-preview {
+  font-size: .74rem; line-height: 1.45; color: var(--text-muted);
+  padding: 2px 8px 6px; min-height: 2.9em;
+}
+
+/* Confirms the current selection — the only control in the picker that
+   actually copies/opens anything (_extAiConfirmSend()). Sticky so it
+   stays reachable at the bottom of the panel even when the provider list
+   scrolls (long list on a short screen, or the mobile bottom sheet). */
+.ai-send-menu-send {
+  all: unset; box-sizing: border-box; position: sticky; bottom: 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; margin-top: 2px; padding: 9px 10px;
+  background: var(--extai-fg); color: #fff; border-radius: 8px;
+  font-family: var(--font); font-size: .82rem; font-weight: 700;
+  text-align: center; cursor: pointer; transition: opacity .15s ease, filter .15s ease;
+}
+.ai-send-menu-send:hover:not(:disabled) { filter: brightness(1.08); }
+.ai-send-menu-send:disabled { opacity: .45; cursor: not-allowed; }
+.ai-send-menu-send .sicon { width: 14px; height: 14px; flex-shrink: 0; }
 
 /* Rendered as a sibling of <body> (a "portal"), not nested inside
    .ai-send-wrap — see renderAskAiButtonGroup()/positionAskAiMenu() in

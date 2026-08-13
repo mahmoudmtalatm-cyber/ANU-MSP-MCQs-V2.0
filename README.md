@@ -824,6 +824,51 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **113 — "Ask AI" picker: selecting an assistant no longer sends right
+  away, messaging is simplified for mobile, and copy actions leave the
+  picker open.** Three changes to `js/ai-external-send.js`, all confined
+  to the dropdown opened by the caret / "Ask AI" button:
+  - **Select, then Send.** Tapping an assistant in the list used to send
+    to it immediately. It now only *selects* it — the row highlights, and
+    a one-line preview appears explaining exactly what will happen
+    (`_extAiPreviewText()`), e.g. "Opens ChatGPT with the question already
+    typed in and ready to go" or "Copies the question, then opens
+    Claude — paste it in once it loads." Nothing is copied or opened
+    until the new **Send** button at the bottom of the picker is pressed
+    (`_extAiConfirmSend()`). If a default assistant is already remembered
+    it's preselected when the picker opens, so Send is ready immediately,
+    but it still needs that explicit tap — no accidental sends from a
+    stray click on the list. The one-click "Ask ‹Name›" split button
+    (from #112) is unaffected: it already knows its target and still
+    sends in a single click by design, since reselecting was never part
+    of that path.
+  - **Simpler, mobile-safe messaging.** Every message in the flow —
+    the per-provider preview, the Send button label, and the toast shown
+    after sending — was rewritten to drop keyboard-shortcut phrasing like
+    "Ctrl/Cmd+V", since a large share of students use this from a phone,
+    where there's no Ctrl or Cmd key. Instructions just say "paste it
+    in"; press-and-hold works the same way. The old dedicated "image"
+    hint banner at the top of the picker is gone — its explanation is now
+    folded into the same live, per-provider preview line instead of a
+    separate static paragraph, so there's one simpler place to read what
+    will happen rather than two.
+  - **Copy actions keep the picker open.** "Copy question image" no
+    longer closes the picker when clicked — it copies and stays open, so
+    a student can copy the image and still pick/send a provider
+    afterward, or copy it again. The same applies to selecting "Copy for
+    another AI" and pressing Send: since that option only writes to the
+    clipboard and never opens a site, confirming it no longer closes the
+    picker either, in case the student wants to try a specific assistant
+    next. Every other provider still closes the picker on Send, since
+    opening its real site in a new tab reads as the interaction being
+    finished.
+  - **Removed "Forget default AI."** With the picker's own Send button
+    always requiring a fresh tap-to-confirm, there was no longer a
+    distinct need for a separate action just to clear the remembered
+    default back to "no default" — reopening the picker (via the caret)
+    and sending to a different assistant already changes it in one step,
+    the same way it always could. Removing the menu item keeps the
+    picker shorter without losing any capability.
 - **112 — "Ask AI" gets a remembered default assistant, and images are now
   auto-copied on send instead of a separate manual step.** Two changes to
   `js/ai-external-send.js`:
