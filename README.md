@@ -824,6 +824,21 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **119 — Fixed "Copy question image" (and the image half of any
+  combined text+image copy) always failing with "can't copy in this
+  browser", on every browser, not just some.** Root cause in
+  `js/ai-external-send.js`: every image this app stores has already been
+  compressed through a canvas as JPEG (`compressImageDataUrl()` in
+  `js/gemini-uploads.js`), but the Clipboard API's image write only
+  reliably accepts PNG — handing `ClipboardItem` a JPEG blob throws
+  instead of copying, and does so consistently across Chrome, Firefox,
+  and Safari alike, which is why it looked like every browser was
+  broken rather than one. `_extAiCopyImage()` and
+  `_extAiCopyTextAndImage()` both now run the image through a new
+  `_extAiImageToPngBlob()` first — a plain canvas re-encode to PNG,
+  regardless of the source image's original format — before handing it
+  to `ClipboardItem`, so the write always uses a type the browser will
+  actually accept.
 - **118 — New bulk AI tool: "Content Filter" — removes any question the
   AI can only answer from its own knowledge, not from a required
   reference source.** Lives in the same whole-quiz AI Tools panel as AI

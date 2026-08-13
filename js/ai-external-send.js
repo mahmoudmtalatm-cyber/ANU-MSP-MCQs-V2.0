@@ -267,13 +267,36 @@ async function _extAiCopyText(text) {
 async function _extAiCopyImage(dataUrl) {
   try {
     if (!navigator.clipboard || !window.ClipboardItem) return false;
-    const res = await fetch(dataUrl);
-    const blob = await res.blob();
+    const blob = await _extAiImageToPngBlob(dataUrl);
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
     return true;
   } catch (e) {
     return false;
   }
+}
+
+/* Every image this app stores gets compressed through a canvas as JPEG
+   (see compressImageDataUrl() in js/gemini-uploads.js), but the Clipboard
+   API's image write only reliably accepts PNG — writing a ClipboardItem
+   with any other MIME type (JPEG included) throws on every major
+   browser, not just some, which is why "copy image" failed everywhere
+   rather than in just one browser. Re-encoding through a canvas here
+   guarantees a PNG blob regardless of the source image's original
+   format, so the actual clipboard write always hits a type the browser
+   will accept. */
+function _extAiImageToPngBlob(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG conversion failed')), 'image/png');
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = dataUrl;
+  });
 }
 
 /* Writes the prompt text and the question image to the clipboard as one
@@ -286,8 +309,7 @@ async function _extAiCopyImage(dataUrl) {
 async function _extAiCopyTextAndImage(text, dataUrl) {
   try {
     if (!navigator.clipboard || !window.ClipboardItem) return false;
-    const res = await fetch(dataUrl);
-    const imageBlob = await res.blob();
+    const imageBlob = await _extAiImageToPngBlob(dataUrl);
     const textBlob = new Blob([text], { type: 'text/plain' });
     await navigator.clipboard.write([
       new ClipboardItem({ [textBlob.type]: textBlob, [imageBlob.type]: imageBlob }),
