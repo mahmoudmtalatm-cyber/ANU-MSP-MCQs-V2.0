@@ -824,6 +824,52 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **118 — New bulk AI tool: "Content Filter" — removes any question the
+  AI can only answer from its own knowledge, not from a required
+  reference source.** Lives in the same whole-quiz AI Tools panel as AI
+  Solve All / Fill Choices / Refine Questions (see #100-ish onward for
+  that panel's history) and looks and behaves like them — its own
+  button, its own Stop button, its own "settings" `<details>` with a
+  reference-source dropzone — but with no per-question equivalent, since
+  filtering only makes sense as a whole-quiz pass.
+  - Deliberately reuses AI Solve All's own engine, `cqAiSolveQuestions()`
+    (`js/gemini-uploads.js`), rather than a separate answer-checking
+    implementation: "was this question's answer found in the source" is
+    exactly what that engine already determines per question via
+    `found_in_source`/`ai_guessed`. `_editorBulkContentFilter()`
+    (`js/ai-features.js`) runs it across every question, then removes
+    every one left flagged `ai_guessed` — walking the list backward so
+    splicing is safe, and calling the same `_caseGroupOnQuestionDeleted()`
+    housekeeping a manual per-question delete uses, so a removed question
+    never leaves a case group's linking broken.
+  - The reference source is **required** — unlike AI Solve All's optional
+    one, a Content Filter run with no source would be indistinguishable
+    from "filters out nothing", so the button refuses to run and shows an
+    error status until at least one file is uploaded.
+  - Deliberately quiet about the mechanics: `cqAiSolveQuestions()`'s own
+    per-batch progress text ("AI is solving questions… (batch N of M)")
+    is swallowed via a throwaway status target rather than shown, and
+    both `ai_answered`/`ai_guessed` are stripped from every surviving
+    question afterward — a question either made it through the filter or
+    it didn't, so there's no "AI-answered"/"AI Guess" badge left over to
+    advertise how each one was scored. The only feedback is a generic
+    "Checking questions against the source…" progress line while it
+    runs, and a clean "N question(s) removed, M remain" summary at the end.
+  - Its dropzone reuses AI Solve All's exact component
+    (`_editorBulkSourceFileListHTML()`/`_editorBulkSourceAcceptFile()`/
+    `_editorBulkSourceFileSelect()`/`_editorBulkSourceRemoveFile()`/
+    `_editorBulkSourceSetupDropzone()`), generalized to take a `toolKey`
+    ('Solve' or 'Filter') so the two tools can each have independent
+    files and DOM ids without colliding or duplicating code — Content
+    Filter gets its own `_editorBulkFilterSourceFiles` store rather than
+    sharing AI Solve All's `_editorBulkAiSourceFiles`, since one tool's
+    source being optional and the other's mandatory means they can't
+    safely be the same list.
+  - Stopping mid-run, and the "AI is busy" close-guard on the editor
+    modal, both work automatically with no extra wiring — `_stopAllAiProcesses()`
+    and `_editorBulkSetBusy()` already key off `_editorBulkCancelToken`/
+    tool-name lists generically, and Content Filter was simply added to
+    both.
 - **117 — The "Ask AI" selection toast now gives situation-specific
   instructions instead of a generic "asking X next" line, and the toast
   that used to follow an actual send is gone for anything that opens a
