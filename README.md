@@ -824,6 +824,23 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **114 — Selecting an AI in the "Ask AI" picker now remembers it right
+  away, not only once Send is pressed.** One change to
+  `_extAiSelectProviderInMenu()` in `js/ai-external-send.js`, following
+  up on #113's select-then-send picker: tapping a specific assistant
+  (anything but "Copy for another AI") now sets it as the remembered
+  default immediately, the same moment it's selected — the student no
+  longer has to reselect it on their next question just because they
+  closed the picker without pressing Send this time. The picker still
+  doesn't copy or open anything until Send is actually pressed; only
+  *which assistant is remembered* now updates at selection time. Under
+  the hood this reuses the existing default-setting path
+  (`_extAiSetDefaultProvider()`), which already rebuilds the button and
+  reopens the picker fresh with the new default preselected — so
+  selecting a real provider no longer needs a separate manual DOM patch
+  for the highlight/preview/Send-button update; only "Copy for another
+  AI" (which never sets a default) still gets one, since it isn't one
+  specific assistant to remember.
 - **113 — "Ask AI" picker: selecting an assistant no longer sends right
   away, messaging is simplified for mobile, and copy actions leave the
   picker open.** Three changes to `js/ai-external-send.js`, all confined

@@ -2944,7 +2944,7 @@
 
 /* ── ASK AI — send this question (+ any explanation/chat already on
    screen) to an external AI chat site the student picks from a dropdown.
-   See js/ai-external-send.js and changelog #110/#111/#112/#113. ── */
+   See js/ai-external-send.js and changelog #110/#111/#112/#113/#114. ── */
 .ai-send-wrap { position: relative; display: inline-block; }
 .ai-send-btn {
   display: inline-flex; align-items: center; gap: 5px;
