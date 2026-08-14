@@ -1412,6 +1412,18 @@ let cqRefineToggle = false; // whether to AI-refine every extracted question's w
 let cqRefineCustomInstructions = ''; // optional custom instructions applied to every refine call
 let cqFillChoicesToggle = false; // whether to AI-fill every question up to 4 answer choices
 
+// ── Content Filter (AI) — same bulk pass as the post-extraction
+// "Content Filter" tool (_editorBulkContentFilter / cqRunContentFilterPass,
+// js/ai-features.js + js/gemini-uploads.js), just offered as a fourth
+// pre-extraction toggle alongside AI Answering / Fill Choices / Refine
+// Questions so it can run automatically right after extraction instead of
+// needing a trip into the editor afterward. Needs its own reference-source
+// files rather than reusing AI Answering's cqAiSourceFiles — that source is
+// optional there, but Content Filter's is mandatory, so the two can't
+// safely share one list. ──
+let cqContentFilterToggle = false; // whether to AI-filter every extracted question against a reference source
+let cqFilterSourceFiles = []; // required source images/PDFs for Content Filter (array of {file, mimeType, name})
+
 // ── Split quiz into multiple quizzes ──
 let cqSplitState = null;
 // shape when active: { context: 'preview'|'saved', quizId: null|string,
@@ -2166,45 +2178,13 @@ async function _editorBulkContentFilter(editorKey) {
   // progress across many `await`s, and the panel can be rebuilt mid-run.
   const statusEl = liveStatusRef(`${editorKey}BulkAiStatus`, `${editorKey}BulkAiStatus`);
   statusEl.innerHTML = _cqProgressStatusHTML('<svg class="sicon" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg> Checking questions against the source…', 0);
-  // Throwaway target for cqAiSolveQuestions' own progress writes — see the
-  // "deliberately quiet" note in the comment above this function.
-  const silentStatusEl = { innerHTML: '' };
 
   let finalHtml;
   try {
-    const allIdxs = questions.map((q, i) => i).filter(i => questions[i] && questions[i].question && questions[i].question.trim());
-    // Clear any ai_answered/ai_guessed left on these questions by an
-    // earlier, unrelated AI Solve All (or Content Filter) pass first —
-    // otherwise a question this run never actually reaches (e.g. because
-    // the run gets stopped partway through) could get filtered, or kept,
-    // based on a stale flag from before instead of nothing being decided
-    // for it yet.
-    allIdxs.forEach(i => { delete questions[i].ai_answered; delete questions[i].ai_guessed; });
-
-    await cqAiSolveQuestions(questions, allIdxs, '', sourceFiles, silentStatusEl, token);
-
-    // The filter itself: drop every question the AI could only answer
-    // from outside the source. Walk backward so splicing doesn't shift
-    // not-yet-checked indices out from under the loop, and run the same
-    // case-group housekeeping cqDeleteQuestion() does for a single manual
-    // delete, so a removed question never leaves a case group's linking
-    // in a broken state.
-    let removed = 0;
-    for (let k = allIdxs.length - 1; k >= 0; k--) {
-      const qi = allIdxs[k];
-      const q = questions[qi];
-      if (q && q.ai_guessed) {
-        const [deleted] = questions.splice(qi, 1);
-        _caseGroupOnQuestionDeleted(questions, deleted);
-        removed++;
-      }
-    }
-    // Strip the solve-flavoured flags off whatever's left — a survivor was
-    // only ever checked here to confirm it belongs, not relabelled, so no
-    // "AI-answered" badge should linger on it either.
-    questions.forEach(q => { delete q.ai_answered; delete q.ai_guessed; });
-
-    const remaining = questions.length;
+    // Actual filtering logic lives in cqRunContentFilterPass (js/gemini-uploads.js),
+    // shared with the pre-extraction "Content Filter (AI)" toggle so it
+    // only exists in one place.
+    const { removed, remaining } = await cqRunContentFilterPass(questions, sourceFiles, token);
     finalHtml = token.cancelled
       ? `<div class="cq-status warning"><svg class="sicon" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg> Content Filter stopped${removed ? ` — ${removed} question${removed !== 1 ? 's' : ''} already removed before stopping` : ''}.</div>`
       : `<div class="cq-status success"><svg class="sicon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Content Filter finished — ${removed} question${removed !== 1 ? 's' : ''} removed, ${remaining} remain${remaining === 1 ? 's' : ''}.</div>`;

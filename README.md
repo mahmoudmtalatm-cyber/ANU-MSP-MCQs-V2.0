@@ -824,6 +824,45 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **120 — "Content Filter" is now also a pre-extraction toggle, right next
+  to Fill Choices and Refine Questions — not just a post-extraction bulk
+  tool you had to open the editor to find.** Lives in the "Create a New
+  Quiz with AI" tab (`js/firebase-storage.js`, `renderCustomQuizModal()`),
+  styled to match its own severity (red, like the "wrong answer" palette)
+  rather than the amber/violet used by Fill Choices/Refine, since removing
+  questions is a more consequential action than polishing them.
+  - Gets its own required reference-source dropzone
+    (`cqFilterSourceDropzone` / `cqFilterSourceFiles`, distinct from AI
+    Answering's optional one, `cqAiSourceFiles`, for the same reason #118
+    kept the editor's two source lists separate: one tool's source being
+    optional and the other's mandatory means they can't safely share a
+    list) — new helpers `setupFilterSourceDropzone()`,
+    `handleCqFilterSourceFileSelect()`, `acceptFilterSourceFile()`, and
+    `cqRemoveFilterSourceFile()` in `js/gemini-uploads.js`, mirroring the
+    existing `*SourceFile*` helpers exactly. `generateQuizFromAI()`
+    (`js/ai-solve.js`) now also refuses to start — same as the
+    already-existing missing-API-key/no-file/no-title checks — if the
+    toggle is on with no file uploaded yet.
+  - The actual filtering logic (drop any question the AI could only
+    answer from its own knowledge rather than the source) previously
+    lived only inside `_editorBulkContentFilter()`
+    (`js/ai-features.js`). It's now factored out into a shared
+    `cqRunContentFilterPass(questions, sourceFiles, cancelToken)`
+    (`js/gemini-uploads.js`), which both `_editorBulkContentFilter()` and
+    the new pre-extraction step in `generateQuizFromAI()` call — so the
+    filtering behavior (and any future fix to it) only has to exist, and
+    be fixed, in one place.
+  - Runs, when enabled, immediately after the existing Solve/Answer step
+    and strictly before Fill Choices/Refine Questions — added to the
+    "Multiple AI steps selected" sequential-run notice in that same
+    order. Filtering first (rather than last) avoids spending Fill
+    Choices/Refine AI calls on a question that's about to be deleted for
+    failing the filter anyway. The final extraction summary line gains a
+    "N filtered out" note alongside the existing AI-solved/filled/refined
+    counts when it runs.
+  - The post-extraction "Content Filter" bulk AI tool from #118 is
+    unchanged in behavior or location — this just adds an earlier,
+    automatic way to run the same pass, it doesn't replace the manual one.
 - **119 — Fixed "Copy question image" (and the image half of any
   combined text+image copy) always failing with "can't copy in this
   browser", on every browser, not just some.** Root cause in
