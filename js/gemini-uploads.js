@@ -1609,7 +1609,7 @@ async function cqRunContentFilterPass(questions, sourceFiles, cancelToken) {
   // question's original answer is restored below, untouched.
   const answersBefore = new Map(allIdxs.map(i => [i, questions[i].answer]));
 
-  const silentStatusEl = { innerHTML: '' };
+  const silentStatusEl = createSilentStatusStub();
   await cqAiSolveQuestions(questions, allIdxs, '', sourceFiles, silentStatusEl, cancelToken);
 
   answersBefore.forEach((originalAnswer, i) => {

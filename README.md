@@ -824,6 +824,30 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **122 — Fixed a crash ("statusEl.insertAdjacentHTML is not a function")
+  that could abort extraction partway through the pre-extraction Content
+  Filter pass (#120).** `cqRunContentFilterPass()` (`js/gemini-uploads.js`)
+  runs its internal check via `cqAiSolveQuestions()` but wants that call's
+  own progress/pause chatter to stay silent, so it hands it a throwaway
+  `statusEl` — previously a bare `{ innerHTML: '' }` object literal. That
+  covered plain `.innerHTML =` writes, but `cqAiSolveQuestions()` and the
+  shared pause helpers it can call into (`cqCheckPause()`,
+  `_cqEnterPause()`, `cqFallbackPauseForRateLimit()`, all in
+  `js/ai-question-tools.js`) also call `.insertAdjacentHTML()` (to report
+  per-batch errors, or show a pause banner) and `.querySelector()` (to
+  find/replace/remove that banner) on it — neither of which a plain
+  object implements. The moment a silent Content Filter run actually hit
+  a per-batch error, an automatic rate-limit pause, or a manual pause
+  mid-filter, one of those calls would throw and abort the whole
+  extraction, discarding everything already extracted.
+  - Fixed by replacing the one-off literal with `createSilentStatusStub()`
+    (`js/dom-utils.js`), a small reusable stub that implements
+    `innerHTML`, `insertAdjacentHTML()`, and `querySelector()` as no-ops —
+    it absorbs every write/read those shared helpers make and stays
+    silent, instead of missing methods the moment an edge case is hit.
+    Documented alongside `liveRef()`/`liveStatusRef()` so any future
+    "give this an internal call a status target it should ignore" need
+    reaches for the same helper instead of another bare literal.
 - **121 — Fixed Content Filter silently overwriting answers it was only
   ever supposed to be checking, not solving.** `cqRunContentFilterPass()`
   (`js/gemini-uploads.js`, added in #120) borrows `cqAiSolveQuestions()`
