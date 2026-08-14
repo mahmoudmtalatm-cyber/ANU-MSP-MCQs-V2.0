@@ -1573,6 +1573,15 @@ async function cqBulkRefineQuestions(questions, customInstructions, statusEl, ca
    left for a stray "AI-answered"/"AI Guess" badge to advertise
    afterward. Callers own their own before/after status text.
 
+   Also never actually solves/verifies anything as far as the output is
+   concerned: cqAiSolveQuestions is only borrowed here to learn WHETHER
+   each answer was found in the source, and every surviving question's
+   original `answer` is restored immediately after that call returns.
+   Whether questions get genuinely re-solved is controlled solely by the
+   separate "Solve/verify all questions" toggle elsewhere — if that ran
+   too, it already did so as its own earlier step before Content Filter
+   ever touches these questions.
+
    Requires at least one reference-source file — callers are expected
    to validate that themselves (with a message suited to where the
    toggle lives) before calling this; this function throws if called
@@ -1590,8 +1599,22 @@ async function cqRunContentFilterPass(questions, sourceFiles, cancelToken) {
   // stale flag from before instead of nothing being decided for it yet.
   allIdxs.forEach(i => { delete questions[i].ai_answered; delete questions[i].ai_guessed; });
 
+  // Content Filter only needs cqAiSolveQuestions to find out WHERE each
+  // answer came from (found_in_source vs. own knowledge) — it isn't meant
+  // to actually solve/verify anything. Whether questions get re-solved is
+  // controlled solely by the separate "Solve/verify all questions"
+  // toggle, which — if on — has already run as its own earlier step by
+  // the time this runs. So the answer this internal call comes up with is
+  // used only to decide keep-or-remove, then discarded: every surviving
+  // question's original answer is restored below, untouched.
+  const answersBefore = new Map(allIdxs.map(i => [i, questions[i].answer]));
+
   const silentStatusEl = { innerHTML: '' };
   await cqAiSolveQuestions(questions, allIdxs, '', sourceFiles, silentStatusEl, cancelToken);
+
+  answersBefore.forEach((originalAnswer, i) => {
+    if (questions[i]) questions[i].answer = originalAnswer;
+  });
 
   // The filter itself: drop every question the AI could only answer from
   // outside the source. Walk backward so splicing doesn't shift

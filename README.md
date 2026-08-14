@@ -824,6 +824,29 @@ Firestore-side curriculum/community data.
 Newer entries first. Each numbered project drop corresponds to one focused
 change (see the filename of whichever zip you're reading from).
 
+- **121 — Fixed Content Filter silently overwriting answers it was only
+  ever supposed to be checking, not solving.** `cqRunContentFilterPass()`
+  (`js/gemini-uploads.js`, added in #120) borrows `cqAiSolveQuestions()`
+  purely to learn whether each answer was found in the reference source —
+  but that function's actual job is to solve/verify, so as a side effect
+  it was also overwriting every checked question's `answer` with
+  whatever the AI came up with, regardless of what the source's own
+  answer key said, and regardless of whether "Solve/verify all
+  questions" was even toggled on. A run of Content Filter with that
+  toggle off — its normal, most common use — was quietly re-answering
+  every surviving question anyway.
+  - Fixed by snapshotting each question's `answer` immediately before the
+    internal solve call and restoring it immediately after, before
+    filtering runs. The AI's response is now used only for what Content
+    Filter actually needs — `found_in_source`, to decide keep-or-remove —
+    and never reaches the output. Whether questions get genuinely
+    re-solved is controlled solely by the separate "Solve/verify all
+    questions" toggle, same as before this fix; if that ran too, it
+    already did so as its own earlier step, upstream of Content Filter
+    entirely.
+  - One fix in the shared helper covers both call sites from #120 — the
+    post-extraction "Content Filter" bulk AI tool and the new
+    pre-extraction toggle alike.
 - **120 — "Content Filter" is now also a pre-extraction toggle, right next
   to Fill Choices and Refine Questions — not just a post-extraction bulk
   tool you had to open the editor to find.** Lives in the "Create a New
